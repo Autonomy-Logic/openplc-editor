@@ -738,6 +738,107 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  packaged-checks:
+    needs: [resolve, build-macos, build-windows-x64, build-linux-x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            platform: mac
+            artifact: installers-macos
+            asset_prefix: OpenPLC_Editor_
+            asset_suffix: '-ARM.dmg'
+          - runner: windows-2022
+            platform: win
+            artifact: installers-windows-x64
+            asset_prefix: OpenPLC.Editor_
+            asset_suffix: '.exe'
+          - runner: ubuntu-22.04
+            platform: linux
+            artifact: installers-linux-x64
+            asset_prefix: OpenPLC.Editor-
+            asset_suffix: '.AppImage'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      PLATFORM: ${{ matrix.platform }}
+      ASSET: ${{ matrix.asset_prefix }}${{ needs.resolve.outputs.version }}${{ matrix.asset_suffix }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the positive-control package and the trusted keys of the built commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          sparse-checkout: |
+            src/backend/editor/package-trust/__tests__/fixtures/com.openplc.fx3u-compatible-2.1.0.vpp
+            src/backend/shared/utils/vpp/trusted-keys.ts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download the rebuilt installer
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: installers
+
+      - name: Run the packaged checks on the rebuilt installer
+        run: |
+          mkdir -p reports
+          if [ "$PLATFORM" = linux ]; then
+            chmod +x "installers/$ASSET"
+            set -- xvfb-run -a
+          fi
+          "$@" node tooling/scripts/release/packaged-checks.mjs --platform "$PLATFORM" \
+            --installer "installers/$ASSET" --version "$VERSION" \
+            --positive-control tree/src/backend/editor/package-trust/__tests__/fixtures/com.openplc.fx3u-compatible-2.1.0.vpp \
+            --trusted-keys tree/src/backend/shared/utils/vpp/trusted-keys.ts \
+            --report "reports/packaged-checks-$PLATFORM.json"
+
+      - name: Download the original installer of the published release
+        id: original
+        if: ${{ !cancelled() && inputs.negative_controls }}
+        run: |
+          mkdir -p original
+          curl -fsSL -o "original/$ASSET" "https://github.com/Autonomy-Logic/openplc-editor/releases/download/v$VERSION/$ASSET"
+
+      - name: Run the packaged checks on the original installer as a negative control
+        if: ${{ !cancelled() && inputs.negative_controls && steps.original.outcome == 'success' }}
+        run: |
+          mkdir -p reports
+          if [ "$PLATFORM" = linux ]; then
+            chmod +x "original/$ASSET"
+            set -- xvfb-run -a
+          fi
+          "$@" node tooling/scripts/release/packaged-checks.mjs --platform "$PLATFORM" \
+            --installer "original/$ASSET" --version "$VERSION" \
+            --positive-control tree/src/backend/editor/package-trust/__tests__/fixtures/com.openplc.fx3u-compatible-2.1.0.vpp \
+            --trusted-keys tree/src/backend/shared/utils/vpp/trusted-keys.ts \
+            --report "reports/negative-control-$PLATFORM.json" --negative-control
+
+      - name: Upload the reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-checks-${{ matrix.platform }}
+          path: reports/
+          retention-days: 30
+
   publish:
     if: ${{ inputs.mode == 'rebuild' }}
     needs:
@@ -747,6 +848,7 @@ jobs:
       - build-windows-arm64
       - build-linux-x64
       - build-linux-arm64
+      - packaged-checks
     runs-on: ubuntu-latest
     permissions:
       contents: write
