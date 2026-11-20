@@ -43,13 +43,13 @@ export function pemToDer(pem: string): Uint8Array {
   return new Uint8Array(createPublicKey(pem).export({ format: 'der', type: 'spki' }))
 }
 
-/** The throwaway key standing in for the third-party `eqsp32-dev` signing key. */
-export const EQSP32_KEY = testSigningKey(
-  'eqsp32-dev',
+/** The throwaway key standing in for the third-party `untrusted-dev` signing key. */
+export const UNTRUSTED_KEY = testSigningKey(
+  'untrusted-dev',
   '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60',
 )
-export const EQSP32_PACKAGE_ID = 'com.erqos.eqsp32'
-export const EQSP32_BOARD = 'EQSP32'
+export const UNTRUSTED_PACKAGE_ID = 'com.example.untrusted'
+export const UNTRUSTED_BOARD = 'UNTRUSTED'
 
 /** The Autonomy-signed catalog package kept as a fixture, and the board it provides. */
 export const FX3U_VPP = join(__dirname, 'com.openplc.fx3u-compatible-2.1.0.vpp')
@@ -57,9 +57,9 @@ export const FX3U_PACKAGE_ID = 'com.openplc.fx3u-compatible'
 export const FX3U_BOARD = 'FX3U-14M / LE3U-14M'
 export const FX3U_KEY_ID = 'openplc-2026'
 
-/** Options of `signTestPackage`; every field has a default that gives the `eqsp32-dev` package. */
+/** Options of `signTestPackage`; every field has a default that gives the `untrusted-dev` package. */
 export interface SignTestPackageOptions {
-  /** The key that signs; `EQSP32_KEY` by default. */
+  /** The key that signs; `UNTRUSTED_KEY` by default. */
   key?: TestSigningKey
   /** The `keyId` written in the payload; the signing key's id by default. */
   keyId?: string
@@ -103,12 +103,12 @@ export function defaultPackageFiles(packageId: string, version: string, boardNam
   }
 }
 
-/** Writes a signed package directory at @p dir; with no options, the `eqsp32-dev` package. */
+/** Writes a signed package directory at @p dir; with no options, the `untrusted-dev` package. */
 export function signTestPackage(dir: string, options: SignTestPackageOptions = {}): SignedTestPackage {
-  const key = options.key ?? EQSP32_KEY
-  const packageId = options.packageId ?? EQSP32_PACKAGE_ID
+  const key = options.key ?? UNTRUSTED_KEY
+  const packageId = options.packageId ?? UNTRUSTED_PACKAGE_ID
   const version = options.version ?? '1.0.0'
-  const files = options.files ?? defaultPackageFiles(packageId, version, options.boardName ?? EQSP32_BOARD)
+  const files = options.files ?? defaultPackageFiles(packageId, version, options.boardName ?? UNTRUSTED_BOARD)
 
   const hashes: Record<string, string> = {}
   for (const [rel, content] of Object.entries(files)) {
