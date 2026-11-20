@@ -1,7 +1,7 @@
 /**
  * The structure of `.github/workflows/release.yml`, read with the `yaml` package, and the thin-adapter exception in
- * CLAUDE.md. Which jobs and steps run is worked out from the workflow's `if:` and `${{ }}` expressions, for a tag push
- * and for a dispatch on a branch, with GitHub's rule that a job is skipped when a job upstream of it was skipped unless
+ * CLAUDE.md. Which jobs and steps run is worked out from the workflow's `if:` and `${{ }}` expressions, for a tag push,
+ * a dispatch on a tag and a dispatch on a branch, with GitHub's rule that a job is skipped when a job upstream of it was skipped unless
  * its `if:` calls a status function. A condition kept inside a shell script cannot be evaluated here. The upload-set
  * check of create-release also runs as a bash script, with the real check-upload-set.mjs, over a temporary directory.
  * @jest-environment node
@@ -56,6 +56,13 @@ type Executed = { step: Step; index: number; env: Record<string, Value> }
 type Plan = { runs: (id: string) => boolean; steps: (id: string) => Executed[] }
 
 const TAG_PUSH: Run = { name: 'a tag push', event: 'push', ref: 'refs/tags/v4.4.0', inputs: {} }
+const TAG_DISPATCH: Run = {
+  name: 'a dispatch on a v* tag',
+  event: 'workflow_dispatch',
+  ref: 'refs/tags/v4.4.0',
+  inputs: { version: '', platforms: 'all' },
+}
+const TAG_RUNS = [TAG_PUSH, TAG_DISPATCH]
 
 function dispatch(name: string, inputs: Record<string, string>): Run {
   return {
@@ -519,10 +526,10 @@ describe('release.yml: trigger and inputs', () => {
 })
 
 describe('release.yml: which jobs run', () => {
-  it('runs trust-module, the five build jobs, packaged-checks and create-release on a tag push', () => {
+  it.each(TAG_RUNS)('runs trust-module, the five build jobs, packaged-checks and create-release on $name', (run) => {
     const expected = ['trust-module', ...BUILD_JOBS, 'packaged-checks', 'create-release']
 
-    expect(expected.filter((id) => !running(TAG_PUSH, [id]).includes(id))).toEqual([])
+    expect(expected.filter((id) => !running(run, [id]).includes(id))).toEqual([])
   })
 
   it.each(BRANCH_DISPATCHES)('runs the five build jobs and packaged-checks on $name', (run) => {
@@ -631,8 +638,8 @@ describe('release.yml: trust-module', () => {
 })
 
 describe('release.yml: build jobs', () => {
-  it('runs every build and package step with OPENPLC_RELEASE_BUILD=1 on a tag push', () => {
-    const plan = simulate(TAG_PUSH)
+  it.each(TAG_RUNS)('runs every build and package step with OPENPLC_RELEASE_BUILD=1 on $name', (run) => {
+    const plan = simulate(run)
     const offenders = BUILD_JOBS.flatMap((id) => {
       const executed = plan.steps(id)
       const building = executed.filter(({ step }) => isBuilding(step))
@@ -666,27 +673,30 @@ describe('release.yml: build jobs', () => {
     expect(offenders).toEqual([])
   })
 
-  it('downloads the trust-module artifact into release/package-trust before building, on a tag push', () => {
-    const plan = simulate(TAG_PUSH)
-    const offenders = BUILD_JOBS.flatMap((id) => {
-      const executed = plan.steps(id)
-      const download = executed.find(({ step }) => isTrustDownload(step))
-      const firstBuild = executed.find(({ step }) => isBuilding(step))
-      if (download === undefined) return [`${id}: does not download trust-module`]
-      const options = record(download.step.with)
-      const problems: string[] = []
-      if (options.name !== 'trust-module') problems.push(`${id}: downloads ${text(options.name)}`)
-      if (normalizedPath(options.path) !== 'release/package-trust') {
-        problems.push(`${id}: downloads into ${text(options.path)}`)
-      }
-      if (firstBuild === undefined || download.index > firstBuild.index) {
-        problems.push(`${id}: downloads after building`)
-      }
-      return problems
-    })
+  it.each(TAG_RUNS)(
+    'downloads the trust-module artifact into release/package-trust before building, on $name',
+    (run) => {
+      const plan = simulate(run)
+      const offenders = BUILD_JOBS.flatMap((id) => {
+        const executed = plan.steps(id)
+        const download = executed.find(({ step }) => isTrustDownload(step))
+        const firstBuild = executed.find(({ step }) => isBuilding(step))
+        if (download === undefined) return [`${id}: does not download trust-module`]
+        const options = record(download.step.with)
+        const problems: string[] = []
+        if (options.name !== 'trust-module') problems.push(`${id}: downloads ${text(options.name)}`)
+        if (normalizedPath(options.path) !== 'release/package-trust') {
+          problems.push(`${id}: downloads into ${text(options.path)}`)
+        }
+        if (firstBuild === undefined || download.index > firstBuild.index) {
+          problems.push(`${id}: downloads after building`)
+        }
+        return problems
+      })
 
-    expect(offenders).toEqual([])
-  })
+      expect(offenders).toEqual([])
+    },
+  )
 
   it.each(BRANCH_DISPATCHES)('downloads no trust module on $name', (run) => {
     const plan = simulate(run)
@@ -716,6 +726,21 @@ describe('release.yml: build jobs', () => {
       expect(offenders).toEqual([])
     },
   )
+})
+
+describe('release.yml: artifact uploads', () => {
+  it('fails every upload-artifact step of trust-module and the five build jobs when it finds no file', () => {
+    const offenders = ['trust-module', ...BUILD_JOBS].flatMap((id) => {
+      const uploads = job(id).steps.filter(isUploadArtifact)
+      if (uploads.length === 0) return [`${id}: no upload-artifact step`]
+      return uploads
+        .map((step) => ({ step, value: record(step.with)['if-no-files-found'] }))
+        .filter(({ value }) => value !== 'error')
+        .map(({ step, value }) => `${id}: ${str(step.name)} (${value === undefined ? 'unset' : String(value)})`)
+    })
+
+    expect(offenders).toEqual([])
+  })
 })
 
 describe('release.yml: packaged-checks', () => {
