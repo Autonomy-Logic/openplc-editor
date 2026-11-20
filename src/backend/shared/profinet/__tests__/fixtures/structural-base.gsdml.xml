@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-v2.45.xsd">
+  <ProfileHeader>
+    <ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+    <ProfileRevision>1.00</ProfileRevision>
+    <ProfileName>Device Profile for PROFINET Devices</ProfileName>
+    <ProfileSource>Synthetic</ProfileSource>
+    <ProfileClassID>Device</ProfileClassID>
+  </ProfileHeader>
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x0F0B" DeviceID="0x00C1">
+      <InfoText TextId="T_Device" />
+      <VendorName Value="Base Vendor" />
+    </DeviceIdentity>
+    <DeviceFunction>
+      <Family MainFamily="I/O" ProductFamily="Base" />
+    </DeviceFunction>
+    <ApplicationProcess>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="B_DAP" PhysicalSlots="0..4" ModuleIdentNumber="0x00000B01" FixedInSlots="0" MinDeviceInterval="32" DNS_CompatibleName="base" ObjectUUID_LocalIndex="1" PNIO_Version="V2.4">
+          <ModuleInfo>
+            <Name TextId="T_Dap" />
+          </ModuleInfo>
+          <UseableModules>
+            <ModuleItemRef ModuleItemTarget="B_MOD" AllowedInSlots="1..4" />
+          </UseableModules>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="B_VSUB" SubmoduleIdentNumber="0x00000001">
+              <IOData>
+                <Input>
+                  <DataItem DataType="Unsigned8" UseAsBits="true" TextId="T_In">
+                    <BitDataItem BitOffset="3" TextId="T_Bit" />
+                  </DataItem>
+                  <DataItem DataType="VisibleString" Length="4" TextId="T_Str" />
+                </Input>
+              </IOData>
+              <RecordDataList>
+                <ParameterRecordDataItem Index="1" Length="2" TransferSequence="1">
+                  <Name TextId="T_Rec" />
+                  <Const ByteOffset="0" Data="0x00,0x01" />
+                  <Ref ValueItemTarget="B_VALUES" DataType="Unsigned8" ByteOffset="1" DefaultValue="1" TextId="T_Field" />
+                </ParameterRecordDataItem>
+              </RecordDataList>
+              <ModuleInfo>
+                <Name TextId="T_VSub" />
+              </ModuleInfo>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+          <SystemDefinedSubmoduleList>
+            <InterfaceSubmoduleItem ID="B_IF" SubmoduleIdentNumber="0x00008000" SubslotNumber="32768" TextId="T_If" SupportedRT_Classes="RT_CLASS_1" SupportedProtocols="SNMP;LLDP" />
+            <PortSubmoduleItem ID="B_PORT" SubmoduleIdentNumber="0x00008001" SubslotNumber="32769" TextId="T_Port" />
+          </SystemDefinedSubmoduleList>
+          <UseableSubmodules>
+            <SubmoduleItemRef SubmoduleItemTarget="B_PLUG_PORT" AllowedInSubslots="32770" />
+          </UseableSubmodules>
+        </DeviceAccessPointItem>
+      </DeviceAccessPointList>
+      <ModuleList>
+        <ModuleItem ID="B_MOD" ModuleIdentNumber="0x00000B02">
+          <ModuleInfo>
+            <Name TextId="T_Mod" />
+          </ModuleInfo>
+          <UseableSubmodules>
+            <SubmoduleItemRef SubmoduleItemTarget="B_SUB" AllowedInSubslots="1" />
+          </UseableSubmodules>
+        </ModuleItem>
+      </ModuleList>
+      <SubmoduleList>
+        <SubmoduleItem ID="B_SUB" SubmoduleIdentNumber="0x00000B03">
+          <IOData />
+          <ModuleInfo>
+            <Name TextId="T_Sub" />
+          </ModuleInfo>
+        </SubmoduleItem>
+        <PortSubmoduleItem ID="B_PLUG_PORT" SubmoduleIdentNumber="0x00000B04">
+          <ModuleInfo>
+            <Name TextId="T_PlugPort" />
+          </ModuleInfo>
+        </PortSubmoduleItem>
+      </SubmoduleList>
+      <ValueList>
+        <ValueItem ID="B_VALUES">
+          <Assignments>
+            <Assign Content="1" TextId="T_One" />
+          </Assignments>
+        </ValueItem>
+      </ValueList>
+      <ChannelDiagList>
+        <ChannelDiagItem ErrorType="300">
+          <Name TextId="T_Chan" />
+        </ChannelDiagItem>
+      </ChannelDiagList>
+      <UnitDiagTypeList>
+        <UnitDiagTypeItem UserStructureIdentifier="7">
+          <Name TextId="T_Unit" />
+          <Ref ByteOffset="2" DataType="Unsigned16" TextId="T_UnitField" />
+        </UnitDiagTypeItem>
+      </UnitDiagTypeList>
+      <LogBookEntryList>
+        <LogBookEntryItem Status="2131100">
+          <ErrorCode2List>
+            <ErrorCode2Item ErrorCode2="9">
+              <Name TextId="T_Log" />
+            </ErrorCode2Item>
+          </ErrorCode2List>
+        </LogBookEntryItem>
+      </LogBookEntryList>
+      <ExternalTextList>
+        <PrimaryLanguage>
+          <Text TextId="T_Device" Value="Base device" />
+          <Text TextId="T_Dap" Value="Base head" />
+          <Text TextId="T_In" Value="Base input" />
+          <Text TextId="T_Bit" Value="Base bit" />
+          <Text TextId="T_Str" Value="Base text" />
+          <Text TextId="T_Rec" Value="Base record" />
+          <Text TextId="T_Field" Value="Base field" />
+          <Text TextId="T_VSub" Value="Base virtual submodule" />
+          <Text TextId="T_If" Value="Base interface" />
+          <Text TextId="T_Port" Value="Base port" />
+          <Text TextId="T_Mod" Value="Base module" />
+          <Text TextId="T_Sub" Value="Base submodule" />
+          <Text TextId="T_PlugPort" Value="Base pluggable port" />
+          <Text TextId="T_One" Value="One" />
+          <Text TextId="T_Chan" Value="Base channel error" />
+          <Text TextId="T_Unit" Value="Base unit diagnosis" />
+          <Text TextId="T_UnitField" Value="Base unit field" />
+          <Text TextId="T_Log" Value="Base logbook entry" />
+        </PrimaryLanguage>
+      </ExternalTextList>
+    </ApplicationProcess>
+  </ProfileBody>
+</ISO15745Profile>

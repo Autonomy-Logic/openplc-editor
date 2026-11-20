@@ -1,0 +1,217 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\xsd\GSDML-DeviceProfile-V2.35.xsd">
+	<!-- Synthetic test device: invented identifiers and texts. -->
+	<ProfileHeader>
+		<ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+		<ProfileRevision>1.00</ProfileRevision>
+		<ProfileName>Device Profile for PROFINET Devices</ProfileName>
+		<ProfileSource>Synthetic</ProfileSource>
+		<ProfileClassID>Device</ProfileClassID>
+	</ProfileHeader>
+	<ProfileBody>
+		<DeviceIdentity VendorID="0x0E21" DeviceID="0x0007">
+		  <InfoText TextId="TOK_Device_Info" />
+		  <VendorName Value="Compact Example" />
+		</DeviceIdentity>
+		<DeviceFunction>
+		  <Family MainFamily="I/O" ProductFamily="Compact" />
+		</DeviceFunction>
+		<ApplicationProcess>
+		<DeviceAccessPointList>
+			<!-- ========================== -->
+			<!--   Head with fixed ports    -->
+			<!-- ========================== -->
+			<DeviceAccessPointItem ID="Compact DAP" PhysicalSlots="0..32" ModuleIdentNumber="0x00000003" MinDeviceInterval="32" DNS_CompatibleName="compact-io" FixedInSlots="0" ObjectUUID_LocalIndex="1" MultipleWriteSupported="true">
+			<ModuleInfo>
+				<Name TextId="TOK_DAP_Name" />
+				<InfoText TextId="TOK_DAP_Info" />
+				<VendorName Value="Compact Example" />
+				<OrderNumber Value="CX-0001" />
+				<HardwareRelease Value="1" />
+				<SoftwareRelease Value="V1.2" />
+			</ModuleInfo>
+			<UseableModules>
+				<ModuleItemRef AllowedInSlots="1..32" ModuleItemTarget="CX-8I8O" />
+				<ModuleItemRef AllowedInSlots="1..32" ModuleItemTarget="CX-COM" />
+			</UseableModules>
+				<VirtualSubmoduleList>
+				<VirtualSubmoduleItem ID="Compact DAP" SubmoduleIdentNumber="0x0001" Writeable_IM_Records="1 2 3 4" MayIssueProcessAlarm="true">
+					<IOData />
+					<ModuleInfo>
+						<Name TextId="TOK_DAP_Name" />
+					</ModuleInfo>
+				</VirtualSubmoduleItem>
+				</VirtualSubmoduleList>
+			<SystemDefinedSubmoduleList>
+			<InterfaceSubmoduleItem DCP_HelloSupported="true" ID="Compact IF"  SubmoduleIdentNumber="0x0002" SubslotNumber="32768" SupportedProtocols="SNMP;LLDP" SupportedRT_Classes="RT_CLASS_1;RT_CLASS_3" TextId="TOK_Interface">
+				<ApplicationRelations NumberOfAR="4">
+					<TimingProperties ReductionRatio="1 2 4 8 16" SendClock="32 64 128"/>
+				</ApplicationRelations>
+				<MediaRedundancy SupportedRole="Client"  />
+			</InterfaceSubmoduleItem>
+				<PortSubmoduleItem ID="Compact P1" SubslotNumber="32769" SubmoduleIdentNumber="0x0003" TextId="TOK_Port1" MAUTypes="16" />
+				<PortSubmoduleItem ID="Compact P2" SubslotNumber="32770" SubmoduleIdentNumber="0x0003" TextId="TOK_Port2" MAUTypes="16" />
+			</SystemDefinedSubmoduleList>
+			</DeviceAccessPointItem>
+		</DeviceAccessPointList>
+		<ModuleList>
+	 <!-- CX-8I8O -->
+        <ModuleItem ID="CX-8I8O" ModuleIdentNumber="0x00280001">
+			<ModuleInfo>
+				<Name TextId="TOK_8I8O_Name" />
+				<InfoText TextId="TOK_8I8O_Info" />
+				<OrderNumber Value="CX-8I8O" />
+			</ModuleInfo>
+			<VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="CX-8I8O sub" MayIssueProcessAlarm="true" SubmoduleIdentNumber="0x00000001">
+				<IOData>
+				<Input>
+					<DataItem DataType="Unsigned8" UseAsBits="true" TextId="TOK_DI">
+						<BitDataItem BitOffset="0" TextId="TOK_DI_0" />
+						<BitDataItem BitOffset="1" TextId="TOK_DI_1" />
+					</DataItem>
+				</Input>
+				<Output>
+					<DataItem DataType="Unsigned8" UseAsBits="true" TextId="TOK_DO" />
+				</Output>
+				</IOData>
+				<RecordDataList>
+				<ParameterRecordDataItem Index="0" Length="4"> <!-- byte order -->
+				<Name TextId="TOK_ByteOrder" />
+				<Const Data="0x00,0x00,0x00,0x00" />
+					<Ref DataType="Unsigned8" ByteOffset="0" DefaultValue="0" Visible="false" TextId="TOK_Byte0" />
+					<Ref DataType="Unsigned8" ByteOffset="1" DefaultValue="0" Visible="false" TextId="TOK_Byte1" />
+				</ParameterRecordDataItem>
+				<ParameterRecordDataItem Index="1" Length="1">
+				<Name TextId="TOK_Filter_Record" />
+					<Ref DataType="Unsigned8" ByteOffset="0" DefaultValue="1" ValueItemTarget="Filter values" TextId="TOK_Filter" />
+				</ParameterRecordDataItem>
+				</RecordDataList>
+				<ModuleInfo>
+					<Name TextId="TOK_8I8O_Name" />
+				</ModuleInfo>
+			</VirtualSubmoduleItem>
+			</VirtualSubmoduleList>
+		</ModuleItem>
+	 <!-- CX-COM -->
+        <ModuleItem ID="CX-COM" ModuleIdentNumber="0x002A0001">
+			<ModuleInfo>
+				<Name TextId="TOK_COM_Name" />
+			</ModuleInfo>
+			<VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="CX-COM head" SubmoduleIdentNumber="0x00000001">
+				<IOData />
+				<ModuleInfo>
+					<Name TextId="TOK_COM_Name" />
+				</ModuleInfo>
+			</VirtualSubmoduleItem>
+			</VirtualSubmoduleList>
+		 <UseableSubmodules>
+			 <SubmoduleItemRef AllowedInSubslots="2..32" SubmoduleItemTarget="CX-IN4"/>
+
+			 <SubmoduleItemRef AllowedInSubslots="2..32" SubmoduleItemTarget="CX-IN64"/>
+			 <SubmoduleItemRef AllowedInSubslots="2" SubmoduleItemTarget="CX-OUT2"/>
+		 </UseableSubmodules>
+	 </ModuleItem>
+		</ModuleList>
+		<SubmoduleList>
+				<!-- Status input -->
+				<SubmoduleItem ID="CX-IN4" SubmoduleIdentNumber="0x00658800" MayIssueProcessAlarm="false">
+					<IOData>
+						<Input Consistency="Item consistency">
+							<DataItem DataType="OctetString"  Length="4" UseAsBits="true"  TextId="TOK_Input_Data"/>
+						</Input>
+					</IOData>
+					<RecordDataList>
+						<ParameterRecordDataItem Index="1" Length="4">
+							<!-- byte order -->
+							<Name TextId="TOK_Module_Config" />
+							<Const Data="0x00,0x00,0x00,0x00" />
+							<Ref DataType="Unsigned8" ByteOffset="0" DefaultValue="0" Visible="false" TextId="TOK_Byte0" />
+						</ParameterRecordDataItem>
+					</RecordDataList>
+					<ModuleInfo>
+						<Name TextId="TOK_IN4_Name"/>
+					</ModuleInfo>
+				</SubmoduleItem>
+				<!-- Error code input -->
+				<SubmoduleItem ID="CX-IN64" SubmoduleIdentNumber="0x00658C00" MayIssueProcessAlarm="false">
+					<IOData>
+						<Input Consistency="Item consistency">
+							<DataItem DataType="OctetString"  Length="64" UseAsBits="false"  TextId="TOK_Input_Data"/>
+						</Input>
+					</IOData>
+					<RecordDataList>
+						<ParameterRecordDataItem Index="2" Length="4">
+							<Name TextId="TOK_Module_Config" />
+							<Const Data="0x00,0x00,0x00,0x00" />
+						</ParameterRecordDataItem>
+					</RecordDataList>
+					<ModuleInfo>
+						<Name TextId="TOK_IN64_Name"/>
+					</ModuleInfo>
+				</SubmoduleItem>
+				<SubmoduleItem ID="CX-OUT2" SubmoduleIdentNumber="0x00659000">
+					<IOData>
+						<Output Consistency="Item consistency">
+							<DataItem DataType="OctetString"  Length="2" UseAsBits="true"  TextId="TOK_Output_Data"/>
+						</Output>
+					</IOData>
+					<ModuleInfo>
+						<Name TextId="TOK_OUT2_Name"/>
+					</ModuleInfo>
+				</SubmoduleItem>
+		</SubmoduleList>
+      <ValueList>
+		<ValueItem ID="Filter values">
+			<Assignments>
+				<Assign Content="0" TextId="TOK_Filter_Off" />
+				<Assign Content="1" TextId="TOK_Filter_On" />
+			</Assignments>
+		</ValueItem>
+		</ValueList>
+		<ChannelDiagList>
+			<ChannelDiagItem ErrorType="258">
+				<Name TextId="TOK_Overload" />
+				<Help TextId="TOK_Overload_Help" />
+			</ChannelDiagItem>
+		</ChannelDiagList>
+		<ExternalTextList>
+        <PrimaryLanguage>
+			<Text TextId="TOK_Device_Info" Value="Compact IO head" />
+			<Text TextId="TOK_DAP_Name" Value="Compact head" />
+			<Text TextId="TOK_DAP_Info" Value="Compact head with two ports" />
+			<Text TextId="TOK_Interface" Value="Compact interface" />
+			<Text TextId="TOK_Port1" Value="Compact port 1" />
+			<Text TextId="TOK_Port2" Value="Compact port 2" />
+			<Text TextId="TOK_8I8O_Name" Value="8 in 8 out" />
+			<Text TextId="TOK_8I8O_Info" Value="Eight inputs and eight outputs" />
+			<Text TextId="TOK_DI" Value="Digital inputs" />
+			<Text TextId="TOK_DI_0" Value="Input 0" />
+			<Text TextId="TOK_DI_1" Value="Input 1" />
+			<Text TextId="TOK_DO" Value="Digital outputs" />
+			<Text TextId="TOK_ByteOrder" Value="IO byte order" />
+			<Text TextId="TOK_Byte0" Value="Byte 0" />
+			<Text TextId="TOK_Byte1" Value="Byte 1" />
+			<Text TextId="TOK_Filter_Record" Value="Filter record" />
+			<Text TextId="TOK_Filter" Value="Input filter" />
+			<Text TextId="TOK_COM_Name" Value="Communication module" />
+			<Text TextId="TOK_Input_Data" Value="Input data" />
+			<Text TextId="TOK_Module_Config" Value="Module configuration" />
+			<Text TextId="TOK_IN4_Name" Value="Status input 4 bytes" />
+			<Text TextId="TOK_IN64_Name" Value="Error code input 64 bytes" />
+			<Text TextId="TOK_Output_Data" Value="Output data" />
+			<Text TextId="TOK_OUT2_Name" Value="Output 2 bytes" />
+			<Text TextId="TOK_Filter_Off" Value="Filter off" />
+			<Text TextId="TOK_Filter_On" Value="Filter on" />
+			<Text TextId="TOK_Overload" Value="Overload" />
+			<Text TextId="TOK_Overload_Help" Value="Reduce the load" />
+		</PrimaryLanguage>
+		<Language xml:lang="de">
+			<Text TextId="TOK_DAP_Name" Value="Kompaktkopf" />
+			<Text TextId="TOK_Overload" Value="Ueberlast" />
+		</Language>
+		</ExternalTextList>
+		</ApplicationProcess>
+	</ProfileBody>
+</ISO15745Profile>

@@ -1,288 +1,290 @@
-/**
- * GSDML (General Station Description Markup Language) types.
- *
- * In-memory representation of a device description document parsed from a
- * GSDML XML file, following the PI GSDML specification Annex A structural
- * model: Device Access Points (DAP), Modules and Submodules, with their
- * I/O data layouts and parameter record definitions.
- *
- * This representation is intentionally the editor's own domain shape, not
- * a faithful mirror of the XML tree. It is normalised, typed and indexed
- * so the configurator UI can slot/subslot-pick, show parameters and build
- * variable mappings without touching the raw XML again.
- */
-
-// ===================== VENDOR / DEVICE IDENTITY =====================
-
-/**
- * Device identity extracted from DeviceIdentity.
- */
+/** Device identity read from DeviceIdentity; ident numbers are normalised `0x` lowercase hex. */
 export interface GsdmlDeviceIdentity {
-  /** VendorID as hex string, e.g. "0x002A" (Siemens). */
-  vendorId: string
-  /** DeviceID as hex string, e.g. "0x0313" (ET200SP IM 155-6PN ST). */
-  deviceId: string
-  /** VendorName, resolved from ExternalText when the identity carries a TextId. */
-  vendorName: string
-  /** InfoText for the device as a whole, resolved from ExternalText. */
-  infoText: string
+  readonly vendorId: string
+  readonly deviceId: string
+  /** The Value of the VendorName child element; empty when absent. */
+  readonly vendorName: string
+  readonly infoText: string
 }
 
-// ===================== I/O DATA =====================
-
-/**
- * Direction of a submodule I/O item: Input (device -> controller) or
- * Output (controller -> device).
- */
-export type GsdmlIoDirection = 'input' | 'output'
-
-/**
- * A single data item inside a submodule's I/O area.
- *
- * Mirrors the DataItem element: a typed field with a bit length and an
- * optional per-channel breakdown through UseAsBits (BitDataItem list).
- */
-export interface GsdmlDataItem {
-  /** Direction this item belongs to. */
-  direction: GsdmlIoDirection
-  /** GSDML data type literal, e.g. "Unsigned8", "Integer16", "Bit", "OctetString". */
-  dataType: string
-  /** Bit length of the whole item. */
-  bitLength: number
-  /** Short label resolved from TextId; empty when none is referenced. */
-  text: string
-  /** When true, the item is a packed byte broken into individual bits. */
-  useAsBits: boolean
-  /** Named bit positions, present only when useAsBits is true. */
-  bits: GsdmlBitDataItem[]
+/** One closed range of a slot or subslot set, both bounds included. */
+export interface GsdmlSlotRange {
+  readonly first: number
+  readonly last: number
 }
 
-/**
- * One bit of a packed byte declared with UseAsBits.
- */
+/** A slot or subslot set, from value lists such as `1..32`, `1 2 3` or `1 3 5..7`. */
+export type GsdmlSlotSet = readonly GsdmlSlotRange[]
+
+/** One named bit of a DataItem, from BitDataItem. */
 export interface GsdmlBitDataItem {
-  /** 0..7 for a byte-packed item; parser preserves whatever the file says. */
-  bitOffset: number
-  /** Short label resolved from TextId; empty when none is referenced. */
-  text: string
+  readonly bitOffset: number
+  readonly text: string
 }
 
-/**
- * I/O layout of a submodule: ordered Input and Output items.
- */
+/** One DataItem of an IO data area. */
+export interface GsdmlDataItem {
+  readonly id: string | null
+  readonly dataType: string
+  /** Null when the size of the data type is not known. */
+  readonly bitLength: number | null
+  readonly textId: string
+  readonly text: string
+  readonly useAsBits: boolean
+  readonly bits: readonly GsdmlBitDataItem[]
+}
+
+/** The IO data of a submodule, with the bit length of each direction. */
 export interface GsdmlIoData {
-  input: GsdmlDataItem[]
-  output: GsdmlDataItem[]
+  readonly input: readonly GsdmlDataItem[]
+  readonly output: readonly GsdmlDataItem[]
+  /** Sum of the input item lengths; null when one of them is unknown. */
+  readonly inputBitLength: number | null
+  /** Sum of the output item lengths; null when one of them is unknown. */
+  readonly outputBitLength: number | null
 }
 
-// ===================== PARAMETER RECORDS =====================
+/** A field of a record or diagnosis structure, from a Ref element. */
+export interface GsdmlDataField {
+  readonly id: string | null
+  readonly textId: string
+  readonly text: string
+  readonly byteOffset: number
+  readonly bitOffset: number
+  /** Null when the size of the data type is not known. */
+  readonly bitLength: number | null
+  readonly dataType: string
+}
 
-/**
- * Kind of a parameter field. Driven by the Ref's DataType plus any ValueItem
- * attached through ValueItemTarget.
- */
-export type GsdmlParameterFieldKind = 'enum' | 'integer' | 'float' | 'boolean' | 'text' | 'bitfield'
+/** How a parameter field is edited. */
+export type GsdmlParameterFieldKind =
+  | 'enum'
+  | 'bit'
+  | 'bitArea'
+  | 'integer'
+  | 'unsigned'
+  | 'float'
+  | 'string'
+  | 'octets'
+  | 'other'
 
-/**
- * A single value option on an enum-kind parameter field, flattened from
- * ValueItem's Assignments list.
- */
+/** One lexical range of AllowedValues; a single value has equal bounds. */
+export interface GsdmlAllowedValueRange {
+  readonly min: string
+  readonly max: string
+}
+
+/** One option of an enumerated field, from ValueItem/Assignments/Assign. */
 export interface GsdmlParameterEnumOption {
-  /** Raw value as it will travel on the wire, as a string to preserve width. */
-  value: string
-  /** Display label resolved from TextId; empty when none is referenced. */
-  text: string
+  readonly value: string
+  readonly text: string
 }
 
-/**
- * A single configurable field inside a parameter record, built from Ref.
- */
-export interface GsdmlParameterField {
-  /** Field identifier, from the Ref's Name attribute. */
-  name: string
-  /** Label resolved from TextId; empty when the Ref has no text. */
-  text: string
-  /** Byte offset into the record. */
-  byteOffset: number
-  /** Bit offset within the byte (0 when the field is byte-aligned). */
-  bitOffset: number
-  /** GSDML data type literal of the field. */
-  dataType: string
-  /** Classified kind for the UI. */
-  kind: GsdmlParameterFieldKind
-  /** Default value as a string, when Ref declares one. */
-  defaultValue?: string
-  /** Allowed numeric range as a half-open "min..max" string, when declared. */
-  allowedValues?: string
-  /** Options for enum fields; empty for non-enum kinds. */
-  enumOptions: GsdmlParameterEnumOption[]
+/** A parameter field of a ParameterRecordDataItem. */
+export interface GsdmlParameterField extends GsdmlDataField {
+  readonly kind: GsdmlParameterFieldKind
+  readonly defaultValue: string
+  /** The AllowedValues ranges as written; null when the attribute is absent. */
+  readonly allowedValues: readonly GsdmlAllowedValueRange[] | null
+  readonly enumOptions: readonly GsdmlParameterEnumOption[]
+  readonly changeable: boolean
+  readonly visible: boolean
 }
 
-/**
- * A parameter record on a submodule, from RecordDataItem.
- *
- * Represents one Record Data Object the controller writes during startup
- * to configure the submodule.
- */
+/** Constant record bytes, from a Const element. */
+export interface GsdmlRecordConstant {
+  readonly byteOffset: number
+  readonly data: readonly number[]
+}
+
+/** A ParameterRecordDataItem of a submodule. */
 export interface GsdmlParameterRecord {
-  /** Record index as hex string, e.g. "0x0001". */
-  index: string
-  /** Total length in bytes. */
-  length: number
-  /** Transfer sequence declared on the record, e.g. "Startup". */
-  transferSequence: string
-  /** Label resolved from TextId; empty when the record has no text. */
-  text: string
-  /** Ordered fields. */
-  fields: GsdmlParameterField[]
+  readonly index: number
+  readonly length: number
+  readonly transferSequence: number | null
+  readonly name: string
+  readonly constants: readonly GsdmlRecordConstant[]
+  readonly fields: readonly GsdmlParameterField[]
 }
 
-// ===================== SUBMODULE =====================
-
-/**
- * A submodule entry. Covers both VirtualSubmoduleItem (fixed, inside a
- * module) and the standalone SubmoduleItem referenced by SubmoduleItemRef.
- */
-export interface GsdmlSubmodule {
-  /** GSDML ID attribute (parser scope). */
-  id: string
-  /** SubmoduleIdentNumber as hex string. */
-  identNumber: string
-  /** Short display name resolved from ModuleInfo.Name's TextId. */
-  name: string
-  /** Longer description resolved from ModuleInfo.InfoText's TextId. */
-  infoText: string
-  /** I/O layout. */
-  io: GsdmlIoData
-  /** Parameter records that configure this submodule. */
-  parameterRecords: GsdmlParameterRecord[]
-  /** True when this submodule is a VirtualSubmoduleItem (fixed inside a module). */
-  virtual: boolean
+/** The fields every submodule kind shares. */
+export interface GsdmlSubmoduleBase {
+  readonly id: string
+  readonly identNumber: string
+  readonly name: string
+  readonly infoText: string
+  readonly io: GsdmlIoData
+  readonly parameterRecords: readonly GsdmlParameterRecord[]
+  readonly requiredSchemaVersion: string | null
 }
 
-// ===================== MODULE =====================
-
-/**
- * A module entry inside the ModuleList, referenced by DAPs through
- * UseableModules -> ModuleItemRef.
- */
-export interface GsdmlModule {
-  /** GSDML ID attribute. */
-  id: string
-  /** ModuleIdentNumber as hex string, used by the controller to plug the module. */
-  identNumber: string
-  /** Short display name resolved from ModuleInfo.Name's TextId. */
-  name: string
-  /** Longer description resolved from ModuleInfo.InfoText's TextId. */
-  infoText: string
-  /** Order number as printed on the hardware label; empty when not declared. */
-  orderNumber: string
-  /** Hardware release label; empty when not declared. */
-  hardwareRelease: string
-  /** Software release label; empty when not declared. */
-  softwareRelease: string
-  /** Submodules fixed inside this module (VirtualSubmoduleItem instances). */
-  virtualSubmodules: GsdmlSubmodule[]
-  /** References to standalone SubmoduleItems this module can carry. */
-  submoduleRefs: string[]
+/** A VirtualSubmoduleItem of a device access point or module. */
+export interface GsdmlVirtualSubmodule extends GsdmlSubmoduleBase {
+  readonly kind: 'virtual'
 }
 
-// ===================== DEVICE ACCESS POINT (DAP) =====================
+/** A SubmoduleItem of the SubmoduleList. */
+export interface GsdmlStandardSubmodule extends GsdmlSubmoduleBase {
+  readonly kind: 'submodule'
+}
+
+/** An InterfaceSubmoduleItem of a SystemDefinedSubmoduleList. */
+export interface GsdmlInterfaceSubmodule extends GsdmlSubmoduleBase {
+  readonly kind: 'interface'
+  readonly subslotNumber: number | null
+  /**
+   * The SupportedRT_Classes tokens as written. In a file newer than the supported schema version, only the tokens of
+   * `GSDML_RT_CLASS_TOKENS` are kept and every other token gives an `unknown-token` notice.
+   */
+  readonly supportedRtClasses: readonly string[]
+  /**
+   * The SupportedProtocols tokens as written. In a file newer than the supported schema version, only the tokens of
+   * `GSDML_PROTOCOL_TOKENS` are kept and every other token gives an `unknown-token` notice.
+   */
+  readonly supportedProtocols: readonly string[]
+}
+
+/** A PortSubmoduleItem, fixed in a SystemDefinedSubmoduleList or pluggable in the SubmoduleList. */
+export interface GsdmlPortSubmodule extends GsdmlSubmoduleBase {
+  readonly kind: 'port'
+  readonly subslotNumber: number | null
+}
+
+/** A submodule of the SubmoduleList. */
+export type GsdmlPluggableSubmodule = GsdmlStandardSubmodule | GsdmlPortSubmodule
+
+/** A submodule of a SystemDefinedSubmoduleList. */
+export type GsdmlSystemDefinedSubmodule = GsdmlInterfaceSubmodule | GsdmlPortSubmodule
+
+/** Any submodule kind. */
+export type GsdmlSubmodule =
+  | GsdmlVirtualSubmodule
+  | GsdmlStandardSubmodule
+  | GsdmlInterfaceSubmodule
+  | GsdmlPortSubmodule
 
 /**
- * One slot position declared on a DAP.
+ * A module a device access point accepts, from UseableModules/ModuleItemRef. Its `moduleId` names a module of the
+ * catalog unless a `dangling-reference` notice has it as its detail. A ModuleItemRef whose ModuleItem was skipped for
+ * its RequiredSchemaVersion (Annex A.3.3) is left out.
  */
-export interface GsdmlSlotEntry {
-  /** Slot number. */
-  slotNumber: number
-  /** When true, the slot cannot be reassigned (interface/port slot). */
-  fixedModule: boolean
-  /** ModuleIdentNumber of the module hard-wired to this slot, when fixed. */
-  moduleIdentNumber?: string
+export interface GsdmlModulePlacement {
+  readonly moduleId: string
+  readonly allowedInSlots: GsdmlSlotSet
+  readonly fixedInSlots: GsdmlSlotSet
+  readonly usedInSlots: GsdmlSlotSet
 }
 
 /**
- * A Device Access Point. Represents a configurable device variant: the IM
- * (interface module) a project will plug modules into.
+ * A submodule a device access point or module accepts, from UseableSubmodules/SubmoduleItemRef. Its `submoduleId` names
+ * a submodule of the catalog SubmoduleList unless a `dangling-reference` notice has it as its detail. A
+ * SubmoduleItemRef whose SubmoduleList entry was skipped for its RequiredSchemaVersion (Annex A.3.3) is left out.
  */
+export interface GsdmlSubmodulePlacement {
+  readonly submoduleId: string
+  readonly allowedInSubslots: GsdmlSlotSet
+  readonly fixedInSubslots: GsdmlSlotSet
+  readonly usedInSubslots: GsdmlSlotSet
+}
+
+/** A DeviceAccessPointItem. */
 export interface GsdmlDeviceAccessPoint {
-  /** GSDML ID attribute. */
-  id: string
-  /** ModuleIdentNumber of the DAP itself (slot 0 normally). */
-  identNumber: string
-  /** Short display name resolved from ModuleInfo.Name's TextId. */
-  name: string
-  /** Longer description resolved from ModuleInfo.InfoText's TextId. */
-  infoText: string
-  /** Order number as printed on the hardware label; empty when not declared. */
-  orderNumber: string
-  /** Fixed slot layout exposed by this DAP (interface, ports, head module). */
-  slots: GsdmlSlotEntry[]
-  /** Module IDs this DAP can carry. */
-  useableModuleIds: string[]
-  /** Submodules fixed inside the DAP (interface submodules, ports). */
-  virtualSubmodules: GsdmlSubmodule[]
+  readonly id: string
+  readonly identNumber: string
+  readonly name: string
+  readonly infoText: string
+  readonly orderNumber: string
+  readonly requiredSchemaVersion: string | null
+  readonly physicalSlots: GsdmlSlotSet
+  readonly fixedInSlots: GsdmlSlotSet
+  readonly useableModules: readonly GsdmlModulePlacement[]
+  readonly virtualSubmodules: readonly GsdmlVirtualSubmodule[]
+  readonly systemDefinedSubmodules: readonly GsdmlSystemDefinedSubmodule[]
+  readonly useableSubmodules: readonly GsdmlSubmodulePlacement[]
 }
 
-// ===================== CATALOG =====================
+/** A ModuleItem of the ModuleList. */
+export interface GsdmlModule {
+  readonly id: string
+  readonly identNumber: string
+  readonly name: string
+  readonly infoText: string
+  readonly orderNumber: string
+  readonly hardwareRelease: string
+  readonly softwareRelease: string
+  readonly requiredSchemaVersion: string | null
+  readonly virtualSubmodules: readonly GsdmlVirtualSubmodule[]
+  readonly useableSubmodules: readonly GsdmlSubmodulePlacement[]
+}
 
-/**
- * Fully parsed GSDML catalog. The main entry point UI code consumes.
- */
+/** A ChannelDiagItem. */
+export interface GsdmlChannelDiagnostic {
+  readonly errorType: number
+  readonly name: string
+  readonly help: string
+}
+
+/** A UnitDiagTypeItem with its Ref fields. */
+export interface GsdmlUnitDiagnosticType {
+  readonly userStructureIdentifier: number
+  readonly name: string
+  readonly fields: readonly GsdmlDataField[]
+}
+
+/** One ErrorCode2Item of a LogBookEntryItem. */
+export interface GsdmlLogBookErrorCode2 {
+  readonly errorCode2: number
+  readonly name: string
+  readonly help: string
+}
+
+/** The ErrorCode2 description of a LogBookEntryItem: its ErrorCode2Value or its ErrorCode2List. */
+export type GsdmlLogBookErrorCode2Description =
+  | { readonly kind: 'value'; readonly name: string; readonly help: string }
+  | { readonly kind: 'list'; readonly items: readonly GsdmlLogBookErrorCode2[] }
+
+/** A LogBookEntryItem. */
+export interface GsdmlLogBookEntry {
+  readonly status: number
+  readonly errorCode2: GsdmlLogBookErrorCode2Description
+}
+
+/** The kind of a parser notice. */
+export type GsdmlNoticeKind =
+  | 'newer-schema-version'
+  | 'object-skipped'
+  | 'unresolved-text'
+  | 'dangling-reference'
+  | 'unknown-data-type'
+  | 'no-device-access-point'
+  | 'notices-truncated'
+  | 'unknown-token'
+
+/** Something the parser noticed while reading a file it accepted. */
+export interface GsdmlNotice {
+  readonly kind: GsdmlNoticeKind
+  readonly message: string
+  /** The ID of the element the notice is about, when it has one. */
+  readonly elementId?: string
+  /** The value the notice is about, such as a text id, a reference target, a data type or an ignored token. */
+  readonly detail?: string
+}
+
+/** The catalog of one GSDML file. Plain data only, safe to structured-clone. */
 export interface GsdmlCatalog {
-  /** Device identity: VendorID, DeviceID and resolved names. */
-  identity: GsdmlDeviceIdentity
-  /** DeviceAccessPointItems indexed by ID. */
-  deviceAccessPoints: GsdmlDeviceAccessPoint[]
-  /** ModuleItems indexed by ID. */
-  modules: GsdmlModule[]
-  /** Standalone SubmoduleItems indexed by ID. */
-  submodules: GsdmlSubmodule[]
-  /** Non-fatal issues the parser logged, e.g. unresolved TextIds. */
-  warnings: string[]
-  /** Highest GSDML schema version seen in the file (e.g. "V2.45"). */
-  schemaVersion: string
+  /** The version of the schema location file name, such as `V2.45`; empty when it names none. */
+  readonly schemaVersion: string
+  readonly identity: GsdmlDeviceIdentity
+  readonly deviceAccessPoints: readonly GsdmlDeviceAccessPoint[]
+  readonly modules: readonly GsdmlModule[]
+  readonly submodules: readonly GsdmlPluggableSubmodule[]
+  readonly channelDiagnostics: readonly GsdmlChannelDiagnostic[]
+  readonly unitDiagnosticTypes: readonly GsdmlUnitDiagnosticType[]
+  readonly logBookEntries: readonly GsdmlLogBookEntry[]
+  readonly notices: readonly GsdmlNotice[]
 }
 
-// ===================== LOOKUPS =====================
-
-/**
- * Convenience lookups built on top of GsdmlCatalog. Not generated by the
- * parser; use buildGsdmlCatalogLookups to derive them.
- */
-export interface GsdmlCatalogLookups {
-  /** DAPs by their ID. */
-  dapById: Map<string, GsdmlDeviceAccessPoint>
-  /** Modules by their ID. */
-  moduleById: Map<string, GsdmlModule>
-  /** Modules by their ModuleIdentNumber (lowercased hex). */
-  moduleByIdent: Map<string, GsdmlModule>
-  /** Standalone submodules by their ID. */
-  submoduleById: Map<string, GsdmlSubmodule>
-  /** Standalone submodules by their SubmoduleIdentNumber (lowercased hex). */
-  submoduleByIdent: Map<string, GsdmlSubmodule>
-}
-
-// ===================== RESULT =====================
-
-/**
- * Successful parse result.
- */
-export interface GsdmlParseSuccess {
-  success: true
-  catalog: GsdmlCatalog
-}
-
-/**
- * Failed parse result. Error is always a human-readable sentence; callers
- * surface it directly to the user.
- */
-export interface GsdmlParseFailure {
-  success: false
-  error: string
-}
-
-/**
- * Discriminated-union parse result.
- */
-export type GsdmlParseResult = GsdmlParseSuccess | GsdmlParseFailure
+/** The result of parsing a GSDML file: its catalog or the reason it was rejected. */
+export type GsdmlParseResult =
+  | { readonly success: true; readonly catalog: GsdmlCatalog }
+  | { readonly success: false; readonly error: string }

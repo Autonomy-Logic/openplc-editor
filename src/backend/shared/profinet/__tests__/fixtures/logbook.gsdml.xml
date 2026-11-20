@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-v2.4.xsd">
+  <ProfileHeader>
+    <ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+    <ProfileClassID>Device</ProfileClassID>
+  </ProfileHeader>
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x0F0C" DeviceID="0x00D1">
+      <InfoText TextId="L_Device" />
+      <VendorName Value="Logbook Vendor" />
+    </DeviceIdentity>
+    <ApplicationProcess>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="L_DAP" PhysicalSlots="0" ModuleIdentNumber="0x00000C01" FixedInSlots="0" MinDeviceInterval="32" DNS_CompatibleName="logbook" ObjectUUID_LocalIndex="1" PNIO_Version="V2.4">
+          <ModuleInfo>
+            <Name TextId="L_Dap" />
+          </ModuleInfo>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="L_VSUB" SubmoduleIdentNumber="0x00000001">
+              <IOData />
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </DeviceAccessPointItem>
+      </DeviceAccessPointList>
+      <LogBookEntryList>
+        <LogBookEntryItem Status="2131000">
+          <ErrorCode2Value>
+            <Name TextId="L_Vendor_Fault" />
+            <Help TextId="L_Vendor_Fault_Help" />
+          </ErrorCode2Value>
+        </LogBookEntryItem>
+        <LogBookEntryItem Status="2131001">
+          <ErrorCode2List>
+            <ErrorCode2Item ErrorCode2="0">
+              <Name TextId="L_Code_Zero" />
+            </ErrorCode2Item>
+            <ErrorCode2Item ErrorCode2="255">
+              <Name TextId="L_Code_Max" />
+              <Help TextId="L_Code_Max_Help" />
+            </ErrorCode2Item>
+          </ErrorCode2List>
+        </LogBookEntryItem>
+        <LogBookEntryItem Status="2131002">
+          <ErrorCode2Value>
+            <Name TextId="L_No_Help" />
+          </ErrorCode2Value>
+        </LogBookEntryItem>
+      </LogBookEntryList>
+      <ExternalTextList>
+        <PrimaryLanguage>
+          <Text TextId="L_Device" Value="Logbook device" />
+          <Text TextId="L_Dap" Value="Logbook head" />
+          <Text TextId="L_Vendor_Fault" Value="Vendor fault" />
+          <Text TextId="L_Vendor_Fault_Help" Value="Restart the device" />
+          <Text TextId="L_Code_Zero" Value="Code zero" />
+          <Text TextId="L_Code_Max" Value="Code maximum" />
+          <Text TextId="L_Code_Max_Help" Value="Replace the module" />
+          <Text TextId="L_No_Help" Value="Fault without help" />
+        </PrimaryLanguage>
+      </ExternalTextList>
+    </ApplicationProcess>
+  </ProfileBody>
+</ISO15745Profile>

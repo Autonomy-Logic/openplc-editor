@@ -28,7 +28,6 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
 
   const handleFilesLoaded = useCallback(
     (items: ESIRepositoryItemLight[], errors?: Array<{ filename: string; error: string }>) => {
-      // Items are already parsed and saved by the main process
       onRepositoryChange(items)
       setUploadErrors(errors ?? [])
     },
@@ -80,12 +79,13 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
 
   return (
     <div className='flex flex-1 flex-col gap-4 overflow-hidden'>
-      {/* Upload Area */}
       <ESIUpload onFilesLoaded={handleFilesLoaded} repository={repository} isLoading={isProcessing} />
 
-      {/* Error Summary (collapsible) */}
       {uploadErrors.length > 0 && (
-        <div className='shrink-0 rounded-md border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'>
+        <div
+          data-testid='esi-upload-errors'
+          className='shrink-0 rounded-md border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+        >
           <div className='flex items-center justify-between px-3 py-2'>
             <button onClick={() => setErrorsExpanded((prev) => !prev)} className='flex items-center gap-2'>
               <svg
@@ -132,7 +132,6 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
         </div>
       )}
 
-      {/* Repository Table */}
       <div className='flex flex-1 flex-col overflow-hidden'>
         <ESIRepositoryTable
           repository={repository}

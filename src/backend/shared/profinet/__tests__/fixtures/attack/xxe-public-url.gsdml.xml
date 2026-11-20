@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE ISO15745Profile [
+  <!ENTITY xxe PUBLIC "-//EXAMPLE//GSDML TEST//EN" "http://gsdml-test.invalid/xxe.xml">
+]>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-v2.45.xsd">
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x0F10" DeviceID="0x0001">
+      <InfoText TextId="A_Device" />
+      <VendorName Value="Attack Vendor" />
+    </DeviceIdentity>
+    <ApplicationProcess>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="A_DAP" PhysicalSlots="0" ModuleIdentNumber="0x00001001" FixedInSlots="0" />
+      </DeviceAccessPointList>
+      <ExternalTextList>
+        <PrimaryLanguage>
+          <Text TextId="A_Device" Value="&xxe;" />
+        </PrimaryLanguage>
+      </ExternalTextList>
+    </ApplicationProcess>
+  </ProfileBody>
+</ISO15745Profile>

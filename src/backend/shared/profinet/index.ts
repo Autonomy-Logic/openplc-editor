@@ -1,21 +1,8 @@
-export { buildGsdmlCatalogLookups, parseGsdml } from './gsdml-parser'
-export type {
-  GsdmlBitDataItem,
-  GsdmlCatalog,
-  GsdmlCatalogLookups,
-  GsdmlDataItem,
-  GsdmlDeviceAccessPoint,
-  GsdmlDeviceIdentity,
-  GsdmlIoData,
-  GsdmlIoDirection,
-  GsdmlModule,
-  GsdmlParameterEnumOption,
-  GsdmlParameterField,
-  GsdmlParameterFieldKind,
-  GsdmlParameterRecord,
-  GsdmlParseFailure,
-  GsdmlParseResult,
-  GsdmlParseSuccess,
-  GsdmlSlotEntry,
-  GsdmlSubmodule,
-} from '@root/middleware/shared/ports/gsdml-types'
+export { GSDML_MAX_NOTICES } from './gsdml-notices'
+export { runGsdmlParseOp } from './gsdml-parse-ops'
+export { parseGsdml, summarizeGsdmlCatalog } from './gsdml-parser'
+export type { GsdmlRepositoryMechanisms } from './gsdml-repository-port'
+export { createGsdmlRepositoryPort, GSDML_SUMMARY_VERSION } from './gsdml-repository-port'
+export type { GsdmlProtocolToken, GsdmlRtClassToken } from './gsdml-version'
+export { GSDML_PROTOCOL_TOKENS, GSDML_RT_CLASS_TOKENS, GSDML_SUPPORTED_SCHEMA_VERSION } from './gsdml-version'
+export { GSDML_XML_ENTITY_LIMITS } from './gsdml-xml'

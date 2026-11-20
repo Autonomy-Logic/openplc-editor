@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DeviceDescription xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-v2.45.xsd">
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x0F0F" DeviceID="0x0001">
+      <VendorName Value="Structure Vendor" />
+    </DeviceIdentity>
+    <ApplicationProcess>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="S_DAP" PhysicalSlots="0" ModuleIdentNumber="0x00000F01" FixedInSlots="0" />
+      </DeviceAccessPointList>
+    </ApplicationProcess>
+  </ProfileBody>
+</DeviceDescription>

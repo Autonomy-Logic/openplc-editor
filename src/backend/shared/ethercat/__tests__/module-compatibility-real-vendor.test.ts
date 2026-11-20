@@ -1,21 +1,10 @@
-/**
- * Every module in a vendor's own ESI must pass the coupler's `<Slots>` check, or the module
- * browser and the scan apply would hide valid modules.
- */
-
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
-import { decodeXmlBytes } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
 import {
   canonicalVendorId,
   isModuleCompatibleWithCoupler,
 } from '@root/middleware/shared/utils/ethercat/module-compatibility'
 
 import { parseESIDeviceFull, parseESILight } from '../esi-parser-main'
-
-const read = (name: string): string =>
-  decodeXmlBytes(new Uint8Array(readFileSync(join(__dirname, 'fixtures', 'esi-real', name))))
+import { readEsiFixture } from './fixtures/esi-repository-test-helpers'
 
 const stations: Array<{ coupler: string; modules: string }> = [
   { coupler: 'weidmueller-ur20-fbc.xml', modules: 'weidmueller-ur20-io.xml' },
@@ -25,8 +14,8 @@ const stations: Array<{ coupler: string; modules: string }> = [
 
 describe.each(stations)('$coupler accepts every module of $modules', ({ coupler, modules }) => {
   test('vendor and slot class or ident', () => {
-    const device = parseESIDeviceFull(read(coupler), 0)
-    const light = parseESILight(read(modules))
+    const device = parseESIDeviceFull(readEsiFixture(coupler), 0)
+    const light = parseESILight(readEsiFixture(modules))
     if (!device.success || device.device === undefined || !light.success) throw new Error('fixture parse failed')
     const vendorId = light.vendor?.id ?? ''
     const list = light.modules ?? []

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-v2.45.xsd">
+  <ProfileHeader>
+    <ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+    <ProfileClassID>Device</ProfileClassID>
+  </ProfileHeader>
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x0F0E" DeviceID="0x00F1">
+      <InfoText TextId="V_Text" />
+      <VendorName Value="Version Vendor" />
+    </DeviceIdentity>
+    <ApplicationProcess>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="VB_DAP" RequiredSchemaVersion="V2.45" PhysicalSlots="0..8" ModuleIdentNumber="0x00000E01" FixedInSlots="0" MinDeviceInterval="32" DNS_CompatibleName="versions" ObjectUUID_LocalIndex="1">
+          <ModuleInfo>
+            <Name TextId="V_Text" />
+          </ModuleInfo>
+          <UseableModules>
+            <ModuleItemRef ModuleItemTarget="VB_225" AllowedInSlots="1..8" />
+            <ModuleItemRef ModuleItemTarget="VB_23" AllowedInSlots="1..8" />
+            <ModuleItemRef ModuleItemTarget="VB_24" AllowedInSlots="1..8" />
+            <ModuleItemRef ModuleItemTarget="VB_245_LOWER" AllowedInSlots="1..8" />
+          </UseableModules>
+        </DeviceAccessPointItem>
+        <DeviceAccessPointItem ID="VB_DAP_NEW" RequiredSchemaVersion="V2.46" ModuleIdentNumber="0x00000E02" FixedInSlots="0">
+          <ModuleInfo>
+            <Name TextId="V_Text" />
+          </ModuleInfo>
+        </DeviceAccessPointItem>
+      </DeviceAccessPointList>
+      <ModuleList>
+        <ModuleItem ID="VB_225" RequiredSchemaVersion="V2.25" ModuleIdentNumber="0x00000E10" />
+        <ModuleItem ID="VB_23" RequiredSchemaVersion="V2.3" ModuleIdentNumber="0x00000E11" />
+        <ModuleItem ID="VB_24" RequiredSchemaVersion="V2.4" ModuleIdentNumber="0x00000E12" />
+        <ModuleItem ID="VB_245_LOWER" RequiredSchemaVersion="v2.45" ModuleIdentNumber="0x00000E13" />
+        <ModuleItem ID="VB_25" RequiredSchemaVersion="V2.5" />
+        <ModuleItem ID="VB_2450" RequiredSchemaVersion="V2.450" />
+        <ModuleItem ID="VB_2451" RequiredSchemaVersion="V2.451" />
+        <ModuleItem ID="VB_299_LOWER" RequiredSchemaVersion="v2.99" />
+        <ModuleItem ID="VB_30" RequiredSchemaVersion="V3.0" />
+      </ModuleList>
+      <SubmoduleList>
+        <SubmoduleItem ID="VB_SUB_OK" RequiredSchemaVersion="V2.31" SubmoduleIdentNumber="0x00000E20" />
+        <SubmoduleItem ID="VB_SUB_NEW" RequiredSchemaVersion="V2.99" />
+        <PortSubmoduleItem ID="VB_PORT_NEW" RequiredSchemaVersion="V2.47" />
+      </SubmoduleList>
+      <ExternalTextList>
+        <PrimaryLanguage>
+          <Text TextId="V_Text" Value="Version boundaries" />
+        </PrimaryLanguage>
+      </ExternalTextList>
+    </ApplicationProcess>
+  </ProfileBody>
+</ISO15745Profile>
