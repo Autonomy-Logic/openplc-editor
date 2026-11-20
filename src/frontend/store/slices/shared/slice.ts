@@ -585,7 +585,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.projectActions.createHmiElement(
         kind,
         name,
-        kind === 'screen' ? newHmiScreenSource(name) : newHmiWidgetSource(name),
+        kind === 'screen'
+          ? newHmiScreenSource(name)
+          : newHmiWidgetSource(name, isLibraryProject(state.project.meta) ? state.project.meta.name : undefined),
       )
       if (!hadHmi && !isLibraryProject(state.project.meta)) {
         state.fileActions.addFile({

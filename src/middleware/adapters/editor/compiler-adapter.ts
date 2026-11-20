@@ -64,6 +64,8 @@ export interface IpcProjectData {
   /** Opaque VPP screen data forwarded to the pipeline for runtime emitters. */
   vppExtensions?: Record<string, Record<string, unknown>>
   originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
+  /** The project's HMI files, verbatim; a library build compiles its widget blocks. */
+  hmi?: PLCProjectData['hmi']
 }
 
 /** Converts a flat port POU to the editor's discriminated-union IPC format. */
@@ -99,6 +101,7 @@ function toIpcProjectData(data: PLCProjectData & { originalCppPous?: unknown[] }
     libraries: data.libraries,
     ...(data.vppExtensions ? { vppExtensions: data.vppExtensions } : {}),
     ...(data.originalCppPous ? { originalCppPous: data.originalCppPous as IpcProjectData['originalCppPous'] } : {}),
+    ...(data.hmi ? { hmi: data.hmi } : {}),
   }
 }
 

@@ -69,11 +69,11 @@ async function buildWidgetLibrary(): Promise<string> {
   try {
     await page.getByText(LIBRARY.name, { exact: true }).first().click({ timeout: 30000 })
     await page.locator('#create-plc-element-trigger').click({ timeout: 30000 })
-    await expect(page.locator('#create-hmi-widget-trigger')).toHaveText(/^Widget$/, { timeout: 10000 })
+    await expect(page.locator('#create-hmi-widget-trigger')).toHaveText(/^Widget/, { timeout: 10000 })
     await page.locator('#create-hmi-widget-trigger').hover()
     await page.locator('#hmi-name').fill(WIDGET)
     await page.locator('#create-hmi-widget-content').getByRole('button', { name: 'Create' }).click()
-    await expect(page.locator('li.group').getByText(WIDGET, { exact: true }).first()).toBeVisible({ timeout: 30000 })
+    await expect(leaf(page, WIDGET)).toBeVisible({ timeout: 30000 })
     await buildLibrary(page)
     await waitForText(page, new RegExp(`Library built successfully: build/${LIBRARY.name}\\.stlib`), { timeout: 60000 })
     expect(existsSync(join(project, 'hmi', 'widgets', `${WIDGET}.st`))).toBe(true)

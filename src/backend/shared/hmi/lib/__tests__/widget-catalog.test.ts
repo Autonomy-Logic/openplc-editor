@@ -5,6 +5,7 @@ import type { LibraryFBEntry, LibraryManifest, StlibArchive } from 'strucpp'
 
 import { loadStrucpp } from '../../../library/strucpp-runtime'
 import { installedArchiveText, installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
+import { newHmiWidgetSource } from '../../../../../middleware/shared/utils/hmi/project-files'
 import { compileHmiWidgets } from '../../unit/generate-hmi-unit'
 import { buildWidgetCatalog, type HmiWidgetInfo } from '../widget-catalog'
 import { loadHmiWidgetLibraries } from '../widget-libraries'
@@ -381,5 +382,18 @@ END_FUNCTION_BLOCK
     const info = widget(lib.catalog.widgets, 'Gauge2')
     expect(info.requires).toBe('hmiDataWidgets')
     expect(info.sources).toEqual([{ name: 'Data', type: 'ARRAY OF REAL', slot: 0 }])
+  })
+})
+
+describe('widget catalogue of a library built from a library project', () => {
+  it('offers a widget from the template under its library palette group', () => {
+    const lib = standardWidgets()
+    const built = loadStrucpp().compileStlib(
+      [{ fileName: 'Badge.st', source: newHmiWidgetSource('Badge', 'badge_lib') }],
+      { name: 'badge_lib', version: '1.0.0', namespace: 'badge_lib', dependencies: [lib] },
+    )
+    expect(built.errors).toEqual([])
+    const catalog = buildWidgetCatalog([lib, built.archive])
+    expect(widget(catalog.widgets, 'Badge')).toMatchObject({ library: 'badge_lib', palette: 'badge_lib' })
   })
 })
