@@ -9,6 +9,7 @@ import { useOrchestrator, usePlatform, useRuntime } from '../../../../../../../m
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
+import { useRuntimeCommercialLicense } from '../../../../../../hooks/use-runtime-commercial-license'
 import { toProjectTargetDevice, toSelectedDevice } from '../../../../../../services/project-target-device'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import type { SelectedDevice } from '../../../../../../store/slices/device'
@@ -16,6 +17,7 @@ import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { RuntimeCommercialLicenseStatus } from '../configuration/components/runtime-commercial-license-status'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
@@ -121,6 +123,7 @@ const OrchestratorsList = () => {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
+  const runtimeLicense = useRuntimeCommercialLicense()
   const [connectionError, setConnectionError] = useState<string | null>(null)
   // Note: Status polling is handled globally by useRuntimePolling hook.
   // This component sets includeTimingStatsInPolling=true to request timing stats.
@@ -649,6 +652,16 @@ const OrchestratorsList = () => {
                       {isConnecting ? 'Connecting...' : 'Connect'}
                     </button>
                   )}
+                  {runtimeConnection.connectionStatus === 'connected' ? (
+                    <RuntimeCommercialLicenseStatus
+                      status={runtimeLicense.status}
+                      hardwareId={runtimeLicense.hardwareId}
+                      idLabel={runtimeLicense.idLabel}
+                      buyUrl={runtimeLicense.buyUrl}
+                      awaitingPurchase={runtimeLicense.awaitingPurchase}
+                      onBuy={() => void runtimeLicense.buy()}
+                    />
+                  ) : null}
                 </div>
                 {runtimeConnection.connectionStatus === 'connected' && runtimeConnection.plcStatus && (
                   <div className='flex items-center gap-2'>
