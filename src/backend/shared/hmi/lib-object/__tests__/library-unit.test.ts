@@ -97,7 +97,6 @@ describe('widget library units', () => {
     })
     expect(libraryPart(plain).units).toHaveLength(1)
     expect(libraryPart(withLibraries)).toEqual(libraryPart(plain))
-    expect(withLibraries.files['unit/hmi_preview_pch.hpp']).toBe(plain.files['unit/hmi_preview_pch.hpp'])
     expect(Object.values(plain.files).some((f) => typeof f === 'string' && f.includes('STRING_LENGTH'))).toBe(false)
     expect(Object.values(withLibraries.files).some((f) => typeof f === 'string' && f.includes('STRING_LENGTH'))).toBe(
       true,

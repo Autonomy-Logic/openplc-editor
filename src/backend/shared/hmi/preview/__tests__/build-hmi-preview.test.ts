@@ -77,18 +77,18 @@ describe('buildHmiPreviewRequest', () => {
     expect(request.files['groups/screen_Main.cpp']).toBe('#include "pou_MAIN.cpp"\n#include "hmi_preview_0.cpp"\n')
     expect(request.files['groups/library.cpp']).toBe('#include "lib_standard_widgets.cpp"\n')
     expect(request.files).not.toHaveProperty(['groups/widgets.cpp'])
-    expect(request.units.map((u) => [u.source, u.language, u.pch])).toEqual([
-      ['hmi/core/hmi_core.c', 'c', undefined],
-      ['hmi/core/hmi_theme.c', 'c', undefined],
-      ['hmi/core/hmi_math.c', 'c', undefined],
-      ['hmi/core/hmi_raster.c', 'c', undefined],
-      ['hmi/core/hmi_text.c', 'c', undefined],
-      ['unit/hmi_preview_fonts.c', 'c', undefined],
-      ['groups/library.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
-      ['groups/screen_Main.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
-      ['groups/glue.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
-      ['groups/factory.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
-      ['hmi/preview/hmi_preview_host.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
+    expect(request.units.map((u) => [u.source, u.language])).toEqual([
+      ['hmi/core/hmi_core.c', 'c'],
+      ['hmi/core/hmi_theme.c', 'c'],
+      ['hmi/core/hmi_math.c', 'c'],
+      ['hmi/core/hmi_raster.c', 'c'],
+      ['hmi/core/hmi_text.c', 'c'],
+      ['unit/hmi_preview_fonts.c', 'c'],
+      ['groups/library.cpp', 'c++'],
+      ['groups/screen_Main.cpp', 'c++'],
+      ['groups/glue.cpp', 'c++'],
+      ['groups/factory.cpp', 'c++'],
+      ['hmi/preview/hmi_preview_host.cpp', 'c++'],
     ])
   })
 
@@ -100,15 +100,8 @@ describe('buildHmiPreviewRequest', () => {
     expect(request.units.filter((u) => u.flags !== undefined)).toHaveLength(1)
   })
 
-  it("precompiles the core header and the runtime headers the unit's headers include, once", () => {
-    expect(request.precompiledHeaders).toEqual([{ header: 'unit/hmi_preview_pch.hpp', language: 'c++' }])
-    const pch = String(request.files['unit/hmi_preview_pch.hpp'])
-    expect(pch.split('\n').filter((l) => l.startsWith('#include'))).toEqual([
-      '#include "hmi_core.h"',
-      '#include "iec_types.hpp"',
-      '#include "iec_var.hpp"',
-      '#include <array>',
-    ])
+  it('compiles every unit with its headers included directly, with no precompiled header', () => {
+    expect(Object.keys(request.files).filter((path) => path.endsWith('.pch') || path.includes('_pch'))).toEqual([])
     expect(request.cxxFlags).toBe(HMI_PREVIEW_CXX_FLAGS)
     expect(request.linkFlags).toBe(HMI_PREVIEW_LINK_FLAGS)
     expect(HMI_PREVIEW_LINK_FLAGS).toContain('-mexec-model=reactor')

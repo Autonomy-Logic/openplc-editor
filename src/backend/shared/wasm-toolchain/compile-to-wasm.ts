@@ -11,7 +11,6 @@ import type {
   WasmCompileStats,
   WasmCompileUnit,
   WasmDiagnostic,
-  WasmPrecompiledHeader,
   WasmToolchainFiles,
   WasmUnitLanguage,
 } from '@root/middleware/shared/ports/wasm-toolchain-types'
@@ -28,7 +27,6 @@ export type {
   WasmCompileStats,
   WasmCompileUnit,
   WasmDiagnostic,
-  WasmPrecompiledHeader,
   WasmUnitLanguage,
 } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
@@ -87,20 +85,6 @@ const reportStderr = (report: Report, stderr: string, level: WasmDiagnostic['lev
   for (const line of stderr.split('\n')) if (line.trim() !== '') report(line, level)
 }
 
-function validateHeaders(request: WasmCompileRequest): string | null {
-  const headers = new Set<string>()
-  for (const { header } of request.precompiledHeaders ?? []) {
-    if (headers.has(header)) return `Precompiled header '${header}' is listed more than once.`
-    headers.add(header)
-    if (request.files[header] === undefined) return `Precompiled header '${header}' is not among the input files.`
-  }
-  for (const { source, pch } of request.units) {
-    if (pch !== undefined && !headers.has(pch))
-      return `Unit '${source}' names '${pch}', which is not a precompiled header.`
-  }
-  return null
-}
-
 function validate(request: WasmCompileRequest): string | null {
   if (request.units.length === 0) return 'Nothing to compile: no translation units were given.'
   for (const path of Object.keys(request.files)) {
@@ -114,20 +98,12 @@ function validate(request: WasmCompileRequest): string | null {
     seen.add(source)
     if (request.files[source] === undefined) return `Translation unit '${source}' is not among the input files.`
   }
-  const headerProblem = validateHeaders(request)
-  if (headerProblem !== null) return headerProblem
   const output = request.output ?? DEFAULT_WASM_OUTPUT
   const outputProblem = toolchainPathProblem(output)
   if (outputProblem !== null) return outputProblem
   if (output === WORK_DIR || output.startsWith(`${WORK_DIR}/`))
     return `Output path '${output}' is reserved for the compiler.`
   return null
-}
-
-/** A built precompiled header: where units find it, and a digest that stands for its bytes. */
-interface BuiltHeader {
-  path: string
-  digest: string
 }
 
 const compilerOf = (language: WasmUnitLanguage): string => (language === 'c' ? 'clang' : 'clang++')
@@ -176,45 +152,16 @@ function shadowDigests(files: WasmToolchainFiles): (names: readonly string[]) =>
   }
 }
 
-/** Plans one job per precompiled header, keyed like a unit. */
-async function planHeaders(request: WasmCompileRequest): Promise<PlannedUnit[]> {
-  return Promise.all(
-    (request.precompiledHeaders ?? []).map(async (header: WasmPrecompiledHeader, index) => {
-      const object = `${WORK_DIR}/${index}.pch`
-      const dependencyFile = `${WORK_DIR}/${index}.pch.d`
-      const flags = flagsOf(request, header.language, header.flags)
-      const compiler = compilerOf(header.language)
-      const kind = header.language === 'c' ? 'c-header' : 'c++-header'
-      const argv = [compiler, ...flags, '-x', kind, header.header, '-MD', '-MF', dependencyFile, '-o', object]
-      const key = await digestParts(['header', compiler, kind, ...flags, header.header])
-      const unit: WasmCompileUnit = { source: header.header, language: header.language }
-      return { unit, argv, object, dependencyFile, key, size: sizeOf(request.files[header.header]) }
-    }),
-  )
-}
-
-/**
- * Plans one compile job per unit. A unit's cache key covers the compiler, its flags, its source path and the digest of
- * the precompiled header it includes.
- */
-async function planUnits(request: WasmCompileRequest, headers: Map<string, BuiltHeader>): Promise<PlannedUnit[]> {
+/** Plans one compile job per unit. A unit's cache key covers the compiler, its flags and its source path. */
+async function planUnits(request: WasmCompileRequest): Promise<PlannedUnit[]> {
   return Promise.all(
     request.units.map(async (unit, index) => {
       const object = `${WORK_DIR}/${index}.o`
       const dependencyFile = `${WORK_DIR}/${index}.d`
       const flags = flagsOf(request, unit.language, unit.flags, unit.ownFlags === true)
       const compiler = compilerOf(unit.language)
-      const header = unit.pch === undefined ? undefined : headers.get(unit.pch)
-      const include = header ? ['-include-pch', header.path] : []
-      const argv = [compiler, ...flags, ...include, '-MD', '-MF', dependencyFile, '-c', unit.source, '-o', object]
-      const key = await digestParts([
-        'unit',
-        compiler,
-        String(flags.length),
-        ...flags,
-        unit.source,
-        header?.digest ?? '',
-      ])
+      const argv = [compiler, ...flags, '-MD', '-MF', dependencyFile, '-c', unit.source, '-o', object]
+      const key = await digestParts(['unit', compiler, String(flags.length), ...flags, unit.source])
       return { unit, argv, object, dependencyFile, key, size: sizeOf(request.files[unit.source]) }
     }),
   )
@@ -293,8 +240,6 @@ interface CompileContext {
   stats: WasmCompileStats
   /** Each job's timing by its planned object path. */
   timings: Map<string, WasmCompileJobTiming>
-  /** What each object was built from, by its planned object path: see {@link objectDigest}. */
-  inputs: Map<string, string>
 }
 
 /**
@@ -328,13 +273,12 @@ async function validVariant(
  * was added or removed, and compiles the rest, largest first.
  */
 async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToTree>, ctx: CompileContext) {
-  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, timings, inputs } = ctx
+  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, timings } = ctx
   const pending: PlannedUnit[] = []
   for (const p of jobs) {
     const hit = await validVariant(cache, p.key, ctx)
     if (hit) {
       objects.set(p.object, hit.object)
-      inputs.set(p.object, hit.digest)
       stats.cached++
       timings.set(p.object, { source: p.unit.source, ms: 0, cached: true })
     } else {
@@ -359,9 +303,6 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
         const shadowDigest = await shadowOf(built.includeNames)
         const digest = await objectDigest(p.key, { ...built, shadowDigest })
         cache?.set(p.key, { object, digest, ...built, shadowDigest })
-        inputs.set(p.object, digest)
-      } else {
-        inputs.set(p.object, await sha256Hex(object))
       }
       reportStderr(report, result.stderr, 'warning')
       return
@@ -379,7 +320,6 @@ async function moduleKey(request: WasmCompileRequest, digests: Map<string, strin
   const files = [...digests.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).flat()
   const layout = JSON.stringify([
     request.units,
-    request.precompiledHeaders ?? [],
     request.cFlags ?? [],
     request.cxxFlags ?? [],
     request.linkFlags ?? [],
@@ -400,7 +340,7 @@ export async function compileToWasm(
 ): Promise<WasmCompileResult> {
   const { runner, cache, log } = options
   const stats: WasmCompileStats = {
-    units: request.units.length + (request.precompiledHeaders?.length ?? 0),
+    units: request.units.length,
     cached: 0,
     compileMs: 0,
     linkMs: 0,
@@ -433,7 +373,6 @@ export async function compileToWasm(
   const failures: string[] = []
   const loadFailures: WasmToolchainLoadError[] = []
   const timings = new Map<string, WasmCompileJobTiming>()
-  const inputs = new Map<string, string>()
   const build = (jobs: PlannedUnit[], tree: ReturnType<typeof filesToTree>): Promise<void> =>
     compileJobs(jobs, tree, {
       runner,
@@ -446,31 +385,17 @@ export async function compileToWasm(
       report,
       stats,
       timings,
-      inputs,
     })
 
-  const headerJobs = await planHeaders(request)
-  const unitFiles: WasmToolchainFiles = { ...request.files }
-  const headers = new Map<string, BuiltHeader>()
-  if (headerJobs.length > 0) {
-    await build(headerJobs, filesToTree(request.files))
-    for (const job of headerJobs) {
-      const bytes = objects.get(job.object)
-      if (!bytes) continue
-      unitFiles[job.object] = bytes
-      const digest = inputs.get(job.object) ?? (await sha256Hex(bytes))
-      headers.set(job.unit.source, { path: job.object, digest })
-    }
-  }
-  const planned = await planUnits(request, headers)
-  if (failures.length === 0 && loadFailures.length === 0) await build(planned, filesToTree(unitFiles))
+  const planned = await planUnits(request)
+  await build(planned, filesToTree(request.files))
   stats.compileMs = performance.now() - compileStart
-  stats.jobs = [...headerJobs, ...planned].flatMap((p) => {
+  stats.jobs = planned.flatMap((p) => {
     const timing = timings.get(p.object)
     return timing ? [timing] : []
   })
 
-  const total = headerJobs.length + planned.length
+  const total = planned.length
   if (loadFailures.length > 0) return fail(loadFailures[0].message)
   if (failures.length > 0) {
     return fail(`Compilation failed in ${failures.length} of ${total} file(s): ${failures.join(' ')}`)

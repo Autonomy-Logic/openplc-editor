@@ -14,6 +14,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { threadRunner } from '../../scripts/clang-thread-runner'
 import { buildHmiShippedObjects } from '../../src/backend/shared/hmi/lib-object/fixed-objects'
 import { buildHmiPreview, type HmiPreviewResources } from '../../src/backend/shared/hmi/preview/build-hmi-preview'
 import { createHmiPreviewPort } from '../../src/backend/shared/hmi/preview/hmi-preview-port'
@@ -21,7 +22,6 @@ import { serveHmiPreview } from '../../src/backend/shared/hmi/preview/preview-wo
 import { HmiPreviewInstance } from '../../src/backend/shared/hmi/preview/preview-instance'
 import { buildHmiWidgetCatalog, WIDGET_PREVIEW_SCREEN } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
-import { isYowaspClang, runClangJob } from '../../src/backend/shared/wasm-toolchain/clang-worker-host'
 import { compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
 import { BoundedWasmObjectCache } from '../../src/backend/shared/wasm-toolchain/wasm-object-cache'
 import { createWasmCompileService } from '../../src/backend/shared/wasm-toolchain/wasm-compile-service'
@@ -104,16 +104,8 @@ function resources(): HmiPreviewResources {
   }
 }
 
-async function runner(): Promise<WasmClangRunner> {
-  const clang: unknown = await import('@yowasp/clang')
-  if (!isYowaspClang(clang)) throw new Error('@yowasp/clang is not the expected module')
-  return {
-    concurrency: 1,
-    prepare: () => Promise.resolve(),
-    run: (job) => runClangJob(clang, job.argv, job.tree),
-    release: () => Promise.resolve(),
-  }
-}
+/** Four clang threads, as the editor runs while an HMI tab holds the toolchain on a machine with the memory for it. */
+const runner = (): Promise<WasmClangRunner & { end(): Promise<void> }> => Promise.resolve(threadRunner(4))
 
 const elapsed = (start: number): number => Math.round(performance.now() - start)
 
@@ -730,6 +722,7 @@ async function main(): Promise<void> {
     "a first build with the shipped objects compiles only the project's own units",
   )
 
+  await clang.end()
   if (failures.length > 0) {
     console.error(`${failures.length} check(s) failed`)
     process.exit(1)

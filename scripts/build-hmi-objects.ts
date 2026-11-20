@@ -1,87 +1,19 @@
 /**
- * Builds the compiled HMI objects the editor ships (`release/hmi-objects/`): the HMI core, font tables, hosts,
- * precompiled header and widget library units, compiled with the pinned WebAssembly toolchain. Run before packaging
+ * Builds the compiled HMI objects the editor ships (`release/hmi-objects/`): the HMI core, font tables, hosts and
+ * widget library units, compiled with the pinned WebAssembly toolchain. Run before packaging
  * (`npm run build:hmi-objects`); the packaged app reads them from its resources, development builds from the folder.
  */
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
 import { join } from 'node:path'
-import { Worker } from 'node:worker_threads'
 
 import { buildHmiShippedObjects } from '../src/backend/shared/hmi/lib-object/fixed-objects'
-import type {
-  WasmClangJob,
-  WasmClangJobResult,
-  WasmClangRunner,
-} from '../src/middleware/shared/ports/wasm-toolchain-mechanisms'
+import { threadRunner } from './clang-thread-runner'
 
 const ROOT = join(__dirname, '..')
 const HMI = join(ROOT, 'resources', 'sources', 'hmi')
 const RUNTIME = join(ROOT, 'node_modules', 'strucpp', 'src', 'runtime', 'include')
 const OUT = join(ROOT, 'release', 'hmi-objects')
-
-/** Runs clang jobs; the same calls the editor's clang worker makes. */
-const WORKER = `
-const { parentPort } = require('node:worker_threads')
-const loaded = import('@yowasp/clang')
-parentPort.on('message', async ({ id, argv, tree }) => {
-  const clang = await loaded
-  let stderr = ''
-  const decoder = new TextDecoder()
-  try {
-    const out = await clang.runClang(argv, tree, {
-      stdout: () => undefined,
-      stderr: (bytes) => { if (bytes) stderr += decoder.decode(bytes, { stream: true }) },
-      decodeASCII: false,
-    })
-    parentPort.postMessage({ id, exitCode: 0, stderr, stdout: '', tree: out })
-  } catch (error) {
-    const exitCode = error instanceof clang.Exit ? error.code : -1
-    parentPort.postMessage({ id, exitCode, stderr: stderr || String(error), stdout: '', tree: {} })
-  }
-})
-`
-
-function threadRunner(size: number): WasmClangRunner & { end(): Promise<void> } {
-  const workers = Array.from({ length: size }, () => new Worker(WORKER, { eval: true }))
-  const idle = [...workers]
-  const waiting: Array<() => void> = []
-  const pending = new Map<number, (result: WasmClangJobResult) => void>()
-  let next = 0
-  for (const worker of workers)
-    worker.on('message', (message: WasmClangJobResult & { id: number }) => {
-      pending.get(message.id)?.(message)
-      pending.delete(message.id)
-    })
-  const take = async (): Promise<Worker> => {
-    for (;;) {
-      const worker = idle.pop()
-      if (worker) return worker
-      await new Promise<void>((resolve) => waiting.push(resolve))
-    }
-  }
-  return {
-    concurrency: size,
-    prepare: () => Promise.resolve(),
-    release: () => Promise.resolve(),
-    async run(job: WasmClangJob) {
-      const worker = await take()
-      const id = next++
-      try {
-        return await new Promise<WasmClangJobResult>((resolve) => {
-          pending.set(id, resolve)
-          worker.postMessage({ id, ...job })
-        })
-      } finally {
-        idle.push(worker)
-        waiting.shift()?.()
-      }
-    },
-    end: async () => {
-      await Promise.all(workers.map((worker) => worker.terminate()))
-    },
-  }
-}
 
 /** Every file under a folder by its relative path: C and C++ sources as text, the rest as bytes. */
 function readAll(dir: string, prefix = ''): Record<string, string | Uint8Array> {

@@ -20,7 +20,7 @@ describe('formatHmiPreviewTimings', () => {
         compileMs: 580.4,
         linkMs: 31.6,
         jobs: [
-          { source: 'unit/hmi_preview_pch.hpp', ms: 0, cached: true },
+          { source: 'hmi/core/hmi_theme.c', ms: 0, cached: true },
           { source: 'groups/glue.cpp', ms: 291.2, cached: false },
           { source: 'groups/screen_Details.cpp', ms: 252.9, cached: false },
           { source: 'hmi/core/hmi_core.c', ms: 0, cached: true },

@@ -1,6 +1,6 @@
 /**
- * The compiled objects of HMI builds that no project changes: the HMI core, the font tables, the hosts, the
- * precompiled header and the widget library units. The application's build compiles them once with the pinned
+ * The compiled objects of HMI builds that no project changes: the HMI core, the font tables, the hosts and the widget
+ * library units. The application's build compiles them once with the pinned
  * toolchain, from reference builds, and ships them; a project's build then compiles only its own units.
  */
 import type { WasmClangRunner } from '../../../../middleware/shared/ports/wasm-toolchain-mechanisms'
@@ -15,7 +15,7 @@ import { composeHmiArtefact } from '../artefact/compose-hmi-artefact'
 import { buildHmiPreview, type HmiPreviewResources } from '../preview/build-hmi-preview'
 
 /** Generated request files that are the same in every project's build. */
-const FIXED_GENERATED = new Set(['unit/hmi_preview_pch.hpp', 'unit/hmi_preview_fonts.c', 'unit/hmi_fonts.c'])
+const FIXED_GENERATED = new Set(['unit/hmi_preview_fonts.c', 'unit/hmi_fonts.c'])
 
 /** Whether a request path holds a file no project changes: runtime headers, HMI sources, library units and the above. */
 export const isFixedHmiPath = (path: string): boolean =>

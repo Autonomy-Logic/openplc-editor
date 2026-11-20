@@ -10,17 +10,22 @@ const object = (paths: string[]): CachedWasmObject => ({
 })
 
 describe('fixed HMI objects', () => {
-  it('counts the runtime headers, the HMI sources, the library units and the shared generated files as fixed', () => {
+  it('counts the runtime headers, the HMI sources, the library units and the font tables as fixed', () => {
     for (const path of [
       'strucpp_runtime/include/iec_types.hpp',
       'hmi/core/hmi_core.c',
       'hmilib/standard-widgets/library.cpp',
-      'unit/hmi_preview_pch.hpp',
       'unit/hmi_preview_fonts.c',
       'unit/hmi_fonts.c',
     ])
       expect(isFixedHmiPath(path)).toBe(true)
-    for (const path of ['unit/hmi_unit.hpp', 'groups/glue.cpp', 'unit/pou_MAIN.cpp', 'hmilibx/a.cpp'])
+    for (const path of [
+      'unit/hmi_unit.hpp',
+      'unit/hmi_preview_pch.hpp',
+      'groups/glue.cpp',
+      'unit/pou_MAIN.cpp',
+      'hmilibx/a.cpp',
+    ])
       expect(isFixedHmiPath(path)).toBe(false)
   })
 
