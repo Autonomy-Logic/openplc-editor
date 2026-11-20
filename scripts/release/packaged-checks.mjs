@@ -37,7 +37,7 @@ import {
 import { CheckFailure, parseCli } from './lib/cli.mjs'
 import { versionFormProblem } from './lib/release-assets.mjs'
 import { parseTrustedKeys, scanPaths, trustNeedles } from './lib/trust-literals.mjs'
-import { EQSP32_PACKAGE_ID, placePackageByHand, writeEqsp32Vpp } from './lib/vpp-fixture.mjs'
+import { UNTRUSTED_PACKAGE_ID, placePackageByHand, writeUntrustedVpp } from './lib/vpp-fixture.mjs'
 
 /** The packaged checks, in the order they run and are reported. */
 export const CHECK_IDS = Object.freeze([
@@ -961,15 +961,15 @@ async function checkAppFolder(ctx, moveArchive) {
 
 /** Offers the third-party package to `openplc-cli packages install`. */
 async function checkCliInstallRefusal(ctx) {
-  const vpp = join(newDir(ctx, 'abuse-03-b'), 'eqsp32.vpp')
-  writeEqsp32Vpp(vpp)
+  const vpp = join(newDir(ctx, 'abuse-03-b'), 'untrusted.vpp')
+  writeUntrustedVpp(vpp)
   const userData = newDir(ctx, 'user-data')
   const run = await runEditorCli(ctx, ['packages', 'install', vpp], userData, CLI_INSTALL_MS)
   const listed = await listedPackages(ctx, userData)
   const detail = `install exit ${run.exitCode ?? (run.timedOut ? 'timeout' : run.signal)}; packages list ${
     listed === null ? 'unreadable' : JSON.stringify(listed)
   }`
-  if (run.exitCode === 0 || listed?.includes(EQSP32_PACKAGE_ID)) return attack(true, run, detail)
+  if (run.exitCode === 0 || listed?.includes(UNTRUSTED_PACKAGE_ID)) return attack(true, run, detail)
   if (run.exitCode !== null && run.stderr.includes(IMPORT_REFUSAL) && listed !== null && listed.length === 0) {
     return attack(false, run, detail)
   }
@@ -978,8 +978,8 @@ async function checkCliInstallRefusal(ctx) {
 
 /** Places the third-party package by hand and compiles a project for its board. */
 async function checkCliCompileRefusal(ctx) {
-  const vpp = join(newDir(ctx, 'abuse-03-e'), 'eqsp32.vpp')
-  const { boardName } = writeEqsp32Vpp(vpp)
+  const vpp = join(newDir(ctx, 'abuse-03-e'), 'untrusted.vpp')
+  const { boardName } = writeUntrustedVpp(vpp)
   const userData = newDir(ctx, 'user-data')
   placePackageByHand({ vppPath: vpp, userDataDir: userData })
   const project = await createProject(ctx, userData)
@@ -989,7 +989,7 @@ async function checkCliCompileRefusal(ctx) {
     built ? 'present' : 'absent'
   }`
   if (run.exitCode === 0 || built) return attack(true, run, detail)
-  if (run.exitCode !== null && run.stderr.includes(INTEGRITY_REFUSAL) && run.stderr.includes(EQSP32_PACKAGE_ID)) {
+  if (run.exitCode !== null && run.stderr.includes(INTEGRITY_REFUSAL) && run.stderr.includes(UNTRUSTED_PACKAGE_ID)) {
     return attack(false, run, detail)
   }
   return inconclusive('the compile neither succeeded nor was refused for the package signature', run, detail)
