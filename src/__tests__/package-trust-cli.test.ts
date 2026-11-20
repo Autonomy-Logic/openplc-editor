@@ -1,6 +1,6 @@
 /**
  * scripts/package-trust/cli.ts run as the package scripts and the release workflows run it, one ts-node process per
- * call, against a temporary repository root.
+ * call, against a temporary repository root; and its exported callSiteTokens, run in process.
  * @jest-environment node
  */
 import { execFileSync } from 'node:child_process'
@@ -8,9 +8,12 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync,
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from '@jest/globals'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest } from '@jest/globals'
 
+import { callSiteTokens } from '../../scripts/package-trust/cli'
 import {
+  CROSS_SEED_PROBE,
+  DEVELOPMENT_SEED,
   deriveReleaseSeed,
   generatePackageTrustModule,
   type TrustModuleLayout,
@@ -21,6 +24,8 @@ import {
   developmentModule,
   flipCharacter,
   readLayoutBeside,
+  RELEASE_TYPES_IMPORT,
+  RELEASE_VERIFIER_IMPORT,
   replaceLiteral,
 } from '../backend/editor/package-trust/__tests__/fixtures/trust-test-kit'
 import { TRUSTED_PACKAGE_KEYS } from '../backend/shared/utils/vpp/trusted-keys'
@@ -40,8 +45,19 @@ const MODULE_POSIX = 'release/package-trust/package-trust-anchor.ts'
 const LAYOUT = join('release', 'package-trust', 'layout.json')
 const FALLBACK_POSIX = 'src/backend/editor/package-trust/package-trust-anchor.ts'
 const BUNDLE = join('release', 'app', 'dist', 'main', 'main.js')
-const RELEASE_TYPES_IMPORT = '../../src/backend/editor/package-trust/types'
 const TIMEOUT = 120000
+
+/** Names that identify the trust path the same way in every release; verify-bundle refuses each in every mode. */
+const FORBIDDEN_NAMES = [
+  'checkAtImport',
+  'checkAtUse',
+  'trustedKeys',
+  'verifyFileSet:',
+  'verifyManifestIdentity:',
+  'verifyEd25519',
+  'readSnapshot',
+  '.anchor.',
+]
 
 /** Variables the CLI reads, cleared from the inherited environment so each run sets only its own. */
 const CONTROLLED = [
@@ -117,6 +133,29 @@ function writeChunk(root: string, name: string, literals: string[]): void {
 
 const firstLine = (text: string): string => text.split('\n')[0]
 
+/** Minified code holding each forbidden name and no other, as a bundle that still carries it would. */
+const PLANTED: Record<string, string> = {
+  checkAtImport: 'const r=e.checkAtImport(t);',
+  checkAtUse: 'const r=e.checkAtUse(t);',
+  trustedKeys: 'const k=e.trustedKeys();',
+  'verifyFileSet:': 'const m={verifyFileSet:I};',
+  'verifyManifestIdentity:': 'const m={verifyManifestIdentity:A};',
+  verifyEd25519: 'const v=m.verifyEd25519(a,b,c);',
+  readSnapshot: 'const s=m.readSnapshot(d);',
+  '.anchor.': 'const q=this.anchor.x(t);',
+}
+
+/** A chunk named @p name beside main.js whose code holds the forbidden name @p forbidden. */
+function writeForbiddenChunk(root: string, name: string, forbidden: string): void {
+  write(
+    join(dirname(join(root, BUNDLE)), name),
+    `"use strict";exports.ids=[722];exports.modules={9:(e,t,n)=>{${PLANTED[forbidden]}}};\n`,
+  )
+}
+
+/** The shared verifier's own calls of verifyFileSet and verifyManifestIdentity, which carry no colon. */
+const SHARED_VERIFIER_CALLS = 'const f=verifyFileSet(p,h);if(!f.valid)return f;return verifyManifestIdentity(p,m)'
+
 let root = ''
 
 beforeEach(() => {
@@ -183,6 +222,7 @@ describe('generate-release', () => {
         seed: deriveReleaseSeed(SECRET, VERSION, COMMIT),
         keys: TRUSTED_PACKAGE_KEYS,
         typesImport: RELEASE_TYPES_IMPORT,
+        verifierImport: RELEASE_VERIFIER_IMPORT,
         header: { mode: 'release', version: VERSION, commit: COMMIT },
       })
       expect(run.status).toBe(0)
@@ -565,6 +605,49 @@ describe('release mode', () => {
       TIMEOUT,
     )
 
+    it.each(FORBIDDEN_NAMES)(
+      'P1: fails a bundle with %s in a chunk beside main.js, naming the name and the chunk',
+      (forbidden) => {
+        writeBundle(releaseRoot(), releaseLiterals())
+        writeForbiddenChunk(root, '722.js', forbidden)
+
+        const run = runCli(['verify-bundle', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(1)
+        expect([run.output.includes(forbidden), run.output.includes('722.js')]).toEqual([true, true])
+      },
+      TIMEOUT,
+    )
+
+    it(
+      'P1: fails a bundle with checkAtImport in main.js itself, naming the name and main.js',
+      () => {
+        write(
+          join(releaseRoot(), BUNDLE),
+          `"use strict";var t=[${releaseLiterals()
+            .map((literal) => JSON.stringify(literal))
+            .join(',')}];${PLANTED.checkAtImport}\n`,
+        )
+
+        const run = runCli(['verify-bundle', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(1)
+        expect([run.output.includes('checkAtImport'), run.output.includes('main.js')]).toEqual([true, true])
+      },
+      TIMEOUT,
+    )
+
+    it(
+      'passes a bundle holding the shared verifier calls of verifyFileSet and verifyManifestIdentity, which have no colon',
+      () => {
+        writeBundle(releaseRoot(), releaseLiterals())
+        write(join(dirname(join(root, BUNDLE)), '41.js'), `"use strict";${SHARED_VERIFIER_CALLS}\n`)
+
+        expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(0)
+      },
+      TIMEOUT,
+    )
+
     it.each(LEFTOVER_LAYOUTS)(
       'fails a split bundle missing the first share literal with %s beside the module, naming the lack',
       (_label, content) => {
@@ -606,6 +689,21 @@ describe('verify-bundle in development mode', () => {
     TIMEOUT,
   )
 
+  it.each(FORBIDDEN_NAMES)(
+    'P1: fails a bundle with %s in a chunk beside main.js, naming the name and the chunk',
+    (forbidden) => {
+      expect(runCli(['prepare', '--root', root], root).status).toBe(0)
+      writeBundle(root, developmentModule().layout.shareLiterals)
+      writeForbiddenChunk(root, '722.js', forbidden)
+
+      const run = runCli(['verify-bundle', '--root', root], root)
+
+      expect(run.status).toBe(1)
+      expect([run.output.includes(forbidden), run.output.includes('722.js')]).toEqual([true, true])
+    },
+    TIMEOUT,
+  )
+
   it(
     'passes a bundle holding every share literal of the development module with layout.json removed after prepare',
     () => {
@@ -614,6 +712,139 @@ describe('verify-bundle in development mode', () => {
       writeBundle(root, developmentModule().layout.shareLiterals)
 
       expect(runCli(['verify-bundle', '--root', root], root).status).toBe(0)
+    },
+    TIMEOUT,
+  )
+})
+
+describe('importing cli.ts', () => {
+  it('runs no command: it sets no exit code and prints nothing', () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => undefined)
+    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined)
+    const exitCode = process.exitCode
+
+    jest.isolateModules(() => {
+      jest.requireActual('../../scripts/package-trust/cli')
+    })
+
+    expect({ exitCode: process.exitCode, errors: error.mock.calls.length, logs: log.mock.calls.length }).toEqual({
+      exitCode,
+      errors: 0,
+      logs: 0,
+    })
+    process.exitCode = exitCode
+    error.mockRestore()
+    log.mockRestore()
+  })
+})
+
+describe('callSiteTokens', () => {
+  /** The import call site of a minified PackageManagerModule, calling the verify function through @p callee. */
+  const importSite = (callee: string): string =>
+    [
+      'async importFromFile(e,t){let n=null;try{n=(0,o.mkdtempSync)((0,a.join)(this.packagesDir,".import-"));',
+      'await(0,s.default)(e,{dir:n});const r=(0,a.join)(n,"manifest.json");',
+      'if(!(0,o.existsSync)(r))return{success:!1,error:"Package does not contain a manifest.json file"};',
+      'let i;try{i=JSON.parse((0,o.readFileSync)(r,"utf-8"))}catch{return{success:!1,error:"Invalid manifest.json format"}}',
+      'const c=l.PackageManifestSchema.safeParse(i);if(!c.success)return{success:!1,error:"Invalid manifest schema"};',
+      `const u=c.data;let d;try{d=${callee}(this)(n,!0)}catch{d=null}`,
+      'const p=Array.isArray(d)&&!0===d[0]&&"string"==typeof d[1]&&"string"==typeof d[2]&&d[1]===u.package.id&&d[2]===u.package.version;',
+      'if(!p){const e=Array.isArray(d)&&!1===d[0]&&"string"==typeof d[1]?d[1]:"Package trust check failed";',
+      'return{success:!1,error:`Package signature verification failed: ${e}`}}',
+      'const h=d[1],f=d[2];(0,m.validatePathId)(h,"manifest.package.id");',
+    ].join('')
+
+  /** The use call site of a minified PackageManagerModule, calling the verify function through @p callee. */
+  const useSite = (callee: string): string =>
+    [
+      'signatureRejectionReason(e,t){try{(0,m.validatePathId)(e,"registry package id")}catch{return"invalid package id"}',
+      'if("string"!=typeof t||0===t.length)return"registry entry has no package path";',
+      'try{(0,g.assertPathContained)(this.packagesDir,t,"registry package path")}catch{',
+      'return"package path resolves outside the packages directory"}',
+      'if(!(0,o.existsSync)(t))return"package files are missing";',
+      `let n;try{n=${callee}(this)(t,!1)}catch{return"Package trust check failed"}`,
+      'return Array.isArray(n)&&!0===n[0]?n[1]!==e?"Package trust check failed":null:',
+      '"string"==typeof n[1]?n[1]:"Package trust check failed"}',
+    ].join('')
+
+  /** Code that is the same in every build, standing between and around the call sites. */
+  const filler = (marker: string): string =>
+    Array.from({ length: 150 }, (_, index) => `function f${index}(e){return e+${index}}`).join(';') +
+    `;var z="${marker}";`
+
+  /** A bundle holding both call sites with @p callee, and @p elsewhere far from both. */
+  const bundle = (callee: string, elsewhere = 'same'): string =>
+    [
+      '"use strict";',
+      filler('head'),
+      `const ${callee}=e=>W.get(e);`,
+      filler('a'),
+      `class P{constructor(e=X){W.set(this,e)}${importSite(callee)}${filler('b')}${useSite(callee)}}`,
+      filler('tail'),
+      `var far=${JSON.stringify(elsewhere)};`,
+    ].join('')
+
+  it('finds both call sites and gives each a non-empty token sequence', () => {
+    const tokens = callSiteTokens(bundle('Ke'))
+
+    expect(tokens).toHaveLength(2)
+    expect(tokens.map((sequence) => sequence.length > 0)).toEqual([true, true])
+  })
+
+  it('gives the same tokens for the same bundle', () => {
+    expect(callSiteTokens(bundle('Ke'))).toEqual(callSiteTokens(bundle('Ke')))
+  })
+
+  it('gives different tokens at each call site for two bundles that differ only in the mangled name of the callee', () => {
+    const [importA, useA] = callSiteTokens(bundle('Ke'))
+    const [importB, useB] = callSiteTokens(bundle('Zq'))
+
+    expect([importA === importB, useA === useB]).toEqual([false, false])
+  })
+
+  it('gives the same tokens for two bundles that differ only far from both call sites', () => {
+    expect(callSiteTokens(bundle('Ke', 'one build'))).toEqual(callSiteTokens(bundle('Ke', 'another build')))
+  })
+
+  it.each([
+    ['the import call site', (callee: string) => bundle(callee).replace('Package signature verification failed', 'X')],
+    ['the use call site', (callee: string) => bundle(callee).replace('registry entry has no package path', 'X')],
+  ])('throws when the bundle lacks the fixed text around %s', (_label, build) => {
+    expect(() => callSiteTokens(build('Ke'))).toThrow()
+  })
+})
+
+describe('cross-seed-check', () => {
+  const SEED_FORMS = [DEVELOPMENT_SEED, CROSS_SEED_PROBE].flatMap((seed) => [
+    Buffer.from(seed).toString('hex'),
+    Buffer.from(seed).toString('base64'),
+  ])
+
+  it(
+    'is a command that takes only --root',
+    () => {
+      const run = runCli(['cross-seed-check', '--version', VERSION], root)
+
+      expect(run.status).toBe(1)
+      expect(run.output).not.toContain('Unknown command')
+      expect(run.output).toContain('--version')
+    },
+    TIMEOUT,
+  )
+
+  it(
+    'fails on a root it cannot build, leaving the root as it was and printing no seed',
+    () => {
+      write(join(root, 'release', 'app', 'dist', 'main', 'main.js'), '"use strict";var kept=1;\n')
+      write(join(root, 'release', 'package-trust', 'kept.txt'), 'kept')
+      const before = listFiles(root).map((file) => [file, readFileSync(join(root, file), 'utf-8')])
+
+      const run = runCli(['cross-seed-check', '--root', root], root)
+
+      expect(run.status).toBe(1)
+      expect(run.output).not.toContain('Unknown command')
+      expect(listFiles(root).map((file) => [file, readFileSync(join(root, file), 'utf-8')])).toEqual(before)
+      expect(SEED_FORMS.filter((form) => run.output.includes(form))).toEqual([])
     },
     TIMEOUT,
   )
