@@ -336,13 +336,18 @@ rehearsal passed.
    audit.
 2. **Rehearsal release.** Create a draft release `v4.3.5-rehearsal` and upload copies of the six original v4.3.5
    installers to it. Keep it a draft.
-3. **Dry run on the oldest tree.** `mode: dry-run`, `ref: feature/DOPE-893-backport-v4.3.0`, `release: v4.3.0`.
-4. **Rehearsal.** `mode: rebuild`, `ref: feature/DOPE-893-backport-v4.3.5`, `release: v4.3.5-rehearsal`,
-   `negative_controls: true`. It replaces the draft's six installers.
-5. **Scenario runs** on the rehearsal: the refusals CI must show, for example a `ref` that is not the backport branch
-   of the release, which `resolve` refuses, and `mode: verify` with the rehearsal's `run_id`.
-6. **Seed audit** within one day of the rehearsal, while its `trust-module` artifact exists: `mode: seed-audit`,
-   `release: v4.3.5-rehearsal`, `run_id` of the rehearsal. It must print `no match`.
+3. **Dry run on the oldest tree.** `mode: dry-run` with `ref` = `feature/DOPE-893-backport-v4.3.0` and `release` =
+   `v4.3.0`. It builds and checks the oldest tree, and uploads nothing.
+4. **Rehearsal rebuild.** `mode: rebuild` with `negative_controls: true`, `ref` = `feature/DOPE-893-backport-v4.3.5`,
+   `release` = `v4.3.5-rehearsal`. Negative controls are valid only here, before any v4.3.x release is replaced.
+5. **Approvals.** Approve the Environment each time, after checking the `ref` in the run name.
+6. **Scenario runs**, then:
+   - ABUSE-16: `ref` = `feature/DOPE-893-backport-v4.3.4`, `release` = `v4.3.5-rehearsal`. It is refused by the ref
+     check, naming 4.3.4 and 4.3.5.
+   - ABUSE-10 and ABUSE-12: alter the draft as each row says, then run `mode: verify` with `run_id` = the rehearsal
+     run.
+   - ABUSE-09: `mode: seed-audit` with `run_id` = the rehearsal run. Run it after the rehearsal run finished and
+     within one day, while its `trust-module` artifact still exists.
 7. **Rebuilds**, only once steps 3 to 6 passed: `mode: rebuild` for each release `v4.3.0` to `v4.3.5` from its backport
    branch, `negative_controls` off, then `mode: verify` for each run.
 
