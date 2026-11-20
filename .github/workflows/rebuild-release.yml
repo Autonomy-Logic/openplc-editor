@@ -1,6 +1,6 @@
 name: Rebuild Release
 
-run-name: Rebuild ${{ inputs.release }} (${{ inputs.mode }})
+run-name: Rebuild ${{ inputs.release }} (${{ inputs.mode }}) from ${{ inputs.ref }}
 
 on:
   workflow_dispatch:
@@ -83,6 +83,12 @@ jobs:
           path: tooling
           persist-credentials: false
 
+      - name: Require the backport branch of the release
+        env:
+          REF: ${{ inputs.ref }}
+          RELEASE: ${{ inputs.release }}
+        run: node tooling/scripts/release/check-ref.mjs --release "$RELEASE" --ref "$REF"
+
       - name: Checkout the branch to build, with tags
         uses: actions/checkout@v4
         with:
@@ -100,6 +106,16 @@ jobs:
       - name: Resolve the commit
         id: sha
         run: echo "sha=$(git -C tree rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Record the branch and the commit in the run summary
+        env:
+          REF: ${{ inputs.ref }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          {
+            echo "Branch: $REF"
+            echo "Commit: $SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check the app version against the release tag
         id: version
@@ -188,6 +204,10 @@ jobs:
       - name: Install dependencies
         working-directory: tree
         run: npm ci --ignore-scripts
+
+      - name: Install STruC++
+        working-directory: tree
+        run: npm run setup:strucpp
 
       - name: Generate the trust module
         working-directory: tree
@@ -912,23 +932,37 @@ jobs:
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[] | "\(.id)\t\(.name)"' > current-assets.tsv
           for FILE in upload/*; do
             NAME=$(basename "$FILE")
-            ASSET_ID=$(awk -F '\t' -v name="$NAME" '$2 == name { print $1 }' current-assets.tsv)
-            if [ -n "$ASSET_ID" ]; then
-              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID"
-            fi
-            curl --fail-with-body -sS -X POST \
+            for STALE_ID in $(awk -F '\t' -v name="$NAME.uploading" '$2 == name { print $1 }' current-assets.tsv); do
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$STALE_ID"
+            done
+            NEW_ID=$(curl --fail-with-body -sS -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "Content-Type: application/octet-stream" \
               --data-binary @"$FILE" \
-              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$NAME" > /dev/null
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$NAME.uploading" | jq -r '.id')
+            for OLD_ID in $(awk -F '\t' -v name="$NAME" '$2 == name { print $1 }' current-assets.tsv); do
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$OLD_ID"
+            done
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$NEW_ID" -f name="$NAME" > /dev/null
             echo "Replaced $NAME"
           done
 
       - name: Check the release digests
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets' > release-assets.json
-          node tooling/scripts/release/release-digests.mjs after --version "$VERSION" --assets release-assets.json --built built.json --original manifest/original.json
+          for ATTEMPT in 1 2 3 4 5 6; do
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets' > release-assets.json
+            STATUS=0
+            node tooling/scripts/release/release-digests.mjs after --version "$VERSION" --assets release-assets.json --built built.json --original manifest/original.json || STATUS=$?
+            if [ "$STATUS" -ne 3 ]; then
+              exit "$STATUS"
+            fi
+            if [ "$ATTEMPT" -lt 6 ]; then
+              sleep 10
+            fi
+          done
+          echo "::error::GitHub computed no sha256 digest for the assets named above after 6 reads"
+          exit 1
 
       - name: Record the rebuild in the release notes
         run: |
@@ -995,8 +1029,19 @@ jobs:
           VERSION=$(jq -r .version manifest/manifest.json)
           RELEASE_ID=$(jq -r .release_id manifest/manifest.json)
           jq -s 'add' digests/built-*.json > built.json
-          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets' > release-assets.json
-          node tooling/scripts/release/release-digests.mjs after --version "$VERSION" --assets release-assets.json --built built.json --original manifest/original.json
+          for ATTEMPT in 1 2 3 4 5 6; do
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets' > release-assets.json
+            STATUS=0
+            node tooling/scripts/release/release-digests.mjs after --version "$VERSION" --assets release-assets.json --built built.json --original manifest/original.json || STATUS=$?
+            if [ "$STATUS" -ne 3 ]; then
+              exit "$STATUS"
+            fi
+            if [ "$ATTEMPT" -lt 6 ]; then
+              sleep 10
+            fi
+          done
+          echo "::error::GitHub computed no sha256 digest for the assets named above after 6 reads"
+          exit 1
 
   seed-audit:
     if: ${{ inputs.mode == 'seed-audit' }}
@@ -1033,6 +1078,22 @@ jobs:
         with:
           name: rebuild-manifest
           path: ${{ runner.temp }}/audit/manifest
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Require the trust-module artifact of the run
+        run: |
+          COUNT=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?name=trust-module" --jq '[.artifacts[] | select(.name == "trust-module" and .expired == false)] | length')
+          if [ "$COUNT" -lt 1 ]; then
+            echo "::error::The trust-module artifact of run $RUN_ID is missing or expired; it is kept for one day, so run seed-audit within one day of the rebuild"
+            exit 1
+          fi
+
+      - name: Download the trust-module artifact of the run
+        uses: actions/download-artifact@v4
+        with:
+          name: trust-module
+          path: ${{ runner.temp }}/audit/trust-module
           run-id: ${{ inputs.run_id }}
           github-token: ${{ github.token }}
 
