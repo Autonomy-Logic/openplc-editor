@@ -64,6 +64,8 @@ export interface ProgramBuildPipelineOptions {
   /** True when the project carries any C/C++ POUs.  Causes every
    *  generated TU to `#include "c_blocks.h"`. */
   hasCBlocks: boolean
+  /** Writes each library's code to its own `lib_<library>.cpp`, declared in `generated_libraries.hpp`. */
+  separateLibraryFiles?: boolean
 }
 
 /** A single artefact the editor should persist (Electron) or pack
@@ -113,7 +115,7 @@ export interface ProgramBuildPipelineResult {
  * source.  Pure: no disk I/O, no `child_process.spawn`.
  */
 export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): ProgramBuildPipelineResult {
-  const { source, md5, pous, libraries, missingLibraries, hasCBlocks } = opts
+  const { source, md5, pous, libraries, missingLibraries, hasCBlocks, separateLibraryFiles } = opts
 
   // Pre-compile gate: every library the project enables must be
   // resolvable before strucpp runs.  Without this, the user gets a
@@ -192,6 +194,7 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     providedHeaders: [...PLC_PROVIDED_HEADERS],
     md5,
     pouIncludes,
+    ...(separateLibraryFiles ? { separateLibraryFiles: true } : {}),
     ...(additionalSources ? { additionalSources } : {}),
   })
 
@@ -265,6 +268,7 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     files.push({ name: 'generated.cpp', content: result.cppCode })
   }
   files.push({ name: 'generated.hpp', content: result.headerCode })
+  if (result.libraryHeader) files.push({ name: result.libraryHeader.name, content: result.libraryHeader.content })
 
   // Phase 4 debugger artifacts (present starting with strucpp v0.3.0).
   // debugTableCpp is the per-project pointer table for generated_debug.cpp.

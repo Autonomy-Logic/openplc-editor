@@ -1,11 +1,18 @@
 /**
- * The compiled objects of HMI builds that no project changes: the HMI core, the font tables, the hosts and the widget
- * library units. The application's build compiles them once with the pinned
- * toolchain, from reference builds, and ships them; a project's build then compiles only its own units.
+ * The compiled objects no project changes: of HMI builds, the HMI core, the font tables, the hosts and the widget
+ * library units; of OpenPLC Simulator builds, the bundled libraries' units. The application's build compiles them
+ * once with the pinned toolchain, from reference builds, and ships them; a project's build then compiles only its own
+ * units.
  */
 import type { WasmClangRunner } from '../../../../middleware/shared/ports/wasm-toolchain-mechanisms'
 import type { WasmCompileRequest } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { HMI_FONT_VARIANTS, hmiSettingsSchema } from '../../../../middleware/shared/utils/hmi/settings'
+import { SIMULATOR_CXX_FLAGS, SIMULATOR_LINK_FLAGS } from '../../compile/steps/build-simulator-wasm-request'
+import {
+  namedArchives,
+  SIMULATOR_LIBRARY_DIR,
+  simulatorLibraryUnitsOf,
+} from '../../compile/steps/simulator-library-units'
 import { type CachedWasmObject, compileToWasm, type WasmObjectCache } from '../../wasm-toolchain/compile-to-wasm'
 import type { StoredWasmObject } from '../../wasm-toolchain/persistent-object-cache'
 import { encodeShippedObjects } from '../../wasm-toolchain/shipped-objects'
@@ -52,6 +59,14 @@ const REFERENCE_SCREEN = `FUNCTION_BLOCK Reference EXTENDS HmiScreen
 END_FUNCTION_BLOCK
 `
 
+/** The OpenPLC Simulator's firmware skeleton and the bundled library archives, for their library objects. */
+export interface SimulatorLibrarySources {
+  /** The skeleton as the simulator build lays it out: runtime, STruC++ runtime headers under `src/`, `wasm-sim/`. */
+  firmwareFiles: Readonly<Record<string, string>>
+  /** The bundled library archives, verbatim. */
+  libraries: readonly unknown[]
+}
+
 export interface HmiFixedObjectSources {
   /** The preview's resources, as the platforms give them, with the bundled library archives as the project's. */
   preview: HmiPreviewResources
@@ -59,6 +74,38 @@ export interface HmiFixedObjectSources {
   hmiSources: Readonly<Record<string, string | Uint8Array>>
   /** The STruC++ runtime headers by path, `strucpp_runtime/include/<file>`. */
   runtimeHeaders: Readonly<Record<string, string>>
+  /** When given, the bundled libraries' simulator objects are shipped too. */
+  simulator?: SimulatorLibrarySources
+}
+
+/** Whether an object is a simulator library unit's: built from a source under the simulator's library folder. */
+const isSimulatorLibraryObject = ({ entry }: StoredWasmObject): boolean =>
+  entry.dependencies.some(([path]) => path.startsWith(`${SIMULATOR_LIBRARY_DIR}/`) && path.endsWith('.cpp'))
+
+/**
+ * Compiles every bundled library a PLC build can use, each from its own whole unit as the simulator build lays it out;
+ * one whose code needs headers PLC builds do not provide, or that has no code, is left out.
+ */
+async function compileSimulatorLibraries(
+  sources: SimulatorLibrarySources,
+  compile: (request: WasmCompileRequest) => Promise<unknown>,
+): Promise<void> {
+  const available = namedArchives(sources.libraries)
+  const usable = new Set<string>()
+  for (const library of available) {
+    if ((library.archive.manifest.headers ?? []).length > 0) continue
+    const alone = await simulatorLibraryUnitsOf(new Set([library.name]), available, SIMULATOR_CXX_FLAGS)
+    if (alone.ok) usable.add(library.name)
+  }
+  const built = await simulatorLibraryUnitsOf(usable, available, SIMULATOR_CXX_FLAGS)
+  if (!built.ok) throw new Error(built.error)
+  await compile({
+    files: { ...sources.firmwareFiles, ...built.files },
+    units: built.units,
+    cxxFlags: SIMULATOR_CXX_FLAGS,
+    linkFlags: [...SIMULATOR_LINK_FLAGS, '-Wl,--allow-undefined'],
+    output: 'libraries.wasm',
+  })
 }
 
 /**
@@ -95,5 +142,9 @@ export async function buildHmiShippedObjects(
     })
     if (!artefact.ok) throw new Error(artefact.errors.map((e) => e.message).join('\n'))
   }
-  return encodeShippedObjects(identity, fixedHmiObjects(cache.collected))
+  if (input.simulator) await compileSimulatorLibraries(input.simulator, compile)
+  return encodeShippedObjects(identity, [
+    ...fixedHmiObjects(cache.collected),
+    ...cache.collected.filter(isSimulatorLibraryObject),
+  ])
 }

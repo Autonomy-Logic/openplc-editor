@@ -67,7 +67,7 @@ import type { DevicePin } from '../types/PLC/devices'
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
 import { materialiseOpcUaCredentials } from './opcua-credentials'
-import { buildSimulatorWasmRequest } from './steps/build-simulator-wasm-request'
+import { buildSimulatorWasmRequest, SIMULATOR_CXX_FLAGS } from './steps/build-simulator-wasm-request'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import {
   computeIoImage,
@@ -86,6 +86,7 @@ import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { buildHmiArtefactStep, HMI_UNSUPPORTED_RUNTIME, hmiNoPanelMessage } from './steps/hmi-artefact'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
+import { simulatorLibraryUnits } from './steps/simulator-library-units'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
 // ---------------------------------------------------------------------------
@@ -719,6 +720,7 @@ async function runCompilePipelineInner(
     libraries: libraryArchives,
     missingLibraries,
     hasCBlocks,
+    separateLibraryFiles: isSimulator,
   })
   if (strucppResult.splitterFallbackMessage) {
     emit({ stage: 'st', message: strucppResult.splitterFallbackMessage, level: 'info' })
@@ -1267,7 +1269,7 @@ async function runCompilePipelineInner(
     hmiFiles,
   })
 
-  if (isSimulator) return compileSimulatorModule(firmwareFiles, port, emit, md5)
+  if (isSimulator) return compileSimulatorModule(firmwareFiles, libraryArchives, port, emit, md5)
 
   // Build arduino-cli argv via the shared helper.  Same input/output
   // on both platforms.  `boardEntry` carries `platform` / `core` /
@@ -1363,11 +1365,14 @@ async function runCompilePipelineInner(
 /** The simulator build: the composed firmware files compiled to one WebAssembly module, with no arduino-cli. */
 async function compileSimulatorModule(
   firmwareFiles: Record<string, string>,
+  libraryArchives: readonly unknown[],
   port: CompilerPlatformPort,
   emit: (event: PipelineProgressEvent) => void,
   md5: string,
 ): Promise<RunCompilePipelineResult> {
-  const built = buildSimulatorWasmRequest(firmwareFiles)
+  const libraries = await simulatorLibraryUnits(firmwareFiles, libraryArchives, SIMULATOR_CXX_FLAGS)
+  if (!libraries.ok) return bailError(emit, 'simulator-compile', libraries.error)
+  const built = buildSimulatorWasmRequest(libraries.value.files, libraries.value.units)
   if (!built.ok) return bailError(emit, 'simulator-compile', built.error)
   emit({ stage: 'simulator-compile', message: 'Compiling the simulator module...', level: 'info' })
   const result = await port.compileToWasm(built.request, makePlatformLog(emit, 'simulator-compile'))

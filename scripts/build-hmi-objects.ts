@@ -1,12 +1,13 @@
 /**
- * Builds the compiled HMI objects the editor ships (`release/hmi-objects/`): the HMI core, font tables, hosts and
- * widget library units, compiled with the pinned WebAssembly toolchain. Run before packaging
+ * Builds the compiled objects the editor ships (`release/hmi-objects/`): the HMI core, font tables, hosts and widget
+ * library units, and the bundled libraries' OpenPLC Simulator units, compiled with the pinned WebAssembly toolchain. Run before packaging
  * (`npm run build:hmi-objects`); the packaged app reads them from its resources, development builds from the folder.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
 import { join } from 'node:path'
 
+import { mergeStrucppRuntimeIntoSkeleton } from '../src/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
 import { buildHmiShippedObjects } from '../src/backend/shared/hmi/lib-object/fixed-objects'
 import { threadRunner } from './clang-thread-runner'
 
@@ -45,6 +46,33 @@ function readAll(dir: string, prefix = ''): Record<string, string | Uint8Array> 
   return out
 }
 
+/** Files of a folder by `<prefix>/<name>`, as text; subfolders too when `recurse`. */
+function readTree(dir: string, prefix: string, recurse: boolean): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (recurse) Object.assign(out, readTree(join(dir, entry.name), `${prefix}/${entry.name}`, true))
+    } else out[`${prefix}/${entry.name}`] = readFileSync(join(dir, entry.name), 'utf8')
+  }
+  return out
+}
+
+/** The OpenPLC Simulator's firmware skeleton as the editor's compile lays it out (`loadFirmwareSkeletonInMemory`). */
+function simulatorSkeleton(runtime: Record<string, string>): Record<string, string> {
+  const sources = join(ROOT, 'resources', 'sources')
+  return mergeStrucppRuntimeIntoSkeleton({
+    firmwareSkeleton: {
+      ...readTree(join(sources, 'arduino'), 'src', false),
+      ...readTree(join(sources, 'Baremetal'), 'examples/Baremetal', false),
+      ...readTree(join(sources, 'wasm-sim'), 'wasm-sim', true),
+    },
+    strucppRuntimeHeaders: Object.fromEntries(
+      Object.entries(runtime).map(([name, content]) => [`strucpp_runtime/include/${name}`, content]),
+    ),
+    boardHalContent: readFileSync(join(sources, 'hal', 'simulator.cpp'), 'utf8'),
+  })
+}
+
 const text = (files: Record<string, string | Uint8Array>): Record<string, string> =>
   Object.fromEntries(
     Object.entries(files).flatMap(([path, content]) => (typeof content === 'string' ? [[path, content]] : [])),
@@ -59,6 +87,7 @@ async function main(): Promise<void> {
       Object.entries(hmiSources).filter(([path]) => /^(core|unit|preview)\//.test(path) && /\.(c|h|cpp)$/.test(path)),
     ),
   )
+  const bundled = bundledArchives()
   const runner = threadRunner(Math.max(1, Math.min(4, cpus().length - 1)))
   try {
     const files = await buildHmiShippedObjects(runner, {
@@ -66,12 +95,13 @@ async function main(): Promise<void> {
         runtimeHeaders: runtime,
         hmiSources: previewSources,
         readFont: (file) => Promise.resolve(new Uint8Array(readFileSync(join(HMI, 'fonts', file)))),
-        projectLibraries: bundledArchives(),
+        projectLibraries: bundled,
       },
       hmiSources,
       runtimeHeaders: Object.fromEntries(
         Object.entries(runtime).map(([name, content]) => [`strucpp_runtime/include/${name}`, content]),
       ),
+      simulator: { firmwareFiles: simulatorSkeleton(runtime), libraries: bundled },
     })
     rmSync(OUT, { recursive: true, force: true })
     mkdirSync(OUT, { recursive: true })
