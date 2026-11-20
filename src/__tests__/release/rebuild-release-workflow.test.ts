@@ -851,6 +851,16 @@ describe('rebuild-release.yml: what it never does', () => {
     ).toEqual([])
   })
 
+  it('passes --allow-prerelease in no step, so every release script keeps the x.y.z version rule', () => {
+    const offenders = jobs().flatMap((entry) =>
+      entry.steps
+        .filter((step) => text(step).includes('--allow-prerelease'))
+        .map((step) => `${entry.id}: ${str(step.name)}`),
+    )
+
+    expect(offenders).toEqual([])
+  })
+
   it('never uploads update metadata or blockmaps to the release or as an artifact', () => {
     const offenders = jobs().flatMap((entry) =>
       entry.steps
