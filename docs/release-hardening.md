@@ -1,7 +1,7 @@
 # Release hardening
 
 How a packaged OpenPLC Editor protects the package trust decision, how CI builds and checks it, and how the
-installers of a published release are rebuilt (DOPE-893). Four parts work together:
+installers of a published release are rebuilt. Four parts work together:
 
 - **Electron fuses** stop code from running inside the editor through its own executable.
 - **The trust anchor** is a module generated per build that checks every package decision of the desktop editor.
@@ -55,7 +55,7 @@ when `OPENPLC_TEST_PACKAGE` is set.
 ## The trust anchor
 
 The desktop editor installs a VPP package only when it is signed by a trusted key
-(`src/backend/shared/utils/vpp/trusted-keys.ts`). Before DOPE-893 the decision read that key map directly and the
+(`src/backend/shared/utils/vpp/trusted-keys.ts`). Before the trust anchor, the decision read that key map directly and the
 bundle carried the key as PEM text, so one edit of the bundle could add a key. The trust anchor puts a module
 generated per build in front of every decision.
 
@@ -336,16 +336,21 @@ rehearsal passed.
    audit.
 2. **Rehearsal release.** Create a draft release `v4.3.5-rehearsal` and upload copies of the six original v4.3.5
    installers to it. Keep it a draft.
-3. **Dry run on the oldest tree.** `mode: dry-run` with `ref` = `feature/DOPE-893-backport-v4.3.0` and `release` =
+3. **Dry run on the oldest tree.** `mode: dry-run` with `ref` = `feature/<KEY>-backport-v4.3.0` and `release` =
    `v4.3.0`. It builds and checks the oldest tree, and uploads nothing.
-4. **Rehearsal rebuild.** `mode: rebuild` with `negative_controls: true`, `ref` = `feature/DOPE-893-backport-v4.3.5`,
+4. **Rehearsal rebuild.** `mode: rebuild` with `negative_controls: true`, `ref` = `feature/<KEY>-backport-v4.3.5`,
    `release` = `v4.3.5-rehearsal`. Negative controls are valid only here, before any v4.3.x release is replaced.
 5. **Approvals.** Approve the Environment each time, after checking the `ref` in the run name.
 6. **Scenario runs**, then:
-   - ABUSE-16: `ref` = `feature/DOPE-893-backport-v4.3.4`, `release` = `v4.3.5-rehearsal`. It is refused by the ref
+   - ABUSE-16: `ref` = `feature/<KEY>-backport-v4.3.4`, `release` = `v4.3.5-rehearsal`. It is refused by the ref
      check, naming 4.3.4 and 4.3.5.
-   - ABUSE-10 and ABUSE-12: alter the draft as each row says, then run `mode: verify` with `run_id` = the rehearsal
-     run.
+   - ABUSE-10 and ABUSE-12: alter the draft in one of these ways, then run `mode: verify` with `run_id` = the
+     rehearsal run. Each run must fail, naming the asset:
+     - ABUSE-10: replace `OpenPLC.Editor_4.3.5.exe` with a file of the same name that the run did not build;
+     - ABUSE-12: put back the original `OpenPLC.Editor-4.3.5-ARM64.AppImage`, which still carries its original
+       digest;
+     - ABUSE-12: delete `OpenPLC.Editor_4.3.5-ARM64.exe`, which is then missing;
+     - ABUSE-12: add a seventh asset `OpenPLC Editor_4.3.5.exe`, which is unexpected.
    - ABUSE-09: `mode: seed-audit` with `run_id` = the rehearsal run. Run it after the rehearsal run finished and
      within one day, while its `trust-module` artifact still exists.
 7. **Rebuilds**, only once steps 3 to 6 passed: `mode: rebuild` for each release `v4.3.0` to `v4.3.5` from its backport
@@ -353,7 +358,7 @@ rehearsal passed.
 
 ### Backport branches
 
-A backport branch `feature/DOPE-893-backport-v4.3.N` is cut from the tag `v4.3.N` and takes only the trust anchor and
+A backport branch `feature/<KEY>-backport-v4.3.N` is cut from the tag `v4.3.N` and takes only the trust anchor and
 the fuses, with their tests, never `release.yml` changes. It is pushed and kept, never merged, and no `v*` tag is ever
 pushed for it: a tag push would start `release.yml` and create a release.
 
