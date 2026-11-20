@@ -1293,3 +1293,119 @@ describe('rebuild-release.yml: seed-audit and the trust-module artifact', () => 
     expect(result.status).toBe(0)
   })
 })
+
+describe('rebuild-release.yml: cross-seed', () => {
+  const CHECK = 'npx ts-node --transpile-only scripts/package-trust/cli.ts cross-seed-check'
+  const MODES = ['rebuild', 'dry-run', 'verify', 'seed-audit']
+
+  function crossSeed(): Job {
+    return job('cross-seed')
+  }
+
+  /** The modes an `if:` names in `inputs.mode == '<mode>'` comparisons; every mode when there is no `if:`. */
+  function namedModes(condition: unknown): string[] {
+    const source = str(condition)
+    if (source === '') return MODES
+    return MODES.filter((mode) => new RegExp(`inputs\\.mode\\s*==\\s*'${mode}'`).test(source))
+  }
+
+  /** The step index of the first step of @p entry whose script holds @p fragment, and the fragment's offset in it. */
+  function position(entry: Job, fragment: string): [number, number] {
+    const index = stepIndex(entry, (step) => str(step.run).includes(fragment))
+    return [index, index < 0 ? -1 : str(entry.steps[index].run).indexOf(fragment)]
+  }
+
+  function precedes(a: [number, number], b: [number, number]): boolean {
+    return a[0] >= 0 && (a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]))
+  }
+
+  /** The directory a step runs in: its working-directory, or the one its script changes to first. */
+  function directoryOf(step: Step): string {
+    const changed = /^\s*cd\s+(\S+?)\/?\s*(&&|\n|$)/.exec(str(step.run))
+    return str(step['working-directory']).replace(/\/$/, '') || (changed ? changed[1] : '')
+  }
+
+  it('waits for resolve only', () => {
+    expect(needsOf(crossSeed())).toEqual(['resolve'])
+  })
+
+  it('runs in the rebuild and dry-run modes only, as resolve does, and only when resolve succeeded', () => {
+    const own = str(crossSeed().body.if)
+    const modes = namedModes(job('resolve').body.if).filter((mode) => namedModes(own).includes(mode))
+
+    expect(modes.sort()).toEqual(['dry-run', 'rebuild'])
+    expect(own).not.toMatch(/\b(always|cancelled|failure)\s*\(/)
+  })
+
+  it('is waited for by publish', () => {
+    expect(needsOf(job('publish'))).toContain('cross-seed')
+  })
+
+  it('grants only contents: read, in its own permissions', () => {
+    expect(crossSeed().body.permissions).toStrictEqual({ contents: 'read' })
+  })
+
+  it('uses no environment and names no secret and no token', () => {
+    const raw = text(crossSeed().body)
+
+    expect(environmentOf(crossSeed())).toBeUndefined()
+    expect(raw).not.toMatch(/secrets\s*[.[]/)
+    expect(raw).not.toMatch(/github\.token|GITHUB_TOKEN|GH_TOKEN/)
+  })
+
+  it('checks out tooling/ at the workflow commit and tree/ at the commit resolve found, keeping no credentials', () => {
+    const checkouts = crossSeed().steps.filter((step) => uses(step).startsWith('actions/checkout'))
+    const refOf = (path: string): string =>
+      str(record(checkouts.find((step) => isCheckout(step, path))?.with).ref).replace(/\s/g, '')
+
+    expect({ tooling: refOf('tooling'), tree: refOf('tree') }).toEqual({
+      tooling: '${{github.sha}}',
+      tree: '${{needs.resolve.outputs.sha}}',
+    })
+    expect(checkouts.map((step) => record(step.with)['persist-credentials'])).toEqual(checkouts.map(() => false))
+  })
+
+  it('sets up Node 22', () => {
+    const setup = crossSeed().steps.find((step) => uses(step).startsWith('actions/setup-node'))
+    const version = str(record(setup?.with)['node-version'])
+    const resolved = /^\$\{\{\s*env\.NODE_VERSION\s*\}\}$/.test(version)
+      ? str(record(workflow().doc.env).NODE_VERSION)
+      : version
+
+    expect(resolved).toMatch(/^22(\.|$)/)
+  })
+
+  it('runs npm ci --ignore-scripts, then npm run setup:strucpp, then cli.ts cross-seed-check, each in tree/', () => {
+    const entry = crossSeed()
+    const install = position(entry, 'npm ci --ignore-scripts')
+    const strucpp = position(entry, 'npm run setup:strucpp')
+    const check = position(entry, CHECK)
+    const directories = [install, strucpp, check].map(([index]) => directoryOf(entry.steps[index] ?? {}))
+
+    expect([precedes(install, strucpp), precedes(strucpp, check)]).toEqual([true, true])
+    expect(directories).toEqual(['tree', 'tree', 'tree'])
+  })
+
+  it("runs the built tree's own cli.ts, never the one in tooling/", () => {
+    const offenders = crossSeed()
+      .steps.filter((step) => str(step.run).includes('cross-seed-check') && str(step.run).includes('tooling/'))
+      .map((step) => str(step.name))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('installs its dependencies with npm ci --ignore-scripts only', () => {
+    const installs = crossSeed().steps.filter((step) => /\bnpm (ci|install|i)\b|\byarn\b|\bpnpm\b/.test(str(step.run)))
+
+    expect(installs.length).toBeGreaterThanOrEqual(1)
+    expect(installs.filter((step) => !str(step.run).includes('npm ci --ignore-scripts'))).toEqual([])
+  })
+
+  it('changes nothing in the release and uploads nothing', () => {
+    const offenders = crossSeed()
+      .steps.filter((step) => isMutation(step) || isUploadArtifact(step))
+      .map((step) => str(step.name))
+
+    expect(offenders).toEqual([])
+  })
+})
