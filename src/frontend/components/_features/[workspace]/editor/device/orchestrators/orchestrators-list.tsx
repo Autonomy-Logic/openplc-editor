@@ -86,6 +86,21 @@ function isActiveTargetLoad(state: VppTargetLoadState): state is ActiveTargetLoa
   return state.status === 'downloading' || state.status === 'verifying' || state.status === 'error'
 }
 
+/** What the status region announces for a load state: the phase only, never the bytes. */
+function packageLoadAnnouncement(state: VppTargetLoadState): string {
+  switch (state.status) {
+    case 'downloading':
+      return 'Downloading the vendor package.'
+    case 'verifying':
+      return 'Verifying the vendor package.'
+    case 'error':
+      return 'Download failed.'
+    case 'idle':
+    case 'ready':
+      return ''
+  }
+}
+
 type VendorPackageLoadProps = {
   state: ActiveTargetLoadState
   isRetrying: boolean
@@ -129,6 +144,7 @@ const VendorPackageLoad = ({ state, isRetrying, onCancel, onRetry }: VendorPacka
   const bar = (
     <div
       role='progressbar'
+      aria-label='Vendor package download'
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent ?? undefined}
@@ -561,6 +577,11 @@ const OrchestratorsList = () => {
                 Absent whenever the package names exactly one, which the effect
                 above has already selected, and on every platform that targets
                 no vPLC. */}
+            {packages && (
+              <p role='status' aria-live='polite' className='sr-only'>
+                {packageLoadAnnouncement(targetLoadState)}
+              </p>
+            )}
             {packages && isActiveTargetLoad(targetLoadState) ? (
               <div className={VENDOR_BOARD_CARD_CLASSES}>
                 <p className='text-sm font-medium text-neutral-900 dark:text-white'>Vendor board</p>

@@ -6,7 +6,7 @@ import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabil
 import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
 import type { VppTargetLoadState } from '@root/middleware/shared/ports/vpp-target-mechanisms'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { OrchestratorsList } from '../orchestrators-list'
@@ -372,7 +372,7 @@ describe('design tokens', () => {
   it('sets Download failed. in the small red text', async () => {
     renderList(createLoadStatePackages(STALLED).port)
 
-    const text = await screen.findByText('Download failed.')
+    const text = within(await screen.findByTestId('vendor-package-error')).getByText('Download failed.')
     const styled = text.closest('.text-red-600')
     expect(styled).not.toBeNull()
     if (!styled) return
@@ -414,6 +414,54 @@ describe('when no package is loading', () => {
     await screen.findByText('No Edge Devices found.')
     expect(screen.queryByTestId('vendor-package-loading')).toBeNull()
     expect(screen.queryByTestId('vendor-package-error')).toBeNull()
+  })
+})
+
+describe('accessibility of the package load', () => {
+  it.each([
+    ['downloading', DOWNLOADING],
+    ['verifying', VERIFYING],
+  ] as const)('names the progress bar while %s', async (_phase, state) => {
+    renderList(createLoadStatePackages(state).port)
+
+    expect(await screen.findByRole('progressbar', { name: 'Vendor package download' })).toBeTruthy()
+  })
+
+  it('announces each phase in a polite status region, not each byte', async () => {
+    const packages = createLoadStatePackages(DOWNLOADING)
+    renderList(packages.port)
+    const status = await screen.findByRole('status')
+    expect(status.getAttribute('aria-live')).toBe('polite')
+    expect(status.textContent).toBe('Downloading the vendor package.')
+
+    packages.push({ status: 'downloading', loaded: 8_880_000, total: 11_100_000 })
+    expect(screen.getByRole('status').textContent).toBe('Downloading the vendor package.')
+
+    packages.push(VERIFYING)
+    expect(screen.getByRole('status').textContent).toBe('Verifying the vendor package.')
+  })
+
+  it('keeps the status region mounted and announces a failed download', async () => {
+    const packages = createLoadStatePackages(DOWNLOADING)
+    renderList(packages.port)
+    const status = await screen.findByRole('status')
+
+    packages.push(STALLED)
+
+    expect(screen.getByRole('status')).toBe(status)
+    expect(status.textContent).toBe('Download failed.')
+    expect(status.textContent).not.toContain('No data received for 30 seconds')
+  })
+
+  it('empties the status region once the package is ready', async () => {
+    const packages = createLoadStatePackages(DOWNLOADING)
+    renderList(packages.port)
+    const status = await screen.findByRole('status')
+
+    packages.push({ status: 'ready' })
+
+    expect(screen.getByRole('status')).toBe(status)
+    expect(status.textContent).toBe('')
   })
 })
 
