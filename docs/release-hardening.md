@@ -1,0 +1,355 @@
+# Release hardening
+
+How a packaged OpenPLC Editor protects the package trust decision, how CI builds and checks it, and how the
+installers of a published release are rebuilt (DOPE-893). Four parts work together:
+
+- **Electron fuses** stop code from running inside the editor through its own executable.
+- **The trust anchor** is a module generated per build that checks every package decision of the desktop editor.
+- **`release.yml`** builds every new release from a tag in release mode and checks what it built.
+- **`rebuild-release.yml`** rebuilds and replaces the installers of a release that is already published.
+
+## Electron fuses
+
+`electronFuses` in `electron-builder.json` sets five fuses on every packaged build:
+
+| Fuse                                    | Value | Effect                                                    |
+| --------------------------------------- | ----- | --------------------------------------------------------- |
+| `runAsNode`                             | off   | `ELECTRON_RUN_AS_NODE` does not turn the editor into Node |
+| `enableNodeOptionsEnvironmentVariable`  | off   | `NODE_OPTIONS` (`--require`, for example) is ignored      |
+| `enableNodeCliInspectArguments`         | off   | `--inspect`, `--inspect-brk` and SIGUSR1 open no debugger |
+| `enableEmbeddedAsarIntegrityValidation` | on    | a modified `app.asar` stops the editor at start           |
+| `onlyLoadAppFromAsar`                   | on    | an `app` folder next to `app.asar` is never loaded        |
+
+`resetAdHocDarwinSignature: true` is a sixth key of the same block. Writing the fuses changes the Electron
+binary, which breaks the signature Electron ships with, so a macOS build made without a signing identity (a local
+`npm run package` on Apple silicon) would be killed at load with "Code Signature Invalid". The key re-signs the app
+ad hoc right after the fuses are written; it changes no fuse. macOS release builds are signed with Developer ID
+afterwards.
+
+Side effects:
+
+- **`NODE_EXTRA_CA_CERTS` is ignored by the main process** of a packaged build: the `NODE_OPTIONS` fuse turns it off
+  too. A proxy that needs an extra certificate authority cannot be added that way.
+- **No `--inspect` on a release build.** Debug the main process in `npm run dev`, or on a `npm run package:test`
+  build.
+- **Worker threads.** The clang, simulator and Python workers are started with `new Worker(script)` from the main
+  process (`src/backend/editor/wasm-toolchain/`, `simulator/`, `python/`). They pass no `execArgv` and read no
+  `NODE_OPTIONS`, so the fuses change nothing in how they start. The packaged checks below do not start them; Play on a
+  packaged build is part of the manual test.
+- **A tampered `app.asar` terminates the editor at start.** On macOS, a repacked archive (its header hash no longer
+  matches the one recorded in the app's `Info.plist`) ends the process with SIGTRAP and
+  `FATAL ... Integrity check failed for asar archive`. A byte edited in place in a `dist/main` script ends it with exit
+  code 1 and `ASAR Integrity Violation: got a hash mismatch`. A test of this expects either: a non-zero exit code or a
+  signal.
+
+### Test-only packaging
+
+`npm run package:test` runs the same steps as `npm run package` with `OPENPLC_TEST_PACKAGE=1` set for every step, and
+turns only the inspect fuse back on (`-c.electronFuses.enableNodeCliInspectArguments=true`). Playwright's
+`_electron.launch` needs the inspect arguments, so it can drive a packaged build only when it comes from
+`package:test`, given through `E2E_PACKAGED_APP`. A release build is checked by spawning it
+(`scripts/release/packaged-checks.mjs`). No workflow may name `package:test` or `OPENPLC_TEST_PACKAGE`
+(`src/__tests__/electron-fuses-config.test.ts` checks every workflow file), and a release-mode build refuses to run
+when `OPENPLC_TEST_PACKAGE` is set.
+
+## The trust anchor
+
+The desktop editor installs a VPP package only when it is signed by a trusted key
+(`src/backend/shared/utils/vpp/trusted-keys.ts`). Before DOPE-893 the decision read that key map directly and the
+bundle carried the key as PEM text, so one edit of the bundle could add a key. The trust anchor puts a module
+generated per build in front of every decision.
+
+### Contract
+
+`src/backend/editor/package-trust/types.ts`:
+
+- `PackageTrustAnchor` has three members:
+  - `trustedKeys()` returns a fresh `keyId -> PEM` map, rebuilt from the module's encoded shares on every call. The
+    shared verifier (`verifyPackageSignature`) gets this map instead of `TRUSTED_PACKAGE_KEYS`, so its refusal
+    reasons are unchanged.
+  - `checkAtImport(dir)` is the import hook.
+  - `checkAtUse(dir)` is the installed-package hook, used by the startup sweep, the rejection reason and the
+    pre-build gate, in the GUI and in the CLI.
+  - Each hook returns `null` when every check site bound to it accepts the package, and a refusal reason otherwise.
+- `PackageTrustMechanisms` holds the primitives the module runs on; the module imports nothing at runtime. The desktop
+  supplies them in `mechanisms.ts` (`desktopPackageTrustMechanisms`, `node:fs` and `node:crypto`).
+- `index.ts` exports `desktopPackageTrustAnchor`, the generated module on the desktop mechanisms.
+  `PackageManagerModule` (`src/backend/editor/package-manager/package-manager-module.ts`) takes it as the default of
+  its constructor and calls the shared verifier first, then the hook. On import, a refusal is reported as
+  `Package signature verification failed: Package trust check failed`.
+
+The anchor is desktop-only: it is an exception to the thin-adapter rule, recorded in `CLAUDE.md`, and openplc-web is
+not changed.
+
+### Check sites
+
+The generated module binds two to four check sites to each hook, in an order and under neutral function names chosen
+by the seed. Every site reads the package once (`readSnapshot`) and, on that snapshot:
+
+- verifies the Ed25519 signature against the key it recombines from its own shares: the signature's key id only picks
+  among those keys, and a key id alone never decides;
+- verifies the package files against the signed file list and the manifest against the signed package identity
+  (`verifyFileSet`, `verifyManifestIdentity`), not only the signature (M14);
+- runs a canary: a known-invalid signature must fail under the recombined trusted key, and a known-valid signature
+  under a throwaway key derived from the seed must pass. A primitive that gets either wrong refuses the package (M12).
+
+A hook accepts only when every site bound to it accepts. Each site holds the key as shares in its own encoding (an
+alphabet, base 16 or 32, combined by XOR or by addition), so the PEM text, its base64 body, the raw key bytes and the
+key id appear nowhere in the bundle.
+
+### Fingerprint
+
+`scripts/package-trust/fingerprint.ts` (`checkFingerprint`) checks a generated module against
+`TRUSTED_PACKAGE_KEYS`: the key map it hands out holds exactly the expected keys, each hook makes at least two failing
+signature checks under expected keys only, and both hooks refuse a synthetic package. Every CLI command that writes or
+places a module runs it and fails on a mismatch.
+
+### Generator and seed
+
+`scripts/package-trust/generator.ts` (`generatePackageTrustModule`) writes the module and its layout (the check sites
+and the exact text of every share literal) from a 32-byte seed. The same seed and keys always give the same module.
+The first line of a module names its mode: `from the development seed`, or `for release <version> at commit <sha>`.
+
+- **Release seed:** `deriveReleaseSeed(secret, version, commit)`, HMAC-SHA256 keyed by the secret over
+  `<version>+<commit>`. The secret is the GitHub Actions secret `TRUST_SEED_SECRET` (64 hexadecimal characters) of the
+  Environment `release-trust`. No seed is stored: CI derives it again for any rebuild, and without the secret it cannot
+  be predicted, so a patch written for one release fits no other.
+- **Development seed:** `DEVELOPMENT_SEED` in `generator.ts`, fixed and public. Every build that is not a release uses
+  it, so a development build gives no protection against a patch made for it.
+- **The committed module** `src/backend/editor/package-trust/package-trust-anchor.ts` is the development module.
+  Regenerate it after a change to the generator or to `trusted-keys.ts`:
+  `npx ts-node --transpile-only scripts/package-trust/cli.ts write-fallback`.
+
+### Build modes
+
+`npm run build:main` runs `scripts/package-trust/cli.ts prepare`, then webpack, then `cli.ts verify-bundle`. Webpack
+replaces the committed module with the one `prepare` placed in `release/package-trust/` (git-ignored), with its
+`layout.json` beside it.
+
+| `OPENPLC_RELEASE_BUILD` | Mode        | `prepare`                                                                                                                                                                                                                                                                                                              |
+| ----------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| unset or empty          | development | Places the development module and its layout. Fails when `GITHUB_REF` is a `refs/tags/v*` tag: a tag build must be in release mode.                                                                                                                                                                                    |
+| `1`                     | release     | Places nothing: requires the module `generate-release` wrote in `release/package-trust/`, with its `layout.json`. Fails when `OPENPLC_TEST_PACKAGE` is set, when the module is not a release module, when its version differs from `release/app/package.json` or its commit from `HEAD`, or on a fingerprint mismatch. |
+| any other value         | (none)      | Fails, naming the variable.                                                                                                                                                                                                                                                                                            |
+
+`verify-bundle` reads `release/app/dist/main/main.js` and every other `.js` beside it (the module lands in a chunk) and
+fails when any share literal of the placed module is missing. In release mode it also fails when the bundle holds a
+share literal of the development module.
+
+`generate-release --version <v> --commit <sha> --out <file>` writes a release module and its `layout.json`. It reads
+the secret from `OPENPLC_TRUST_SEED_SECRET` and fails, writing nothing, when it is absent or is not 64 hexadecimal
+characters.
+
+### Environment variables
+
+| Variable                          | Set by                                   | Read by                                                                                                                                     |
+| --------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENPLC_RELEASE_BUILD`           | the build steps of a release-mode CI run | `cli.ts prepare` and `verify-bundle`: `1` is release mode                                                                                   |
+| `OPENPLC_TRUST_SEED_SECRET`       | the one step that needs the secret       | `cli.ts generate-release`, `scripts/release/seed-audit.mjs`                                                                                 |
+| `OPENPLC_TEST_PACKAGE`            | `npm run package:test`                   | `cli.ts prepare`, which refuses it in release mode                                                                                          |
+| `OPENPLC_TRUST_MODULE_UNDER_TEST` | the `trust-module` job                   | `src/backend/editor/package-trust/__tests__/check-sites.test.ts`: the rows that need only the real trusted key run against that module file |
+
+## `release.yml`: new releases
+
+A `v*` tag push builds in release mode:
+
+- the `trust-module` job runs in the Environment `release-trust`. It installs with `npm ci --ignore-scripts` and no
+  cache, and it is the only job that sees the secret, in its generator step
+  (`cli.ts generate-release --out release/package-trust/package-trust-anchor.ts`). It runs `check-sites.test.ts` on
+  the generated module with `OPENPLC_TRUST_MODULE_UNDER_TEST` and uploads the module as the artifact `trust-module`,
+  kept for one day;
+- the five build jobs download `trust-module` into `release/package-trust/` and build with `OPENPLC_RELEASE_BUILD=1`.
+
+A dispatch on a branch (`workflow_dispatch`, with its `platforms` and `version` inputs as before) builds with the
+development seed: no `trust-module` job, no `OPENPLC_RELEASE_BUILD`, and no release.
+
+Every run, tag or dispatch:
+
+- each build job runs `scripts/release/read-fuses.mjs` on every executable it built and
+  `scripts/release/scan-trust-literals.mjs` on its unpacked output, before it uploads anything;
+- the `packaged-checks` job runs `scripts/release/packaged-checks.mjs` (positive controls only, no negative control)
+  on the macOS arm64 DMG, the Windows x64 installer and the Linux x64 AppImage, on `macos-14`, `windows-2022` and
+  `ubuntu-22.04`.
+
+`create-release` runs on tags only, after `packaged-checks`. It runs `scripts/release/check-upload-set.mjs` on the
+installers before `gh release create` and uploads exactly the six installers: never a `latest*.yml` and never a
+`.blockmap` (see `docs/update-notice.md`).
+
+A dispatch of `release.yml` on a demand branch with `platforms: all` is how a development build of the hardened editor
+is produced and checked.
+
+## The release check scripts
+
+`scripts/release/` uses Node built-ins only, so a workflow runs it from its own checkout without installing anything.
+Each script exits 0 when its check passes and 1 with the reason otherwise.
+
+| Script                    | Checks                                                                                                                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check-ref.mjs`           | `--ref` is `feature/<PROJECT>-<number>-backport-v<version>`, the version taken from `--release`; prints the version                                                                             |
+| `check-version.mjs`       | `APP_VERSION` and `release/app/package.json` of `--tree` equal the version of `--release`; prints the version                                                                                   |
+| `check-upload-set.mjs`    | a folder holds exactly the six installer names of `--version`, each a regular file                                                                                                              |
+| `read-fuses.mjs`          | every executable or `.app` given carries the five fuses, naming each one that does not                                                                                                          |
+| `scan-trust-literals.mjs` | no file under the given folders holds a trusted key as PEM, base64 body, raw bytes or key id, nor a PEM BEGIN marker                                                                            |
+| `release-digests.mjs`     | `before` records the sha256 of the six installers of a release; `after` checks that each now has the digest the run built. Exit 3 when the only problem is a digest GitHub has not computed yet |
+| `release-notes.mjs`       | appends an "Installers rebuilt on <date>" section (commit, previous and new sha256 of each installer) to the release notes                                                                      |
+| `seed-audit.mjs`          | the seed of a run appears nowhere in the given files (raw, hex in both cases, base64), printing only `match: <file> offset <n> form <form>` or `no match`, never the seed                       |
+| `packaged-checks.mjs`     | installs one installer and attacks it (below)                                                                                                                                                   |
+
+The release tag of every script is `v<major>.<minor>.<patch>`, or its `-rehearsal` form, which stands for the same
+version.
+
+### Packaged checks
+
+`packaged-checks.mjs --platform <mac|win|linux> --installer <path> --version <v> --positive-control <fx3u .vpp>
+--trusted-keys <trusted-keys.ts> --report <file.json> [--negative-control]` installs the installer into a temporary
+folder and runs, in order:
+
+- `start`: the editor stays alive 30 s.
+- `ABUSE-01`: the reproducer of the published trust patch (`fixtures/patch-trust-reproducer.mjs`) must not change
+  `app.asar`.
+- `ABUSE-02`: no file of the installation, `app.asar` extracted included, holds a trust literal.
+- `ABUSE-06 row 1` and `row 2`: a repacked `app.asar`, and one byte edited in place in the `dist/main` chunk that holds
+  the trust module, must stop the editor.
+- `ABUSE-07`: `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`, `--inspect`, `--inspect-brk` and SIGUSR1 must run no attacker
+  code and open no debugger. A process ended by SIGUSR1 itself, with no inspector banner, counts as refused.
+- `ABUSE-13 (a)` and `(b)`: an `app` folder next to `app.asar`, and one with `app.asar` moved away, must not load.
+- `ABUSE-03 (b)` and `(e)`: the CLI refuses to install, and to compile against, a package signed by another key.
+- `AC5 compile` and `AC5 packages install`: the Autonomy-signed fx3u package (`--positive-control`, pinned by sha256)
+  is still accepted: a CLI build for its board starts with no trust refusal, and the CLI installs it.
+
+Some checks are skipped with their reason: `ABUSE-06` on Linux (no ASAR integrity there), SIGUSR1 on Windows,
+`AC5 packages install` outside Linux, and `ABUSE-03 (b)` and `AC5 packages install` before 4.3.2 (no
+`openplc-cli packages`).
+
+With `--negative-control` the same checks run inverted against an original installer: each passes only when the
+attack works, so a check that cannot see its attack fails instead of passing. `start` and `ABUSE-07 NODE_OPTIONS` stay
+normal; `ABUSE-13 (a)`, `ABUSE-03 (b)`, `ABUSE-03 (e)` and the two `AC5` checks are skipped, each with its reason.
+
+The report is JSON (`schema: 1`): the platform, the version, the installer and its sha256, `negativeControl`, the
+start and end times, `result` (`pass` or `fail`) and one entry per check with its `mode` (`normal`, `inverted` or
+`skipped`), `result`, `reason` and evidence. Exit codes: 0 when every check passes or is skipped, 1 when one fails
+(an inconclusive check fails), 2 for a usage problem, with no report.
+
+## `rebuild-release.yml`: rebuilding a published release
+
+Started by hand only (`workflow_dispatch`), from `main`. One run per release at a time (`concurrency` on the release
+input). Every release script runs from the workflow's own checkout (`tooling/`), never from the tree it builds
+(`tree/`).
+
+### Inputs
+
+| Input               | Used by                | Meaning                                                                |
+| ------------------- | ---------------------- | ---------------------------------------------------------------------- |
+| `mode`              | every run              | `rebuild` (default), `dry-run`, `verify` or `seed-audit`               |
+| `ref`               | `rebuild`, `dry-run`   | the branch to build: the backport branch of the release                |
+| `release`           | every mode             | the target release tag, for example `v4.3.5` or `v4.3.5-rehearsal`     |
+| `negative_controls` | `rebuild`, `dry-run`   | also run the negative controls; for the rehearsal only. Off by default |
+| `run_id`            | `verify`, `seed-audit` | the rebuild run to verify or audit                                     |
+
+There is no version input: the version comes from the release tag. The run name is
+`Rebuild <release> (<mode>) from <ref>`.
+
+### Modes and jobs
+
+- **`rebuild`** runs every job below and replaces the six installers of the release.
+- **`dry-run`** runs the same jobs except `publish`: it builds and checks, and changes nothing on the release.
+- **`verify`** reads the rebuild manifest and build digests of `run_id` and checks the release's assets against them
+  with `release-digests.mjs after`.
+- **`seed-audit`** searches everything a rebuild run left for its seed (below).
+
+Jobs of `rebuild` and `dry-run`:
+
+1. `resolve` requires `ref`, runs `check-ref.mjs` before it fetches the tree, checks out `ref`, writes the branch and
+   the commit to the run summary, runs `check-version.mjs`, requires tag `v<version>` to be an ancestor of the commit,
+   finds the one release with the target tag (drafts included), records the original digests
+   (`release-digests.mjs before`) and uploads them with the release id, version and commit as the artifact
+   `rebuild-manifest` (30 days).
+2. `trust-module`: as in `release.yml`, for the version and commit `resolve` found, plus `npm run setup:strucpp`
+   before the check-site test.
+3. Five build jobs (`build-macos`, `build-windows-x64`, `build-windows-arm64`, `build-linux-x64`,
+   `build-linux-arm64`) build with `OPENPLC_RELEASE_BUILD=1` and the downloaded module, name the installers as the
+   release does, record their sha256, run `read-fuses.mjs` and `scan-trust-literals.mjs`, then upload the installers
+   (7 days) and their digests (30 days). With `negative_controls`, `build-windows-x64` also reads the fuses of the
+   original installer of `v<version>` and requires the readout to fail naming only the original.
+4. `packaged-checks` runs `packaged-checks.mjs` on the macOS arm64, Windows x64 and Linux x64 installers of the run
+   (Linux under `xvfb-run`), with no secret, no token and no dependency install. With `negative_controls` it also
+   downloads the published installer of `v<version>` and runs the checks on it with `--negative-control`. The
+   reports are uploaded as `packaged-checks-<platform>` (30 days).
+5. `publish` (`rebuild` only, after every build job and `packaged-checks`) checks the upload set (with
+   `negative_controls`, it first proves that a set holding `latest.yml` fails), replaces the installers, checks the
+   digests and records the rebuild in the release notes.
+
+### The `ref` rule
+
+A rebuild builds only the backport branch of its target release: `feature/<KEY>-backport-v<version>`, the version
+taken from the release tag, so `v4.3.5-rehearsal` needs the backport branch of 4.3.5. `check-ref.mjs` enforces it in
+`resolve`, before the branch is fetched. The Environment `release-trust` cannot enforce it: the workflow is dispatched
+from `main`, so its deployment branch rule only ever sees `main`. The run name shows the `ref`, so the
+`release-trust` reviewer reads it before approving the `trust-module` job.
+
+### Replacing the installers
+
+For each of the six installers, `publish`:
+
+1. deletes a `<name>.uploading` asset an earlier attempt left;
+2. uploads the new file as `<name>.uploading`;
+3. deletes the old `<name>` asset;
+4. renames the upload to `<name>`.
+
+The release never lacks a file the run has not uploaded yet, and an `.uploading` name matches no installer the update
+notice picks. Between steps 3 and 4 the installer's name is absent for a few seconds (see `docs/update-notice.md`).
+
+If a replacement fails, use **Re-run failed jobs** on the same run (within 7 days, while its installer artifacts
+exist): the re-run deletes any leftover `.uploading` asset and replaces each installer again. Otherwise delete the
+leftover `<name>.uploading` asset by hand.
+
+After the upload, `publish` reads the release back with `release-digests.mjs after`: each of the six installers must
+carry the digest the run built, no installer may keep its original digest, and no seventh asset may exist. GitHub can
+fill an asset's digest after the upload response, so while the only problem is a digest not computed yet (exit 3) the
+read is repeated, 10 s apart, up to 6 reads, then fails naming the assets still without one.
+
+### Seed audit
+
+`seed-audit` runs in the Environment `release-trust`. It requires the `trust-module` artifact of `run_id` to exist
+(it is kept for one day), downloads it with every other artifact of the run, the run's logs, every asset of the
+release and the repository's cache keys, and runs `seed-audit.mjs` with the version and commit of the run's manifest.
+
+## Rehearsal and rebuilds
+
+Every 4.3.x release from 4.3.0 on is rebuilt from its backport branch. Nothing replaces a published asset before the
+rehearsal passed.
+
+1. **Environment and secret.** A repository admin creates the Environment `release-trust`, with a required reviewer
+   and a deployment rule that allows `main` and `v*` tags (the refs its jobs run on), and adds the secret `TRUST_SEED_SECRET` to it: 64
+   hexadecimal characters, for example from `openssl rand -hex 32`. Keep it unchanged between a rebuild and its seed
+   audit.
+2. **Rehearsal release.** Create a draft release `v4.3.5-rehearsal` and upload copies of the six original v4.3.5
+   installers to it. Keep it a draft.
+3. **Dry run on the oldest tree.** `mode: dry-run`, `ref: feature/DOPE-893-backport-v4.3.0`, `release: v4.3.0`.
+4. **Rehearsal.** `mode: rebuild`, `ref: feature/DOPE-893-backport-v4.3.5`, `release: v4.3.5-rehearsal`,
+   `negative_controls: true`. It replaces the draft's six installers.
+5. **Scenario runs** on the rehearsal: the refusals CI must show, for example a `ref` that is not the backport branch
+   of the release, which `resolve` refuses, and `mode: verify` with the rehearsal's `run_id`.
+6. **Seed audit** within one day of the rehearsal, while its `trust-module` artifact exists: `mode: seed-audit`,
+   `release: v4.3.5-rehearsal`, `run_id` of the rehearsal. It must print `no match`.
+7. **Rebuilds**, only once steps 3 to 6 passed: `mode: rebuild` for each release `v4.3.0` to `v4.3.5` from its backport
+   branch, `negative_controls` off, then `mode: verify` for each run.
+
+### Backport branches
+
+A backport branch `feature/DOPE-893-backport-v4.3.N` is cut from the tag `v4.3.N` and takes only the trust anchor and
+the fuses, with their tests, never `release.yml` changes. It is pushed and kept, never merged, and no `v*` tag is ever
+pushed for it: a tag push would start `release.yml` and create a release.
+
+## Limits and accepted residuals
+
+- **Test level.** The hardened runtime with a Developer ID signature exists only in CI builds. A local macOS build is
+  signed ad hoc, so the packaged checks run locally show the fuses and the trust anchor, not the hardened runtime.
+- **Linux.** Electron has no ASAR integrity for an AppImage, so a modified `app.asar` still starts there
+  (`ABUSE-06` is skipped on Linux). The per-build key encoding and the check sites still apply.
+- **Windows without Authenticode.** The installers are not code-signed (DOPE-444). The `app.asar` hash is recorded
+  in the executable, which no signature protects, so an attacker able to write the installation can change both.
+- **Files outside `app.asar`.** ASAR integrity covers `app.asar` only: the extra resources (`yowasp-clang`,
+  `wasmer-sdk`, `python-runtime`, `bin`, `sources`) are not checked (DOPE-895).
+- **`seed-audit` and compressed installers.** The audit searches the release assets as they are: DMG, NSIS and
+  AppImage files are compressed, so a seed packed inside one would not show as plain bytes.
