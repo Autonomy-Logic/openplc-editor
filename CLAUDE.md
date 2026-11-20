@@ -651,10 +651,10 @@ repos and merge to `development`; promote `development` to `main` in both repos;
 Release"). openplc-web has no release workflow: `production-cd.yml` deploys on every push to its
 `main`, and `staging-cd.yml` on pushes to `development`.
 
-**Release mode.** A `v*` tag push is the only release-mode run of `release.yml`: its `trust-module`
-job, in the GitHub Environment `release-trust` (secret `TRUST_SEED_SECRET`, approved by a required
-reviewer), generates the build's trust module, and the five build jobs download it and build with
-`OPENPLC_RELEASE_BUILD=1`. A dispatch on a branch builds with the development seed and publishes
+**Release mode.** A run of `release.yml` on a `v*` tag (a tag push, or a dispatch on the tag) is
+release mode: its `trust-module` job, in the GitHub Environment `release-trust` (secret
+`TRUST_SEED_SECRET`, approved by a required reviewer), generates the build's trust module, and the
+five build jobs download it and build with `OPENPLC_RELEASE_BUILD=1`. A dispatch on a branch builds with the development seed and publishes
 nothing. Every run reads the fuses of each built executable (`scripts/release/read-fuses.mjs`), scans
 the unpacked output for the trusted key (`scan-trust-literals.mjs`) and runs `packaged-checks` on the
 macOS arm64, Windows x64 and Linux x64 installers; `create-release` runs `check-upload-set.mjs` and
