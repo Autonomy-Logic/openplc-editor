@@ -2,13 +2,16 @@
  * The structure of `.github/workflows/release.yml`, read with the `yaml` package, and the thin-adapter exception in
  * CLAUDE.md. Which jobs and steps run is worked out from the workflow's `if:` and `${{ }}` expressions, for a tag push
  * and for a dispatch on a branch, with GitHub's rule that a job is skipped when a job upstream of it was skipped unless
- * its `if:` calls a status function. A condition kept inside a shell script cannot be evaluated here.
+ * its `if:` calls a status function. A condition kept inside a shell script cannot be evaluated here. The upload-set
+ * check of create-release also runs as a bash script, with the real check-upload-set.mjs, over a temporary directory.
  * @jest-environment node
  */
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, dirname, join } from 'node:path'
 
-import { describe, expect, it } from '@jest/globals'
+import { afterEach, describe, expect, it } from '@jest/globals'
 import { parse } from 'yaml'
 
 const repo = join(__dirname, '..', '..')
@@ -453,6 +456,21 @@ function shellWords(line: string): string[] {
   return [...line.matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+)/g)].map((match) => match[1] ?? match[2] ?? match[3])
 }
 
+/** The step of @p entry whose script runs @p script; throws naming both when there is none. */
+function stepRunning(entry: Job, script: string): Step {
+  const found = entry.steps.find(runs(script))
+  if (found === undefined) throw new Error(`${entry.id} has no step running ${script}`)
+  return found
+}
+
+/** The shell words of the line of @p step that runs @p script, its line continuations joined. */
+function commandWords(step: Step, script: string): string[] {
+  const lines = str(step.run)
+    .replace(/\\\r?\n/g, ' ')
+    .split('\n')
+  return shellWords(lines.find((line) => line.includes(script)) ?? '')
+}
+
 /** The asset paths given to `gh release create` or `gh release upload`, with the job that runs them. */
 function releaseAssetGlobs(): { where: string; glob: string }[] {
   return jobs().flatMap((entry) =>
@@ -726,6 +744,12 @@ describe('release.yml: packaged-checks', () => {
     ).toBe(true)
   })
 
+  it('runs packaged-checks.mjs with --allow-prerelease, so a prerelease tag passes its version rule', () => {
+    const script = 'scripts/release/packaged-checks.mjs'
+
+    expect(commandWords(stepRunning(checks(), script), script)).toContain('--allow-prerelease')
+  })
+
   it('runs no negative control anywhere in the workflow', () => {
     expect(strings(workflow().doc).filter((value) => value.includes('--negative-control'))).toEqual([])
   })
@@ -753,6 +777,79 @@ describe('release.yml: create-release', () => {
 
     expect(check).toBeGreaterThanOrEqual(0)
     expect(create).toBeGreaterThan(check)
+  })
+
+  describe('the upload-set check', () => {
+    const SCRIPT = 'scripts/release/check-upload-set.mjs'
+    const PRERELEASE_INSTALLERS = [
+      'OpenPLC.Editor-4.4.0-rc1.AppImage',
+      'OpenPLC.Editor-4.4.0-rc1-ARM64.AppImage',
+      'OpenPLC.Editor_4.4.0-rc1.exe',
+      'OpenPLC.Editor_4.4.0-rc1-ARM64.exe',
+      'OpenPLC_Editor_4.4.0-rc1.dmg',
+      'OpenPLC_Editor_4.4.0-rc1-ARM.dmg',
+    ]
+
+    let dir = ''
+
+    afterEach(() => {
+      if (dir !== '') rmSync(dir, { recursive: true, force: true })
+      dir = ''
+    })
+
+    function uploadSetCheck(): Step {
+      return stepRunning(job('create-release'), SCRIPT)
+    }
+
+    /**
+     * Runs the step's script under bash, as a runner does, with VERSION=4.4.0-rc1 and an `upload` directory holding
+     * @p names, beside a link to the repository's scripts/.
+     */
+    function runUploadSetCheck(names: string[]): { status: number | null; output: string } {
+      dir = mkdtempSync(join(realpathSync(tmpdir()), 'release-upload-set-'))
+      symlinkSync(join(repo, 'scripts'), join(dir, 'scripts'))
+      mkdirSync(join(dir, 'upload'))
+      for (const name of names) writeFileSync(join(dir, 'upload', name), `installer ${name}\n`)
+      const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', str(uploadSetCheck().run)], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ''}`,
+          VERSION: '4.4.0-rc1',
+        },
+        encoding: 'utf8',
+      })
+      return { status: result.status, output: `${result.stdout}${result.stderr}` }
+    }
+
+    it('runs check-upload-set.mjs with --allow-prerelease', () => {
+      expect(commandWords(uploadSetCheck(), SCRIPT)).toContain('--allow-prerelease')
+    })
+
+    it('gives check-upload-set.mjs the version through its env, with no ${{ }} in its script', () => {
+      const step = uploadSetCheck()
+      const words = commandWords(step, SCRIPT)
+
+      expect(str(step.run)).not.toContain('${{')
+      expect(words[words.indexOf('--version') + 1]).toBe('$VERSION')
+      expect(str(record(step.env).VERSION)).toMatch(/^\$\{\{\s*steps\.version\.outputs\.version\s*\}\}$/)
+    })
+
+    it('passes the six 4.4.0-rc1 installers when run for the tag v4.4.0-rc1', () => {
+      const result = runUploadSetCheck(PRERELEASE_INSTALLERS)
+
+      expect({ status: result.status, output: result.output }).toEqual({
+        status: 0,
+        output: expect.stringContaining('4.4.0-rc1'),
+      })
+    })
+
+    it('fails the six 4.4.0-rc1 installers plus latest.yml, naming it (ABUSE-11)', () => {
+      const result = runUploadSetCheck([...PRERELEASE_INSTALLERS, 'latest.yml'])
+
+      expect(result.status).toBe(1)
+      expect(result.output).toContain('latest.yml')
+    })
   })
 
   it('gives gh release create installer globs, none matching update metadata or a blockmap', () => {
