@@ -43,6 +43,7 @@ import {
   acceptingCrypto,
   acceptingVerifier,
   allSiteFunctions,
+  canaryPatches,
   constantHashCrypto,
   controlledPath,
   countingFs,
@@ -565,6 +566,26 @@ describeWithTestKey('modules generated for a test Autonomy key', () => {
   )
 
   it(
+    'ABUSE-05, M12: refuses a package signed by the module key at a site whose check canary is patched in the source',
+    () => {
+      const failing: string[] = []
+      for (const module of modules.slice(0, 10)) {
+        for (const site of module.layout.sites) {
+          for (const [patch, source] of canaryPatches(module.source, site)) {
+            const verdict = loadModule(source)(valid, atImportOf(site.hook))
+            if (JSON.stringify(verdict) !== JSON.stringify(refused())) {
+              failing.push(`${toHex(module.seed)} ${site.hook} ${site.functionName}: ${patch}`)
+            }
+          }
+        }
+      }
+
+      expect(failing).toEqual([])
+    },
+    TIMEOUT,
+  )
+
+  it(
     'reads each file of the package once per call',
     () => {
       const failing = failingSeeds((module) => {
@@ -915,6 +936,26 @@ describe('the module with the Autonomy key', () => {
         Array.from({ length: 6 }, () => refused()),
       )
     })
+  })
+
+  describe('ABUSE-05, M12: a check canary patched in the source', () => {
+    it(
+      'makes the patched site refuse the fx3u package, for every site and both patches',
+      () => {
+        const failing: string[] = []
+        for (const site of real.layout.sites) {
+          for (const [patch, source] of canaryPatches(real.source, site)) {
+            const verdict = loadModule(source)(fx3u, atImportOf(site.hook))
+            if (JSON.stringify(verdict) !== JSON.stringify(refused())) {
+              failing.push(`${site.hook} ${site.functionName}: ${patch}`)
+            }
+          }
+        }
+
+        expect(failing).toEqual([])
+      },
+      TIMEOUT,
+    )
   })
 
   describe('M12: a primitive that gets the canary wrong', () => {

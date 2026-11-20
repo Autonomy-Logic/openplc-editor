@@ -313,6 +313,24 @@ describe('generatePackageTrustModule', () => {
     expect(failing).toEqual([])
   })
 
+  it('lists for every site the share literals of its two check-canary cases, all in the source and in shareLiterals', () => {
+    const failing = failingSeeds(({ source, layout }) =>
+      layout.sites.every(({ canaryCases }) => {
+        const { matching, mismatching } = canaryCases
+        return (
+          matching.length > 0 &&
+          mismatching.length > 0 &&
+          [...matching, ...mismatching].every(
+            (literal) => source.includes(`'${literal}'`) && layout.shareLiterals.includes(literal),
+          ) &&
+          matching.every((literal) => !mismatching.includes(literal))
+        )
+      }),
+    )
+
+    expect(failing).toEqual([])
+  })
+
   it('hosts the sites and the entry point in functions whose names do not tell what they do', () => {
     const failing = failingSeeds(({ layout }) =>
       [layout.entryName, ...layout.sites.map((site) => site.functionName)].every(
