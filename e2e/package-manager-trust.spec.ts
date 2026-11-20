@@ -2,7 +2,7 @@
  * Package trust in the Package Manager, end to end. The Autonomy-signed catalog package (`com.openplc.fx3u-compatible`
  * 2.1.0) installs through "Add from file...", is listed, its board can be picked in the open project, it is kept when
  * a project for that board opens, and that project builds. A package signed by another key (the synthetic
- * `eqsp32-dev`) is refused at "Add from file..." with the reason shown, also when it claims the Autonomy key id, and
+ * `untrusted-dev`) is refused at "Add from file..." with the reason shown, also when it claims the Autonomy key id, and
  * one copied into the profile by hand is removed when a project opens.
  *
  * Running needs a production build; see "Electron e2e" in CLAUDE.md. `E2E_PACKAGED_APP` runs it against a test-only
@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { type ElectronApplication, expect, type Page, test } from '@playwright/test'
 
 import {
-  EQSP32_PACKAGE_ID,
+  UNTRUSTED_PACKAGE_ID,
   FX3U_BOARD,
   FX3U_PACKAGE_ID,
   FX3U_VPP,
@@ -245,10 +245,10 @@ test('an Autonomy-signed package installs from file, its board is picked, kept o
 test('a package signed by another key is refused at Add from file, and one added by hand is removed on open', async () => {
   test.setTimeout(180000)
   const work = freshDirectory('package-trust-foreign')
-  const foreign = signTestPackage(join(work, 'eqsp32'))
-  const foreignVpp = await zipPackage(foreign.dir, join(work, 'com.erqos.eqsp32-1.0.0.vpp'))
-  const claimed = signTestPackage(join(work, 'eqsp32-claimed'), { keyId: 'openplc-2026' })
-  const claimedVpp = await zipPackage(claimed.dir, join(work, 'com.erqos.eqsp32-claimed.vpp'))
+  const foreign = signTestPackage(join(work, 'untrusted'))
+  const foreignVpp = await zipPackage(foreign.dir, join(work, 'com.example.untrusted-1.0.0.vpp'))
+  const claimed = signTestPackage(join(work, 'untrusted-claimed'), { keyId: 'openplc-2026' })
+  const claimedVpp = await zipPackage(claimed.dir, join(work, 'com.example.untrusted-claimed.vpp'))
 
   const userData = freshProfile('package-trust-foreign')
   const packages = join(userData, 'packages')
@@ -261,29 +261,31 @@ test('a package signed by another key is refused at Add from file, and one added
   await expect(empty).toBeVisible()
 
   await addFromFile(app, page, foreignVpp)
-  await expectImportRefused(page, EQSP32_PACKAGE_ID, 'Untrusted signing key: eqsp32-dev', 'refused-eqsp32-dev')
+  await expectImportRefused(page, UNTRUSTED_PACKAGE_ID, 'Untrusted signing key: untrusted-dev', 'refused-untrusted-dev')
   await expect(empty).toBeVisible()
-  await expect(listEntry(page, EQSP32_PACKAGE_ID)).toHaveCount(0)
+  await expect(listEntry(page, UNTRUSTED_PACKAGE_ID)).toHaveCount(0)
 
   await addFromFile(app, page, claimedVpp)
-  await expectImportRefused(page, EQSP32_PACKAGE_ID, 'Invalid package signature', 'refused-claimed-key-id')
+  await expectImportRefused(page, UNTRUSTED_PACKAGE_ID, 'Invalid package signature', 'refused-claimed-key-id')
   await expect(empty).toBeVisible()
   expect(readRegistryPackages(packages)).toEqual({})
   expect(readdirSync(packages).filter((entry) => entry !== 'registry.json')).toEqual([])
 
-  const byHand = installByHand(packages, EQSP32_PACKAGE_ID, foreign.dir, ['board'])
-  expect(Object.keys(readRegistryPackages(packages))).toEqual([EQSP32_PACKAGE_ID])
+  const byHand = installByHand(packages, UNTRUSTED_PACKAGE_ID, foreign.dir, ['board'])
+  expect(Object.keys(readRegistryPackages(packages))).toEqual([UNTRUSTED_PACKAGE_ID])
   await openNewProject(editor, projectFixture('trust-sweep', 'OpenPLC Simulator'), 'trust-sweep')
   await openConsole(page)
   await waitForText(
     page,
-    new RegExp(`Removed untrusted VPP package "${escape(EQSP32_PACKAGE_ID)}": its signature is missing or invalid\\.`),
+    new RegExp(
+      `Removed untrusted VPP package "${escape(UNTRUSTED_PACKAGE_ID)}": its signature is missing or invalid\\.`,
+    ),
     { timeout: 30000 },
   )
   await snapshot(page, 'removed-on-open')
   expect(existsSync(byHand)).toBe(false)
   expect(readRegistryPackages(packages)).toEqual({})
   const log = readFileSync(join(userData, 'logs', 'combined.log'), 'utf8')
-  expect(log).toContain(`VPP package "${EQSP32_PACKAGE_ID}" was removed at startup`)
-  expect(log).toContain('Untrusted signing key: eqsp32-dev')
+  expect(log).toContain(`VPP package "${UNTRUSTED_PACKAGE_ID}" was removed at startup`)
+  expect(log).toContain('Untrusted signing key: untrusted-dev')
 })
