@@ -1,11 +1,15 @@
 import { parseArgs } from 'node:util'
 
-/** A failed check: each problem is printed on its own line and the process exits with status 1. */
+/** A failed check: each problem is printed on its own line and the process exits with `exitCode`, 1 by default. */
 export class CheckFailure extends Error {
-  /** @param {string[]} problems */
-  constructor(problems) {
+  /**
+   * @param {string[]} problems
+   * @param {number} [exitCode]
+   */
+  constructor(problems, exitCode = 1) {
     super(problems.join('\n'))
     this.problems = problems
+    this.exitCode = exitCode
   }
 }
 
@@ -28,7 +32,7 @@ export function parseCli(options, required, args = process.argv.slice(2)) {
   return parsed
 }
 
-/** Runs a script body; any error ends the process with status 1 after printing its message. */
+/** Runs a script body; an error ends the process after printing its message, with a CheckFailure's `exitCode` or 1. */
 export function runCli(main) {
   try {
     main()
@@ -36,6 +40,6 @@ export function runCli(main) {
     const lines =
       error instanceof CheckFailure ? error.problems : [error instanceof Error ? error.message : String(error)]
     for (const line of lines) console.error(line)
-    process.exit(1)
+    process.exit(error instanceof CheckFailure ? error.exitCode : 1)
   }
 }

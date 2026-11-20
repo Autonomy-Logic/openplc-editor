@@ -9,11 +9,15 @@ const USAGE = [
   '       release-digests.mjs after --version <v> --assets <release-assets.json> --built <built.json> --original <original.json>',
 ]
 
+/** Exit status of `after` when its only problems are digests of the six installers GitHub has not computed yet. */
+const PENDING_DIGEST_EXIT = 3
+
 /**
- * The `name -> sha256 hex` of a release's assets, read from the `assets` array of the REST release object.
+ * The digest of each of a release's assets, read from the `assets` array of the REST release object: `hex` is the
+ * sha256 hex of a `sha256:<hex>` digest, and `pending` is true when the `digest` field is absent or null.
  * @param {string} path
  * @param {string[]} expected
- * @returns {{ digests: Map<string, string | undefined>, problems: string[] }}
+ * @returns {{ digests: Map<string, { hex: string | undefined, pending: boolean }>, problems: string[] }}
  */
 function readReleaseAssets(path, expected) {
   const assets = JSON.parse(readFileSync(path, 'utf8'))
@@ -21,9 +25,10 @@ function readReleaseAssets(path, expected) {
   const names = assets.map((asset) => String(asset?.name))
   const digests = new Map(
     assets.map((asset) => {
+      const pending = asset?.digest === undefined || asset?.digest === null
       const digest = typeof asset?.digest === 'string' ? asset.digest : ''
       const hex = digest.startsWith('sha256:') && SHA256_HEX.test(digest.slice(7)) ? digest.slice(7) : undefined
-      return [String(asset?.name), hex]
+      return [String(asset?.name), { hex, pending }]
     }),
   )
   const { missing, unexpected, duplicated } = compareNames(names, expected)
@@ -39,32 +44,45 @@ function readReleaseAssets(path, expected) {
 function before(values, expected) {
   const { digests, problems } = readReleaseAssets(values.assets, expected)
   problems.push(
-    ...expected.filter((name) => digests.has(name) && !digests.get(name)).map((name) => `${name}: no sha256 digest`),
+    ...expected
+      .filter((name) => digests.has(name) && !digests.get(name)?.hex)
+      .map((name) => `${name}: no sha256 digest`),
   )
   if (problems.length > 0) {
     throw new CheckFailure([`release assets in ${values.assets} are not the six installers:`, ...problems])
   }
   writeFileSync(
     values.out,
-    `${JSON.stringify(Object.fromEntries(expected.map((name) => [name, digests.get(name)])), null, 2)}\n`,
+    `${JSON.stringify(Object.fromEntries(expected.map((name) => [name, digests.get(name)?.hex])), null, 2)}\n`,
   )
   console.log(`recorded the sha256 of the six installers in ${values.out}`)
 }
 
-/** Checks that a release holds exactly the six installers, each with its build digest and none with its original. */
+/**
+ * Checks that a release holds exactly the six installers, each with its build digest and none with its original.
+ * Exits with PENDING_DIGEST_EXIT when the only problems are installers whose digest GitHub has not computed yet.
+ */
 function after(values, expected) {
   const built = readDigestMap(values.built, expected)
   const original = readDigestMap(values.original, expected)
   const { digests, problems } = readReleaseAssets(values.assets, expected)
+  const pending = []
   for (const name of expected) {
-    if (!digests.has(name)) continue
     const digest = digests.get(name)
-    if (!digest) problems.push(`${name}: no sha256 digest`)
-    else if (digest === original[name]) problems.push(`${name}: still carrying its original digest`)
-    else if (digest !== built[name]) problems.push(`${name}: digest differs from the build`)
+    if (!digest) continue
+    if (digest.pending) pending.push(`${name}: no digest computed yet`)
+    else if (!digest.hex) problems.push(`${name}: no sha256 digest`)
+    else if (digest.hex === original[name]) problems.push(`${name}: still carrying its original digest`)
+    else if (digest.hex !== built[name]) problems.push(`${name}: digest differs from the build`)
   }
   if (problems.length > 0) {
-    throw new CheckFailure([`release assets in ${values.assets} fail the digest check:`, ...problems])
+    throw new CheckFailure([`release assets in ${values.assets} fail the digest check:`, ...problems, ...pending])
+  }
+  if (pending.length > 0) {
+    throw new CheckFailure(
+      [`release assets in ${values.assets} have no digest computed yet:`, ...pending],
+      PENDING_DIGEST_EXIT,
+    )
   }
   console.log('the release holds the six installers built by this run')
 }
