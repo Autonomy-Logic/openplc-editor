@@ -14,6 +14,7 @@ import {
 } from '../../shared/library/prepare-library-upload'
 import { downloadPublicLibrary } from '../../shared/library/public-catalog-client'
 import { selectBuildLibraryArchives } from '../../shared/library/select-library-archives'
+import { stlibArchiveFromText } from '../../shared/library/stlib-archive-json'
 import { validatePathId } from '../../shared/utils/path-safety'
 import { assertPathContained } from '../utils/path-containment'
 import { createDesktopCatalogTransport } from './desktop-catalog-transport'
@@ -514,8 +515,7 @@ export class LibraryManagerModule {
     const names = new Set<string>()
     for (const file of this.bundledFiles()) {
       try {
-        const raw = JSON.parse(readFileSync(file, 'utf-8')) as unknown
-        const archive = this.coerceArchive(raw)
+        const archive = stlibArchiveFromText(readFileSync(file, 'utf-8'))
         if (archive) {
           archives.push(archive)
           names.add(archive.manifest.name)
@@ -544,25 +544,10 @@ export class LibraryManagerModule {
     }
     if (!existsSync(stlibPath)) return null
     try {
-      const raw = JSON.parse(readFileSync(stlibPath, 'utf-8')) as unknown
-      return this.coerceArchive(raw)
+      return stlibArchiveFromText(readFileSync(stlibPath, 'utf-8'))
     } catch {
       return null
     }
-  }
-
-  /**
-   * Light-touch validation that an unknown JSON blob has the
-   * `StlibArchive` shape the rest of the editor expects.  Doesn't
-   * try to schema-validate every field — we trust strucpp's
-   * compileStlib output and the .stlib format spec — but guards
-   * against catastrophic mismatches (missing manifest, no name).
-   */
-  private coerceArchive(raw: unknown): StlibArchiveDTO | null {
-    if (!raw || typeof raw !== 'object') return null
-    const obj = raw as { manifest?: unknown }
-    if (!obj.manifest || typeof obj.manifest !== 'object') return null
-    return raw as StlibArchiveDTO
   }
 
   private readRegistry(): LibraryRegistry {
