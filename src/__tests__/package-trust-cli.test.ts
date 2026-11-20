@@ -320,6 +320,19 @@ describe('release mode', () => {
     writeChunk(root, '722.js', literals.slice(half))
   }
 
+  /**
+   * Rewrites the placed release module so each share is built by concatenation ('a' + 'bc'): it still recombines
+   * the right key, so the fingerprint check passes, but it holds no share literal.
+   */
+  function removeShareLiterals(): void {
+    const path = join(root, MODULE)
+    let source = readFileSync(path, 'utf-8')
+    for (const literal of releaseLiterals()) {
+      source = replaceLiteral(source, literal, `${literal.slice(0, 1)}' + '${literal.slice(1)}`)
+    }
+    writeFileSync(path, source)
+  }
+
   /** layout.json files an earlier step can leave beside the module; none of them may change a result. */
   const LEFTOVER_LAYOUTS: [string, () => string][] = [
     [
@@ -436,12 +449,8 @@ describe('release mode', () => {
     it(
       'fails naming the module when it builds the right key with no share literal left, after the fingerprint check',
       () => {
-        const path = join(releaseRoot(), MODULE)
-        let source = readFileSync(path, 'utf-8')
-        for (const literal of releaseLiterals()) {
-          source = replaceLiteral(source, literal, `${literal.slice(0, 1)}' + '${literal.slice(1)}`)
-        }
-        writeFileSync(path, source)
+        releaseRoot()
+        removeShareLiterals()
 
         const run = runCli(['prepare', '--root', root], root, RELEASE)
 
@@ -474,6 +483,20 @@ describe('release mode', () => {
         writeBundle(releaseRoot(), releaseLiterals())
 
         expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(0)
+      },
+      TIMEOUT,
+    )
+
+    it(
+      'fails naming the module when the placed module holds no share literal, even with a bundle holding its shares',
+      () => {
+        writeBundle(releaseRoot(), releaseLiterals())
+        removeShareLiterals()
+
+        const run = runCli(['verify-bundle', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(1)
+        expect(run.output).toContain(`${MODULE_POSIX} has no share literals`)
       },
       TIMEOUT,
     )
