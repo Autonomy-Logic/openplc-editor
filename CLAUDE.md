@@ -583,11 +583,11 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
 - **HMI widget libraries:** the ST libraries of the HMI live in their own repository,
   [openplc-hmi-widgets](https://github.com/Autonomy-Logic/openplc-hmi-widgets), released as plain STruC++ `.stlib`
   archives: `standard-widgets` (element base, widgets, keyboard, screen base, runtime) and `hmi-alarms` (the PLC side
-  of the alarm and event widgets), with a versioned manifest (`openplc-hmi-widgets.json`, formats 1 and 2 read) that
-  holds every archive's SHA-256 and licence. `binary-versions.json` pins the release (`hmi-widgets`: tag, repository,
-  SHA-256 of the manifest) and `npm run setup:hmi-widgets` (part of `postinstall`; `scripts/download-binaries.ts` over
-  the shared `widgets-release-setup.ts`) installs it into `vendor/hmi-widgets/` after checking the manifest against
-  the pin and each archive against the manifest. It fails, saying so, when the release is not published;
+  of the alarm and event widgets), with `LICENSE`, `LICENSING.md` and `SHA256SUMS`, the release's only index.
+  `binary-versions.json` pins the release (`hmi-widgets`: tag, repository, `sumsSha256` = SHA-256 of `SHA256SUMS`)
+  and `npm run setup:hmi-widgets` (part of `postinstall`; `scripts/download-binaries.ts` over the shared
+  `widgets-release-setup.ts`) installs every file `SHA256SUMS` lists into `vendor/hmi-widgets/` after checking it
+  against the pin and each file against it. It fails, saying so, when the release is not published;
   `OPENPLC_HMI_WIDGETS_DIR=<openplc-hmi-widgets>/dist` installs a local build instead. Packaged builds ship the
   directory as the extra resource `hmi-widgets`, listed by the library manager as bundled: always on, not removable.
 - **One kind of library, requirements per POU:** every `.stlib` is the same thing. STruC++ records on each chunk the

@@ -176,7 +176,7 @@ async function setupHmiWidgets(versions: unknown, force: boolean): Promise<void>
   const pin = widgetsReleasePin(versions)
   const overrideDir = process.env[WIDGETS_OVERRIDE_ENV] ? path.resolve(process.env[WIDGETS_OVERRIDE_ENV]) : undefined
   const result = await setupWidgetsRelease(pin, { overrideDir, force }, widgetsMechanisms)
-  const what = `HMI widgets ${result.release.version} (${result.release.archives.map((a) => a.name).join(', ')})`
+  const what = `HMI widgets ${overrideDir ? 'local build' : pin.version} (${result.libraries.join(', ')})`
   if (result.source === 'installed') console.log(`  ${what} already installed, skipping.`)
   else console.log(`  ${what} installed from ${result.source === 'override' ? overrideDir : 'the release'}.`)
 }

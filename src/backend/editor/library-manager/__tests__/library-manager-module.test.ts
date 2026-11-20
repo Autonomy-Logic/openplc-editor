@@ -406,7 +406,8 @@ describe('LibraryManagerModule', () => {
       writeBundled(makeArchive('iec-standard-fb'))
       writeHmiWidget(needingCore(makeArchive('standard-widgets')))
       writeHmiWidget(makeArchive('hmi-alarms'))
-      writeFileSync(join(hmiWidgetsDir, 'openplc-hmi-widgets.json'), '{}', 'utf-8')
+      writeFileSync(join(hmiWidgetsDir, 'SHA256SUMS'), '', 'utf-8')
+      writeFileSync(join(hmiWidgetsDir, 'LICENSE'), 'GPLv3', 'utf-8')
       const rows = makeModule().listInstalled()
       expect(rows.map((r) => [r.name, r.bundled, r.origin])).toEqual([
         ['iec-standard-fb', true, 'bundled'],

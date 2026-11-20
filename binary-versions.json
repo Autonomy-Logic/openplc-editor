@@ -4,8 +4,8 @@
     "repository": "Autonomy-Logic/STruCpp"
   },
   "hmi-widgets": {
-    "version": "v1.1.0",
+    "version": "v1.1.1",
     "repository": "Autonomy-Logic/openplc-hmi-widgets",
-    "manifestSha256": "b573dd68ca17b832ee12b8c0a7bdeeaf1b56d7b8751525817cb88d88b7cfe922"
+    "sumsSha256": "9c94288bf75c1a0e9313047488532781c4e8195de323e5ef5bea6c111700cdc5"
   }
 }

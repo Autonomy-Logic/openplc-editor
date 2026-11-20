@@ -5,9 +5,8 @@ import {
   HMI_PROVIDED_HEADERS,
   hmiCoreApiMismatch,
   libraryArchiveWarning,
-  parseWidgetsRelease,
+  parseWidgetsReleaseSums,
   PLC_PROVIDED_HEADERS,
-  type WidgetsRelease,
   widgetsReleaseProblems,
 } from '../widget-libraries'
 
@@ -68,77 +67,55 @@ describe('HMI core API of an archive', () => {
   })
 })
 
-describe('release manifest', () => {
+describe('release checksum list', () => {
   const sha = (c: string) => c.repeat(64)
-  const release = (formatVersion = 2): WidgetsRelease => ({
-    formatVersion,
-    name: 'openplc-hmi-widgets',
-    version: '1.1.0',
-    strucppVersion: '0.8.1-rc2',
-    archives: [
-      {
-        name: 'dials',
-        displayName: 'Dials',
-        version: '1.0.0',
-        file: 'dials.stlib',
-        sha256: sha('a'),
-        size: 1,
-        strucppVersion: '0.8.1-rc2',
-        headers: ['hmi_core.h'],
-        license: 'GPL-3.0-only',
-      },
-      {
-        name: 'alarms',
-        displayName: 'Alarms',
-        version: '1.0.0',
-        file: 'alarms.stlib',
-        sha256: sha('b'),
-        size: 1,
-        strucppVersion: '0.8.1-rc2',
-        headers: [],
-        license: 'GPL-3.0-only',
-      },
-    ],
+  const entries = [
+    { file: 'LICENSE', sha256: sha('f') },
+    { file: 'alarms.stlib', sha256: sha('b') },
+    { file: 'dials.stlib', sha256: sha('a') },
+  ]
+
+  it('parses sha256sum lines, text and binary mode', () => {
+    expect(
+      parseWidgetsReleaseSums(`${sha('f')}  LICENSE\n${sha('b')} *alarms.stlib\n${sha('a')}  dials.stlib\n`),
+    ).toEqual(entries)
   })
 
-  it('parses format 2, and format 1 without the kind and catalogue it carried', () => {
-    expect(parseWidgetsRelease(JSON.stringify(release()))).toEqual(release())
-    const v1 = release(1)
-    const withKinds = {
-      ...v1,
-      archives: v1.archives.map((a) => ({ ...a, kind: 'hmi', hmiCoreApi: 1, catalog: { widgets: [], colors: [] } })),
-    }
-    expect(parseWidgetsRelease(JSON.stringify(withKinds))).toEqual(v1)
-  })
-
-  it('refuses another format version and a malformed manifest', () => {
-    expect(() => parseWidgetsRelease(JSON.stringify(release(3)))).toThrow(
-      'The HMI widget release manifest is format 3; this build reads formats 1 and 2',
+  it('refuses a malformed line, a path, a file listed twice and a list with no archive', () => {
+    expect(() => parseWidgetsReleaseSums(`${sha('a')} dials.stlib\n`)).toThrow('SHA256SUMS line 1 is not')
+    expect(() => parseWidgetsReleaseSums(`${sha('a')}  ../dials.stlib\n`)).toThrow('SHA256SUMS line 1 is not')
+    expect(() => parseWidgetsReleaseSums(`${sha('a')}  a/dials.stlib\n`)).toThrow('SHA256SUMS line 1 is not')
+    expect(() => parseWidgetsReleaseSums(`${sha('a')}  dials.stlib\n${sha('b')}  dials.stlib\n`)).toThrow(
+      'SHA256SUMS lists dials.stlib twice',
     )
-    expect(() => parseWidgetsRelease(JSON.stringify({ ...release(), archives: [{ name: 'x' }] }))).toThrow(
-      'The HMI widget release manifest is invalid at archives.0',
-    )
+    expect(() => parseWidgetsReleaseSums(`${sha('f')}  LICENSE\n`)).toThrow('SHA256SUMS lists no .stlib archive')
   })
 
-  it('accepts files that match the manifest', () => {
+  it('accepts files that match the list', () => {
     const files = [
+      { file: 'LICENSE', sha256: sha('f'), text: 'GPLv3' },
       { file: 'dials.stlib', sha256: sha('a'), text: JSON.stringify(coreArchive()) },
       { file: 'alarms.stlib', sha256: sha('b'), text: JSON.stringify(plainArchive()) },
     ]
-    expect(widgetsReleaseProblems(release(), files)).toEqual([])
+    expect(widgetsReleaseProblems(entries, files)).toEqual([])
   })
 
   it('reports a missing file, a hash mismatch, another library and a wrong core API', () => {
-    expect(widgetsReleaseProblems(release(), [])).toEqual(['dials.stlib is missing', 'alarms.stlib is missing'])
+    expect(widgetsReleaseProblems(entries, [])).toEqual([
+      'LICENSE is missing',
+      'alarms.stlib is missing',
+      'dials.stlib is missing',
+    ])
     expect(
-      widgetsReleaseProblems(release(), [
+      widgetsReleaseProblems(entries, [
+        { file: 'LICENSE', sha256: sha('f'), text: 'not JSON, not an archive' },
         { file: 'dials.stlib', sha256: sha('c'), text: '' },
         { file: 'alarms.stlib', sha256: sha('b'), text: JSON.stringify(coreArchive('other', other)) },
       ]),
     ).toEqual([
-      `dials.stlib has SHA-256 ${sha('c')}, the manifest says ${sha('a')}`,
       'alarms.stlib is not the library alarms',
       `alarms.stlib is built for HMI core API ${other}, but this editor provides HMI core API ${core}`,
+      `dials.stlib has SHA-256 ${sha('c')}, SHA256SUMS says ${sha('a')}`,
     ])
   })
 })

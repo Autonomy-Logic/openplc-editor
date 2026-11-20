@@ -1,10 +1,8 @@
 /**
  * What every build provides to library code, the HMI core API version an archive was compiled against, and the
- * openplc-hmi-widgets release manifest. A library is a plain STruC++ archive: its chunks record the headers they need,
+ * checksum list of an openplc-hmi-widgets release. A library is a plain STruC++ archive: its chunks record the headers they need,
  * and a build states the headers it provides, so a POU that calls the HMI core is usable by HMI builds only.
  */
-import { z } from 'zod'
-
 /**
  * API version of the HMI C core that library code calls: the `HMI_CORE_API_VERSION` macro of
  * `resources/sources/hmi/core/hmi_core.h`, raised together with it.
@@ -28,11 +26,8 @@ export const HMI_PROVIDED_HEADERS: readonly ProvidedHeader[] = [
 /** Headers a PLC build provides beyond the runtime's own: none. */
 export const PLC_PROVIDED_HEADERS: readonly ProvidedHeader[] = []
 
-/** Release manifest format versions this build reads; format 1 also carries fields this build ignores. */
-export const WIDGETS_RELEASE_FORMATS: readonly number[] = [1, 2]
-
-/** File name of the release manifest among a release's assets. */
-export const WIDGETS_RELEASE_MANIFEST = 'openplc-hmi-widgets.json'
+/** File name of a release's checksum list, the release's only index. */
+export const WIDGETS_RELEASE_SUMS = 'SHA256SUMS'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -94,45 +89,31 @@ export function bundledLibraryNames(rows: ReadonlyArray<{ name: string; bundled:
   return rows.filter((row) => row.bundled).map((row) => row.name)
 }
 
-const releaseSchema = z.object({
-  formatVersion: z.number(),
-  name: z.literal('openplc-hmi-widgets'),
-  version: z.string(),
-  strucppVersion: z.string(),
-  archives: z.array(
-    z.object({
-      name: z.string().regex(/^[a-z][a-z0-9-]*$/),
-      displayName: z.string(),
-      version: z.string(),
-      file: z.string().regex(/^[a-z][a-z0-9-]*\.stlib$/),
-      sha256: z.string().regex(/^[0-9a-f]{64}$/),
-      size: z.number().int().nonnegative(),
-      strucppVersion: z.string(),
-      headers: z.array(z.string()),
-      license: z.string(),
-    }),
-  ),
-})
-
-export type WidgetsRelease = z.infer<typeof releaseSchema>
-
-/** Parses an openplc-hmi-widgets release manifest; throws with the reason when it is not one this build reads. */
-export function parseWidgetsRelease(text: string): WidgetsRelease {
-  const raw: unknown = JSON.parse(text)
-  if (isRecord(raw) && typeof raw.formatVersion === 'number' && !WIDGETS_RELEASE_FORMATS.includes(raw.formatVersion))
-    throw new Error(
-      `The HMI widget release manifest is format ${raw.formatVersion}; this build reads formats ` +
-        WIDGETS_RELEASE_FORMATS.join(' and '),
-    )
-  const parsed = releaseSchema.safeParse(raw)
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0]
-    throw new Error(`The HMI widget release manifest is invalid at ${issue?.path.join('.')}: ${issue?.message}`)
-  }
-  return parsed.data
+/** One file of a release, as its checksum list names it. */
+export interface WidgetsReleaseEntry {
+  file: string
+  sha256: string
 }
 
-/** One archive of a release as read from disk, with the SHA-256 of its bytes. */
+const SUMS_LINE = /^([0-9a-f]{64}) [ *]([A-Za-z0-9][A-Za-z0-9._-]*)$/
+
+/** Parses a release's `SHA256SUMS` (`sha256sum` format); throws with the reason when a line is not a plain file entry. */
+export function parseWidgetsReleaseSums(text: string): WidgetsReleaseEntry[] {
+  const entries: WidgetsReleaseEntry[] = []
+  for (const [index, line] of text.split('\n').entries()) {
+    if (line.trim() === '') continue
+    const match = SUMS_LINE.exec(line)
+    if (!match) throw new Error(`${WIDGETS_RELEASE_SUMS} line ${index + 1} is not "<sha256>  <file>"`)
+    const [, sha256, file] = match
+    if (entries.some((e) => e.file === file)) throw new Error(`${WIDGETS_RELEASE_SUMS} lists ${file} twice`)
+    entries.push({ file, sha256 })
+  }
+  if (!entries.some((e) => e.file.endsWith('.stlib')))
+    throw new Error(`${WIDGETS_RELEASE_SUMS} lists no .stlib archive`)
+  return entries
+}
+
+/** One file of a release as read, with the SHA-256 of its bytes. */
 export interface WidgetsReleaseFile {
   file: string
   sha256: string
@@ -140,22 +121,27 @@ export interface WidgetsReleaseFile {
 }
 
 /**
- * What is wrong with a release's archives: a missing file, a hash that differs from the manifest, an archive that is
- * not the library the manifest names, or one whose code needs another HMI core API. Empty when it can be installed.
+ * What is wrong with a release's files: a missing file, a hash that differs from the checksum list, an archive that
+ * does not hold the library its file is named after, or one whose code needs another HMI core API. Empty when it can be
+ * installed.
  */
-export function widgetsReleaseProblems(release: WidgetsRelease, files: readonly WidgetsReleaseFile[]): string[] {
+export function widgetsReleaseProblems(
+  entries: readonly WidgetsReleaseEntry[],
+  files: readonly WidgetsReleaseFile[],
+): string[] {
   const problems: string[] = []
   const byFile = new Map(files.map((f) => [f.file, f]))
-  for (const entry of release.archives) {
+  for (const entry of entries) {
     const found = byFile.get(entry.file)
     if (!found) {
       problems.push(`${entry.file} is missing`)
       continue
     }
     if (found.sha256 !== entry.sha256) {
-      problems.push(`${entry.file} has SHA-256 ${found.sha256}, the manifest says ${entry.sha256}`)
+      problems.push(`${entry.file} has SHA-256 ${found.sha256}, ${WIDGETS_RELEASE_SUMS} says ${entry.sha256}`)
       continue
     }
+    if (!entry.file.endsWith('.stlib')) continue
     let archive: unknown
     try {
       archive = JSON.parse(found.text)
@@ -163,7 +149,8 @@ export function widgetsReleaseProblems(release: WidgetsRelease, files: readonly 
       problems.push(`${entry.file} is not JSON`)
       continue
     }
-    if (libraryArchiveName(archive) !== entry.name) problems.push(`${entry.file} is not the library ${entry.name}`)
+    const name = entry.file.slice(0, -'.stlib'.length)
+    if (libraryArchiveName(archive) !== name) problems.push(`${entry.file} is not the library ${name}`)
     const mismatch = hmiCoreApiMismatch(archive)
     if (mismatch)
       problems.push(

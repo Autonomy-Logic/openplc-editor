@@ -1449,10 +1449,7 @@
           "group": "display",
           "declaredBy": "HmiLabel",
           "defaultValue": "HMI_FONT#Regular",
-          "enumMembers": [
-            "Regular",
-            "Bold"
-          ]
+          "enumMembers": ["Regular", "Bold"]
         },
         {
           "name": "TextColor",
@@ -1469,11 +1466,7 @@
           "group": "display",
           "declaredBy": "HmiLabel",
           "defaultValue": "HMI_ALIGN#Left",
-          "enumMembers": [
-            "Left",
-            "Center",
-            "Right"
-          ]
+          "enumMembers": ["Left", "Center", "Right"]
         }
       ],
       "outputs": [
@@ -2564,26 +2557,8 @@
       },
       "series": {
         "count": "Pens",
-        "values": [
-          "Value",
-          "Value2",
-          "Value3",
-          "Value4",
-          "Value5",
-          "Value6",
-          "Value7",
-          "Value8"
-        ],
-        "colors": [
-          "AccentColor",
-          "Color2",
-          "Color3",
-          "Color4",
-          "Color5",
-          "Color6",
-          "Color7",
-          "Color8"
-        ]
+        "values": ["Value", "Value2", "Value3", "Value4", "Value5", "Value6", "Value7", "Value8"],
+        "colors": ["AccentColor", "Color2", "Color3", "Color4", "Color5", "Color6", "Color7", "Color8"]
       },
       "typeDefaults": [
         {
@@ -3388,11 +3363,7 @@
           "group": "display",
           "declaredBy": "HmiBarGraph",
           "defaultValue": "HMI_DIRECTION#Row",
-          "enumMembers": [
-            "Row",
-            "Column",
-            "Auto"
-          ]
+          "enumMembers": ["Row", "Column", "Auto"]
         },
         {
           "name": "Setpoint",
@@ -4340,12 +4311,7 @@
           "group": "display",
           "declaredBy": "HmiDateTime",
           "defaultValue": "HMI_DATE_STYLE#Long",
-          "enumMembers": [
-            "Long",
-            "Iso",
-            "DayMonth",
-            "MonthDay"
-          ]
+          "enumMembers": ["Long", "Iso", "DayMonth", "MonthDay"]
         }
       ],
       "outputs": [
@@ -4714,9 +4680,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Pressed",
@@ -4900,9 +4864,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -5062,11 +5024,7 @@
           "group": "display",
           "declaredBy": "HmiSlider",
           "defaultValue": "HMI_DIRECTION#Row",
-          "enumMembers": [
-            "Row",
-            "Column",
-            "Auto"
-          ]
+          "enumMembers": ["Row", "Column", "Auto"]
         },
         {
           "name": "Caption",
@@ -5131,9 +5089,7 @@
           "type": "REAL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -5335,9 +5291,7 @@
           "type": "REAL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -5523,9 +5477,7 @@
           "type": "STRING"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -5720,9 +5672,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -5899,9 +5849,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Pressed",
@@ -6078,9 +6026,7 @@
           "type": "INT"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -6259,9 +6205,7 @@
           "type": "INT"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -6441,9 +6385,7 @@
           "type": "INT"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -6660,9 +6602,7 @@
           "type": "REAL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -6881,9 +6821,7 @@
           "type": "REAL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -7061,9 +6999,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Controls",
       "main": {
         "name": "Value",
@@ -7277,9 +7213,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Process",
       "main": {
         "name": "Value",
@@ -7811,11 +7745,7 @@
           "group": "display",
           "declaredBy": "HmiValve",
           "defaultValue": "HMI_DIRECTION#Row",
-          "enumMembers": [
-            "Row",
-            "Column",
-            "Auto"
-          ]
+          "enumMembers": ["Row", "Column", "Auto"]
         },
         {
           "name": "Caption",
@@ -7872,9 +7802,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Process",
       "main": {
         "name": "Value",
@@ -8080,9 +8008,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Process",
       "main": {
         "name": "Value",
@@ -8400,11 +8326,7 @@
           "group": "display",
           "declaredBy": "HmiControlValve",
           "defaultValue": "HMI_DIRECTION#Row",
-          "enumMembers": [
-            "Row",
-            "Column",
-            "Auto"
-          ]
+          "enumMembers": ["Row", "Column", "Auto"]
         },
         {
           "name": "Caption",
@@ -8588,11 +8510,7 @@
           "group": "display",
           "declaredBy": "HmiCheckValve",
           "defaultValue": "HMI_DIRECTION#Row",
-          "enumMembers": [
-            "Row",
-            "Column",
-            "Auto"
-          ]
+          "enumMembers": ["Row", "Column", "Auto"]
         },
         {
           "name": "OnColor",
@@ -8808,9 +8726,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Clicked"
-      ],
+      "events": ["Clicked"],
       "palette": "Process",
       "main": {
         "name": "Value",
@@ -9530,12 +9446,7 @@
           "group": "layout",
           "declaredBy": "HmiPipe",
           "defaultValue": "HMI_PORT#Bottom",
-          "enumMembers": [
-            "Top",
-            "Right",
-            "Bottom",
-            "Left"
-          ]
+          "enumMembers": ["Top", "Right", "Bottom", "Left"]
         },
         {
           "name": "Target",
@@ -9552,12 +9463,7 @@
           "group": "layout",
           "declaredBy": "HmiPipe",
           "defaultValue": "HMI_PORT#Top",
-          "enumMembers": [
-            "Top",
-            "Right",
-            "Bottom",
-            "Left"
-          ]
+          "enumMembers": ["Top", "Right", "Bottom", "Left"]
         },
         {
           "name": "Path",
@@ -9773,9 +9679,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "AckTop"
-      ],
+      "events": ["AckTop"],
       "palette": "Alarms",
       "sources": [
         {
@@ -9944,9 +9848,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "AckAll"
-      ],
+      "events": ["AckAll"],
       "palette": "Alarms",
       "typeDefaults": [
         {
@@ -11024,26 +10926,8 @@
       },
       "series": {
         "count": "Rows",
-        "values": [
-          "Value",
-          "Value2",
-          "Value3",
-          "Value4",
-          "Value5",
-          "Value6",
-          "Value7",
-          "Value8"
-        ],
-        "colors": [
-          "Status",
-          "Status2",
-          "Status3",
-          "Status4",
-          "Status5",
-          "Status6",
-          "Status7",
-          "Status8"
-        ]
+        "values": ["Value", "Value2", "Value3", "Value4", "Value5", "Value6", "Value7", "Value8"],
+        "colors": ["Status", "Status2", "Status3", "Status4", "Status5", "Status6", "Status7", "Status8"]
       }
     },
     {
@@ -11188,13 +11072,7 @@
           "group": "display",
           "declaredBy": "HmiDialog",
           "defaultValue": "HMI_DIALOG_ICON#Warning",
-          "enumMembers": [
-            "None",
-            "Info",
-            "Warning",
-            "Danger",
-            "Question"
-          ]
+          "enumMembers": ["None", "Info", "Warning", "Danger", "Question"]
         },
         {
           "name": "Buttons",
@@ -11248,9 +11126,7 @@
           "type": "BOOL"
         }
       ],
-      "events": [
-        "Answered"
-      ],
+      "events": ["Answered"],
       "palette": "Controls",
       "main": {
         "name": "Open",
