@@ -162,7 +162,8 @@ without evaluating it: the string literals of every array passed to one of the m
 - **Release seed:** `deriveReleaseSeed(secret, version, commit)`, HMAC-SHA256 keyed by the secret over
   `<version>+<commit>`. The secret is the GitHub Actions secret `TRUST_SEED_SECRET` (64 hexadecimal characters) of the
   Environment `release-trust`. No seed is stored: CI derives it again for any rebuild, and without the secret it cannot
-  be predicted, so a patch written for one release fits no other.
+  be predicted. A byte-exact patch written for one release fits no other; a structural patch can (see "Limits and
+  accepted residuals").
 - **Development seed:** `DEVELOPMENT_SEED` in `generator.ts`, fixed and public. Every build that is not a release uses
   it, so a development build gives no protection against a patch made for it.
 - **Cross-seed probe:** `CROSS_SEED_PROBE` in `generator.ts`, fixed and public, used only by `cross-seed-check`.
@@ -452,6 +453,13 @@ pushed for it: a tag push would start `release.yml` and create a release.
   is the same in every release, so a patch that anchors on that text and returns a forged verdict is not stopped by
   the code on Windows and Linux; ASAR integrity stops it on macOS. Recorded as a residual until the installers are
   signed (DOPE-444).
+- **A structural patch of the generated checks.** The seed changes names, share literals, the order of the sites and
+  canaries, and which variant of each check a site uses, but not the shape of the code around them: the hook's loop
+  over its sites, the end of each site, the entry point's handling of the shared verifier's `valid` and the refusal
+  text are the same in every release. One regex that matches that shape, rather than exact bytes, can patch every
+  release. It needs a modifiable `app.asar`: Windows without Authenticode (until DOPE-444) and Linux. Code signing
+  with ASAR integrity is what stops it, as on macOS; the per-build generation only makes each patch structural instead
+  of byte-exact. Recorded as a residual under the same condition as the call-site patch.
 - **A wrapped `node:fs`.** Code able to replace `node:fs` in the main process can serve the bytes of a genuine package
   to the trust checks while another package is used. Recorded as a residual under the same condition.
 - **`seed-audit` and compressed installers.** The audit searches the release assets as they are: DMG, NSIS and
