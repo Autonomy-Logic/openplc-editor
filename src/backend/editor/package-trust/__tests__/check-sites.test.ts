@@ -15,9 +15,9 @@ import { PackageManagerModule } from '../../package-manager/package-manager-modu
 import { desktopPackageTrustAnchor, desktopPackageTrustMechanisms } from '../index'
 import type { PackageTrustAnchor, PackageTrustMechanisms } from '../types'
 import {
-  EQSP32_BOARD,
-  EQSP32_KEY,
-  EQSP32_PACKAGE_ID,
+  UNTRUSTED_BOARD,
+  UNTRUSTED_KEY,
+  UNTRUSTED_PACKAGE_ID,
   extractFx3u,
   FX3U_BOARD,
   FX3U_PACKAGE_ID,
@@ -146,10 +146,10 @@ describeWithTestKey('check sites of modules generated for a test Autonomy key', 
     for (const seed of [SEED_A, SEED_B, ...testSeeds(50)]) modules.push(generateTestModule(seed))
     const trusted = { key: TEST_AUTONOMY_KEY, packageId: 'com.test.valid', boardName: 'Test Board' }
     valid = signTestPackage(join(fixtures, 'valid'), trusted).dir
-    packages.set('the eqsp32-dev package', signTestPackage(join(fixtures, 'eqsp32')))
+    packages.set('the untrusted-dev package', signTestPackage(join(fixtures, 'untrusted')))
     packages.set(
-      'the eqsp32-dev package with its key id set to the trusted key id',
-      signTestPackage(join(fixtures, 'eqsp32-rekeyed'), { keyId: TEST_AUTONOMY_KEY.keyId }),
+      'the untrusted-dev package with its key id set to the trusted key id',
+      signTestPackage(join(fixtures, 'untrusted-rekeyed'), { keyId: TEST_AUTONOMY_KEY.keyId }),
     )
     packages.set(
       'a validly signed package with a file altered',
@@ -187,8 +187,8 @@ describeWithTestKey('check sites of modules generated for a test Autonomy key', 
   }, 120000)
 
   it.each([
-    'the eqsp32-dev package',
-    'the eqsp32-dev package with its key id set to the trusted key id',
+    'the untrusted-dev package',
+    'the untrusted-dev package with its key id set to the trusted key id',
     'a validly signed package with a file altered',
     'a validly signed package with an unsigned file added',
     'a validly signed package whose manifest names another package than the signature',
@@ -208,13 +208,13 @@ describeWithTestKey('check sites of modules generated for a test Autonomy key', 
   )
 
   it.each(HOOKS)(
-    'accepts the eqsp32-dev package at the %s hook once every site of the hook is neutralized',
+    'accepts the untrusted-dev package at the %s hook once every site of the hook is neutralized',
     (hook) => {
-      const eqsp32 = packages.get('the eqsp32-dev package')?.dir ?? ''
+      const untrusted = packages.get('the untrusted-dev package')?.dir ?? ''
 
       const failing = failingSeeds((module) => {
         const anchor = primedAnchor(module.source, siteFunctions(module.layout, hook), valid, recordingMechanisms())
-        return check(anchor, hook, eqsp32) === null
+        return check(anchor, hook, untrusted) === null
       })
 
       expect(failing).toEqual([])
@@ -228,15 +228,15 @@ describeWithTestKey('check sites of modules generated for a test Autonomy key', 
     ['first', 'use'],
     ['last', 'use'],
   ] as const)(
-    'refuses the eqsp32-dev package with the %s site of the %s hook neutralized',
+    'refuses the untrusted-dev package with the %s site of the %s hook neutralized',
     (position, hook) => {
-      const eqsp32 = packages.get('the eqsp32-dev package')?.dir ?? ''
+      const untrusted = packages.get('the untrusted-dev package')?.dir ?? ''
 
       const failing = failingSeeds((module) => {
         const functions = siteFunctions(module.layout, hook)
         const target = position === 'first' ? functions[0] : functions[functions.length - 1]
         const anchor = primedAnchor(module.source, [target], valid, recordingMechanisms())
-        return check(anchor, hook, eqsp32) === REFUSED
+        return check(anchor, hook, untrusted) === REFUSED
       })
 
       expect(failing).toEqual([])
@@ -245,11 +245,11 @@ describeWithTestKey('check sites of modules generated for a test Autonomy key', 
   )
 
   it('refuses every package at both hooks when the Ed25519 primitive accepts every signature', () => {
-    const eqsp32 = packages.get('the eqsp32-dev package')?.dir ?? ''
+    const untrusted = packages.get('the untrusted-dev package')?.dir ?? ''
 
     const failing = failingSeeds((module) => {
       const anchor = loadTrustModule(module.source)(withPrimitive(desktopPackageTrustMechanisms, () => true))
-      return [eqsp32, valid].every((dir) => HOOKS.every((hook) => check(anchor, hook, dir) === REFUSED))
+      return [untrusted, valid].every((dir) => HOOKS.every((hook) => check(anchor, hook, dir) === REFUSED))
     })
 
     expect(failing).toEqual([])
@@ -295,16 +295,16 @@ describeWithTestKey('check sites of modules generated for a test Autonomy key', 
 describe('check sites of the module with the Autonomy key', () => {
   let fixtures = ''
   let fx3u = ''
-  let eqsp32: SignedTestPackage
-  let eqsp32AsAutonomy: SignedTestPackage
+  let untrusted: SignedTestPackage
+  let untrustedAsAutonomy: SignedTestPackage
   let alteredFx3u = ''
   let injectedFx3u = ''
 
   beforeAll(async () => {
     fixtures = mkdtempSync(join(realpathSync(tmpdir()), 'package-trust-real-'))
     fx3u = await extractFx3u(join(fixtures, 'fx3u'))
-    eqsp32 = signTestPackage(join(fixtures, 'eqsp32'))
-    eqsp32AsAutonomy = signTestPackage(join(fixtures, 'eqsp32-as-autonomy'), { keyId: real.keyId })
+    untrusted = signTestPackage(join(fixtures, 'untrusted'))
+    untrustedAsAutonomy = signTestPackage(join(fixtures, 'untrusted-as-autonomy'), { keyId: real.keyId })
     alteredFx3u = join(fixtures, 'fx3u-altered')
     cpSync(fx3u, alteredFx3u, { recursive: true })
     writeFileSync(join(alteredFx3u, 'hal', 'arduino', 'fx3u-14.cpp'), 'void hardwareInit() { /* altered */ }\n')
@@ -353,93 +353,93 @@ describe('check sites of the module with the Autonomy key', () => {
     })
   })
 
-  describe('ABUSE-03: the eqsp32-dev package on an unmodified editor', () => {
+  describe('ABUSE-03: the untrusted-dev package on an unmodified editor', () => {
     it('is refused at import, with the shared verifier reason, and nothing is installed', async () => {
       const manager = realManager()
 
-      const result = await manager.importFromFile(await vppOf(eqsp32.dir, 'eqsp32'))
+      const result = await manager.importFromFile(await vppOf(untrusted.dir, 'untrusted'))
 
       expect(result).toMatchObject({
         success: false,
-        error: expect.stringContaining('Untrusted signing key: eqsp32-dev'),
+        error: expect.stringContaining('Untrusted signing key: untrusted-dev'),
       })
       expect(manager.listInstalled()).toEqual([])
-      expect(existsSync(join(packagesDir, EQSP32_PACKAGE_ID))).toBe(false)
+      expect(existsSync(join(packagesDir, UNTRUSTED_PACKAGE_ID))).toBe(false)
     })
 
     it('is removed by the startup sweep when added by hand, folder and registry entry included', () => {
-      const folder = installByHand(packagesDir, EQSP32_PACKAGE_ID, eqsp32.dir, ['board'])
+      const folder = installByHand(packagesDir, UNTRUSTED_PACKAGE_ID, untrusted.dir, ['board'])
       const warn = jest.fn()
 
       const removed = realManager().verifyInstalledSignatures(warn)
 
-      expect(removed).toEqual([EQSP32_PACKAGE_ID])
+      expect(removed).toEqual([UNTRUSTED_PACKAGE_ID])
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('was removed at startup'))
       expect(existsSync(folder)).toBe(false)
       expect(Object.keys(readRegistryPackages(packagesDir))).toEqual([])
     })
 
     it('stops a build for its board at the pre-build gate', () => {
-      installByHand(packagesDir, EQSP32_PACKAGE_ID, eqsp32.dir, ['board'])
+      installByHand(packagesDir, UNTRUSTED_PACKAGE_ID, untrusted.dir, ['board'])
 
-      expect(realManager().verifyBoardPackageIntegrity(EQSP32_BOARD)).toEqual({
+      expect(realManager().verifyBoardPackageIntegrity(UNTRUSTED_BOARD)).toEqual({
         ok: false,
-        packageId: EQSP32_PACKAGE_ID,
-        reason: expect.stringContaining('eqsp32-dev'),
+        packageId: UNTRUSTED_PACKAGE_ID,
+        reason: expect.stringContaining('untrusted-dev'),
       })
     })
   })
 
   describe('ABUSE-04: a key added to the map the anchor hands to the shared verifier', () => {
-    /** The real anchor on @p mechanisms, whose `trustedKeys()` also maps @p keyId to the eqsp32-dev key. */
+    /** The real anchor on @p mechanisms, whose `trustedKeys()` also maps @p keyId to the untrusted-dev key. */
     function widenedAnchor(keyId: string, mechanisms: PackageTrustMechanisms): PackageTrustAnchor {
       const inner = real.create(mechanisms)
       return {
-        trustedKeys: () => ({ ...inner.trustedKeys(), [keyId]: EQSP32_KEY.publicKeyPem }),
+        trustedKeys: () => ({ ...inner.trustedKeys(), [keyId]: UNTRUSTED_KEY.publicKeyPem }),
         checkAtImport: (dir) => inner.checkAtImport(dir),
         checkAtUse: (dir) => inner.checkAtUse(dir),
       }
     }
 
-    it('refuses the eqsp32-dev package at import, verifying with no key but the Autonomy key', async () => {
+    it('refuses the untrusted-dev package at import, verifying with no key but the Autonomy key', async () => {
       const recording = recordingMechanisms()
-      const manager = new PackageManagerModule(widenedAnchor('eqsp32-dev', recording.mechanisms))
+      const manager = new PackageManagerModule(widenedAnchor('untrusted-dev', recording.mechanisms))
 
-      const result = await manager.importFromFile(await vppOf(eqsp32.dir, 'eqsp32'))
+      const result = await manager.importFromFile(await vppOf(untrusted.dir, 'untrusted'))
 
       expect(result).toEqual({ success: false, error: IMPORT_REFUSED })
       expect(manager.listInstalled()).toEqual([])
-      expect(recording.calls.filter((call) => sameBytes(call.key, EQSP32_KEY.publicKeyDer))).toEqual([])
+      expect(recording.calls.filter((call) => sameBytes(call.key, UNTRUSTED_KEY.publicKeyDer))).toEqual([])
       expect(
         recording.calls.filter(
-          (call) => sameBytes(call.message, eqsp32.signedBytes) && !sameBytes(call.key, real.keyDer),
+          (call) => sameBytes(call.message, untrusted.signedBytes) && !sameBytes(call.key, real.keyDer),
         ),
       ).toEqual([])
     })
 
-    it('refuses the package signed under the Autonomy key id when the map points that id at the eqsp32-dev key', async () => {
+    it('refuses the package signed under the Autonomy key id when the map points that id at the untrusted-dev key', async () => {
       const recording = recordingMechanisms()
       const manager = new PackageManagerModule(widenedAnchor(real.keyId, recording.mechanisms))
 
-      const result = await manager.importFromFile(await vppOf(eqsp32AsAutonomy.dir, 'eqsp32-as-autonomy'))
+      const result = await manager.importFromFile(await vppOf(untrustedAsAutonomy.dir, 'untrusted-as-autonomy'))
 
       expect(result).toEqual({ success: false, error: IMPORT_REFUSED })
       expect(manager.listInstalled()).toEqual([])
-      const packageChecks = recording.calls.filter((call) => sameBytes(call.message, eqsp32AsAutonomy.signedBytes))
+      const packageChecks = recording.calls.filter((call) => sameBytes(call.message, untrustedAsAutonomy.signedBytes))
       expect(packageChecks.length).toBeGreaterThan(0)
       expect(packageChecks.filter((call) => !sameBytes(call.key, real.keyDer))).toEqual([])
     })
 
-    it('refuses the eqsp32-dev package added by hand at the use hook: sweep and pre-build gate', () => {
-      const folder = installByHand(packagesDir, EQSP32_PACKAGE_ID, eqsp32.dir, ['board'])
-      const manager = new PackageManagerModule(widenedAnchor('eqsp32-dev', desktopPackageTrustMechanisms))
+    it('refuses the untrusted-dev package added by hand at the use hook: sweep and pre-build gate', () => {
+      const folder = installByHand(packagesDir, UNTRUSTED_PACKAGE_ID, untrusted.dir, ['board'])
+      const manager = new PackageManagerModule(widenedAnchor('untrusted-dev', desktopPackageTrustMechanisms))
 
-      expect(manager.verifyBoardPackageIntegrity(EQSP32_BOARD)).toEqual({
+      expect(manager.verifyBoardPackageIntegrity(UNTRUSTED_BOARD)).toEqual({
         ok: false,
-        packageId: EQSP32_PACKAGE_ID,
+        packageId: UNTRUSTED_PACKAGE_ID,
         reason: REFUSED,
       })
-      expect(manager.verifyInstalledSignatures(jest.fn())).toEqual([EQSP32_PACKAGE_ID])
+      expect(manager.verifyInstalledSignatures(jest.fn())).toEqual([UNTRUSTED_PACKAGE_ID])
       expect(existsSync(folder)).toBe(false)
     })
   })
@@ -450,8 +450,8 @@ describe('check sites of the module with the Autonomy key', () => {
     })
 
     it.each([
-      ['the eqsp32-dev package', () => eqsp32.dir],
-      ['the eqsp32-dev package with its key id set to the Autonomy key id', () => eqsp32AsAutonomy.dir],
+      ['the untrusted-dev package', () => untrusted.dir],
+      ['the untrusted-dev package with its key id set to the Autonomy key id', () => untrustedAsAutonomy.dir],
       ['the fx3u package with a file altered beside its signature.json', () => alteredFx3u],
       ['the fx3u package with an unsigned file added beside its signature.json', () => injectedFx3u],
     ])('refuses %s at import and leaves the installed list unchanged', async (name, dir) => {
@@ -464,8 +464,8 @@ describe('check sites of the module with the Autonomy key', () => {
     })
 
     it.each([
-      ['the eqsp32-dev package', () => eqsp32.dir],
-      ['the eqsp32-dev package with its key id set to the Autonomy key id', () => eqsp32AsAutonomy.dir],
+      ['the untrusted-dev package', () => untrusted.dir],
+      ['the untrusted-dev package with its key id set to the Autonomy key id', () => untrustedAsAutonomy.dir],
       ['the fx3u package with a file altered beside its signature.json', () => alteredFx3u],
       ['the fx3u package with an unsigned file added beside its signature.json', () => injectedFx3u],
     ])('refuses %s at the anchor hooks', (_name, dir) => {
@@ -475,11 +475,11 @@ describe('check sites of the module with the Autonomy key', () => {
 
   describe('ABUSE-05: one site or the primitive neutralized', () => {
     it.each(HOOKS)(
-      'accepts the eqsp32-dev package at the %s hook once every site of the hook is neutralized',
+      'accepts the untrusted-dev package at the %s hook once every site of the hook is neutralized',
       (hook) => {
         const anchor = primedAnchor(real.source, siteFunctions(real.layout, hook), fx3u, recordingMechanisms())
 
-        expect(check(anchor, hook, eqsp32.dir)).toBeNull()
+        expect(check(anchor, hook, untrusted.dir)).toBeNull()
       },
     )
 
@@ -488,18 +488,18 @@ describe('check sites of the module with the Autonomy key', () => {
       ['last', 'import'],
       ['first', 'use'],
       ['last', 'use'],
-    ] as const)('refuses the eqsp32-dev package with the %s site of the %s hook neutralized', (position, hook) => {
+    ] as const)('refuses the untrusted-dev package with the %s site of the %s hook neutralized', (position, hook) => {
       const functions = siteFunctions(real.layout, hook)
       const target = position === 'first' ? functions[0] : functions[functions.length - 1]
       const anchor = primedAnchor(real.source, [target], fx3u, recordingMechanisms())
 
-      expect(check(anchor, hook, eqsp32.dir)).toBe(REFUSED)
+      expect(check(anchor, hook, untrusted.dir)).toBe(REFUSED)
     })
 
-    it('refuses the eqsp32-dev package and the fx3u package when the primitive accepts every signature', () => {
+    it('refuses the untrusted-dev package and the fx3u package when the primitive accepts every signature', () => {
       const anchor = realAnchor(withPrimitive(desktopPackageTrustMechanisms, () => true))
 
-      expect([eqsp32.dir, fx3u].flatMap((dir) => HOOKS.map((hook) => check(anchor, hook, dir)))).toEqual([
+      expect([untrusted.dir, fx3u].flatMap((dir) => HOOKS.map((hook) => check(anchor, hook, dir)))).toEqual([
         REFUSED,
         REFUSED,
         REFUSED,
