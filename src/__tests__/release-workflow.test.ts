@@ -898,6 +898,80 @@ describe('release.yml: create-release', () => {
   })
 })
 
+describe('release.yml: cross-seed', () => {
+  const CHECK = 'npx ts-node --transpile-only scripts/package-trust/cli.ts cross-seed-check'
+
+  function crossSeed(): Job {
+    return job('cross-seed')
+  }
+
+  it.each(TAG_RUNS)('runs on $name', (run) => {
+    expect(running(run, ['cross-seed'])).toEqual(['cross-seed'])
+  })
+
+  it.each(BRANCH_DISPATCHES)('does not run on $name', (run) => {
+    expect(running(run, ['cross-seed'])).toEqual([])
+  })
+
+  it('is waited for by create-release', () => {
+    expect(needsOf(job('create-release'))).toContain('cross-seed')
+  })
+
+  it('grants only contents: read, in its own permissions', () => {
+    expect(crossSeed().body.permissions).toStrictEqual({ contents: 'read' })
+  })
+
+  it('uses no environment and names no secret and no token', () => {
+    const raw = text(crossSeed().body)
+
+    expect(environmentOf(crossSeed())).toBeUndefined()
+    expect(raw).not.toMatch(/secrets\s*[.[]/)
+    expect(raw).not.toMatch(/github\.token|GITHUB_TOKEN|GH_TOKEN/)
+  })
+
+  it('checks out the repository keeping no credentials', () => {
+    const checkouts = crossSeed().steps.filter((step) => uses(step).startsWith('actions/checkout'))
+
+    expect(checkouts.length).toBeGreaterThanOrEqual(1)
+    expect(checkouts.map((step) => record(step.with)['persist-credentials'])).toEqual(checkouts.map(() => false))
+  })
+
+  it('sets up Node 22', () => {
+    const setup = crossSeed().steps.find((step) => uses(step).startsWith('actions/setup-node'))
+    const version = str(record(setup?.with)['node-version'])
+    const resolved = /^\$\{\{\s*env\.NODE_VERSION\s*\}\}$/.test(version)
+      ? str(record(workflow().doc.env).NODE_VERSION)
+      : version
+
+    expect(resolved).toMatch(/^22(\.|$)/)
+  })
+
+  it('runs npm ci --ignore-scripts, then npm run setup:strucpp, then cli.ts cross-seed-check', () => {
+    const entry = crossSeed()
+    const install = position(entry, 'npm ci --ignore-scripts')
+    const strucpp = position(entry, 'npm run setup:strucpp')
+    const check = position(entry, CHECK)
+
+    expect(install).toBeGreaterThanOrEqual(0)
+    expect([install < strucpp, strucpp < check]).toEqual([true, true])
+  })
+
+  it('installs its dependencies with npm ci --ignore-scripts only', () => {
+    const installs = crossSeed().steps.filter((step) => /\bnpm (ci|install|i)\b|\byarn\b|\bpnpm\b/.test(str(step.run)))
+
+    expect(installs.length).toBeGreaterThanOrEqual(1)
+    expect(installs.filter((step) => !str(step.run).includes('npm ci --ignore-scripts'))).toEqual([])
+  })
+
+  it('creates no release and uploads nothing', () => {
+    const offenders = crossSeed()
+      .steps.filter((step) => /\bgh\s+release\b/.test(str(step.run)) || isUploadArtifact(step))
+      .map((step) => str(step.name))
+
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('CLAUDE.md', () => {
   function section(heading: string): string {
     const lines = readFileSync(CLAUDE_MD, 'utf8').split('\n')
