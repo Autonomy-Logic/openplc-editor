@@ -200,6 +200,9 @@ and closes a debug session with no PLC attached. Any other build drops the branc
   app loads only from `app.asar`. `_electron.launch` needs the inspect arguments, so Playwright can
   drive a packaged build (`E2E_PACKAGED_APP`) only when it comes from `npm run package:test`. A
   release build (`npm run package`) is checked by spawning it (`scripts/release/packaged-checks.mjs`).
+- **`E2E_PACKAGED_APP` switches every spec that launches through `e2e/helpers/editor-session.ts`**
+  (`launchEditor` or its `editor` fixture) to that packaged executable, path resolved from the
+  repository root; unset, they run the built `release/app/dist/main/main.js`.
 - **A modified `app.asar` makes the app terminate at start**, with exit code 1 or a signal such as
   SIGTRAP: expect either.
 - **A local macOS build with no signing identity starts only because `resetAdHocDarwinSignature`**
