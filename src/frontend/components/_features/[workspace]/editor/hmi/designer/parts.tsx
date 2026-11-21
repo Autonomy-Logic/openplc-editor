@@ -1,5 +1,5 @@
 /** Small building blocks of the HMI designer, in the editor's own styles. */
-import { HMI_BUILD_STEPS, type HmiBuildStep } from '@root/middleware/shared/ports/hmi-preview-types'
+import type { HmiBuildStep } from '@root/middleware/shared/ports/hmi-preview-types'
 import { Background, ControlButton, ReactFlowProvider } from '@xyflow/react'
 import { type ReactNode, useEffect, useState } from 'react'
 
@@ -224,12 +224,11 @@ const STEP_LABELS: Record<HmiBuildStep, string> = {
 }
 
 /**
- * The build's step and how far along it is, in place of a screen until its first build, or over the last frame
+ * The build's step with an indeterminate bar, in place of a screen until its first build, or over the last frame
  * dimmed, taking the canvas's input, once an edit has waited PREVIEW_PROGRESS_DELAY_MS for its build.
  */
 export function PreviewLoading(props: { step: HmiBuildStep | null; dimmed?: boolean }) {
   const step = props.step ?? 'sources'
-  const done = (HMI_BUILD_STEPS.indexOf(step) + 1) / HMI_BUILD_STEPS.length
   const [shown, setShown] = useState(!props.dimmed)
   useEffect(() => {
     if (!props.dimmed) return
@@ -253,8 +252,8 @@ export function PreviewLoading(props: { step: HmiBuildStep | null; dimmed?: bool
       <p className='font-caption text-sm font-semibold text-neutral-850 dark:text-neutral-200'>Building the preview</p>
       <div className='h-1.5 w-56 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800'>
         <div
-          className='h-full rounded-full bg-brand transition-[width] duration-500'
-          style={{ width: `${done * 100}%` }}
+          data-testid='hmi-preview-loading-bar'
+          className='h-full w-[30%] animate-indeterminate-bar rounded-full bg-brand motion-reduce:w-full motion-reduce:animate-none'
         />
       </div>
       <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>{STEP_LABELS[step]}</p>
