@@ -48,6 +48,24 @@ export async function libraryObjectKey(input: LibraryObjectKeyInput): Promise<st
   ])
 }
 
+const ARCHIVE_EXTENSION = '.stlib'
+const KIND = /^[a-z][a-z-]*$/
+const FILE_NAME_PART = /^[^/\\\0]+$/
+
+/**
+ * The file name of a library's compiled object of `kind`, kept next to its archive `<base>.stlib`:
+ * `<base>.<kind>.wasm-object`. Null when `kind` is not lowercase letters and dashes, or the archive's file name is
+ * not a plain file name.
+ */
+export function libraryObjectFileName(archiveFileName: string, kind: string): string | null {
+  if (!KIND.test(kind) || !FILE_NAME_PART.test(archiveFileName)) return null
+  const base = archiveFileName.endsWith(ARCHIVE_EXTENSION)
+    ? archiveFileName.slice(0, -ARCHIVE_EXTENSION.length)
+    : archiveFileName
+  if (base === '' || base === '.' || base === '..') return null
+  return `${base}.${kind}.wasm-object`
+}
+
 interface LibraryObjectHeader {
   magic: string
   format: number

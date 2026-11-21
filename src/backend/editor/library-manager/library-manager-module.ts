@@ -16,6 +16,7 @@ import { downloadPublicLibrary } from '../../shared/library/public-catalog-clien
 import { selectBuildLibraryArchives } from '../../shared/library/select-library-archives'
 import { stlibArchiveFromText } from '../../shared/library/stlib-archive-json'
 import { validatePathId } from '../../shared/utils/path-safety'
+import { libraryObjectFileName } from '../../shared/wasm-toolchain/library-objects'
 import { assertPathContained } from '../utils/path-containment'
 import { createDesktopCatalogTransport } from './desktop-catalog-transport'
 import type { LibraryRegistry } from './types'
@@ -406,11 +407,11 @@ export class LibraryManagerModule {
   }
 
   /**
-   * The file next to a user-installed library's archive that holds its compiled object of `kind`; null for a library
-   * this machine keeps no files next to (bundled, unknown, or a name or kind that is not a plain file name part).
+   * The file next to a user-installed library's archive that holds its compiled object of `kind`, named by
+   * `libraryObjectFileName`; null for a library this machine keeps no files next to (bundled, unknown, or a name or
+   * kind that is not a plain file name part).
    */
   private libraryObjectPath(name: string, kind: string): string | null {
-    if (!/^[a-z][a-z-]*$/.test(kind)) return null
     try {
       validatePathId(name, 'name')
     } catch {
@@ -423,7 +424,8 @@ export class LibraryManagerModule {
     } catch {
       return null
     }
-    return join(dirname(entry.stlibPath), `${basename(entry.stlibPath, '.stlib')}.${kind}.wasm-object`)
+    const fileName = libraryObjectFileName(basename(entry.stlibPath), kind)
+    return fileName === null ? null : join(dirname(entry.stlibPath), fileName)
   }
 
   /** The bytes of a library's compiled object of `kind`, as stored next to its archive; null when there are none. */

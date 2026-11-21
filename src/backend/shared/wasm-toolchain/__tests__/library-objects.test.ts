@@ -8,6 +8,7 @@ import {
   decodeLibraryObject,
   encodeLibraryObject,
   keepLibraryObjects,
+  libraryObjectFileName,
   libraryObjectKey,
   offerLibraryObjects,
 } from '../library-objects'
@@ -83,6 +84,24 @@ describe('library object files', () => {
     expect(await decodeLibraryObject(TOOLCHAIN, 'key-1', damaged)).toBeNull()
     expect(await decodeLibraryObject(TOOLCHAIN, 'key-1', new Uint8Array([1, 2]))).toBeNull()
     expect(await decodeLibraryObject(TOOLCHAIN, 'key-1', new TextEncoder().encode('{"magic":1}'))).toBeNull()
+  })
+})
+
+describe('library object file names', () => {
+  it('name the object of each kind after the archive it sits next to', () => {
+    expect(libraryObjectFileName('alpha-lib.stlib', 'hmi')).toBe('alpha-lib.hmi.wasm-object')
+    expect(libraryObjectFileName('alpha-lib.stlib', 'hmi-factory')).toBe('alpha-lib.hmi-factory.wasm-object')
+    expect(libraryObjectFileName('alpha-lib.stlib', 'simulator')).toBe('alpha-lib.simulator.wasm-object')
+    expect(libraryObjectFileName('alpha.v2.stlib', 'hmi')).toBe('alpha.v2.hmi.wasm-object')
+    expect(libraryObjectFileName('alpha-lib', 'hmi')).toBe('alpha-lib.hmi.wasm-object')
+  })
+
+  it.each(['', '../x', 'x/y', 'HMI', '-hmi', 'hmi.wasm', 'hmi\u0000'])('refuse the kind %j', (kind) => {
+    expect(libraryObjectFileName('alpha-lib.stlib', kind)).toBeNull()
+  })
+
+  it.each(['', '.stlib', '..', 'dir/alpha.stlib', 'dir\\alpha.stlib'])('refuse the archive file name %j', (name) => {
+    expect(libraryObjectFileName(name, 'hmi')).toBeNull()
   })
 })
 
