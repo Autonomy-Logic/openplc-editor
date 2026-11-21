@@ -180,11 +180,7 @@ function ThemePreview(props: { theme: string }) {
     return () => clearTimeout(timer)
   }, [props.theme, request.settings.themes, rebuild])
   return (
-    <div
-      data-testid='hmi-theme-preview'
-      data-preview={`${preview.status} ${preview.buildMs ?? ''}`.trim()}
-      className='relative w-fit'
-    >
+    <div data-testid='hmi-theme-preview' data-preview={preview.status} className='relative w-fit'>
       <canvas
         ref={canvas}
         className='rounded-lg border border-neutral-200 dark:border-neutral-850'

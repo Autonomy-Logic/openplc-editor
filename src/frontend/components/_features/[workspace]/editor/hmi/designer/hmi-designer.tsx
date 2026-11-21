@@ -715,7 +715,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
           <div
             className={cn('relative min-w-0 flex-1 overflow-hidden', CANVAS_AREA_CLASS)}
             data-testid='hmi-canvas-area'
-            data-preview={`${preview.status} ${preview.buildMs ?? ''}`.trim()}
+            data-preview={preview.status}
             data-page={preview.page}
           >
             <CanvasBackdrop id={`hmi-bg-${name}`} />
@@ -850,7 +850,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
             CANVAS_AREA_CLASS,
           )}
           data-testid='hmi-canvas-area'
-          data-preview={`${preview.status} ${preview.buildMs ?? ''}`.trim()}
+          data-preview={preview.status}
         >
           <CanvasBackdrop id={`hmi-widget-bg-${name}`} />
           <div className='box shrink-0 rounded-lg'>

@@ -654,9 +654,7 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
 - **HMI preview:** `src/backend/shared/hmi/preview/` builds screens and widget blocks with the WebAssembly toolchain
   and runs them in a Worker (`createHmiPreviewPort`; host `resources/sources/hmi/preview/`). Each screen compiles
   against its own copy of the unit header (`split-screen-headers.ts`), so an edit of one screen recompiles that screen
-  and the glue only. Every build logs a debug Console line, `HMI preview built in N ms: files, generate (widget blocks,
-  STruC++), fonts, toolchain (compile, link; each compiled file), start, first frame`, which is how to see where a slow
-  computer spends a rebuild. The running module also follows structural edits without a build: the preview-only
+  and the glue only. The running module also follows structural edits without a build: the preview-only
   factory table (`hmi_preview_factory.cpp`, generated for preview builds only, with `hmi_preview_live.cpp`) creates any
   widget type, and any element, compiled or made, can be taken off its container and the drawing list and put back
   elsewhere. `designer-live.ts` diffs the screen the module shows against the source (`planLiveSync`): removed elements

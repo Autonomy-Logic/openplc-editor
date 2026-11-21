@@ -149,23 +149,6 @@ export interface HmiPreviewElementId {
   element: string
 }
 
-/** How long each step of a preview build took, in ms. */
-export interface HmiPreviewTimings {
-  /** Reading the preview's files; 0 once they were read. */
-  sourcesMs: number
-  /** Generating the unit: checks, ST, STruC++ and the C++ glue. */
-  generateMs: number
-  /** STruC++ compiling the project's widget blocks, part of `generateMs`. */
-  widgetsMs: number
-  /** STruC++ compiling the screens and glue, part of `generateMs`. */
-  strucppMs: number
-  /** Building the font table. */
-  fontsMs: number
-  /** The toolchain call as the build saw it: compiling, linking and moving request and module. */
-  toolchainMs: number
-  totalMs: number
-}
-
 export type HmiPreviewBuild =
   | {
       ok: true
@@ -180,14 +163,12 @@ export type HmiPreviewBuild =
       factory: HmiPreviewFactory
       warnings: HmiDiagnostic[]
       stats: WasmCompileStats
-      timings: HmiPreviewTimings
     }
   | {
       ok: false
       errors: HmiDiagnostic[]
       warnings: HmiDiagnostic[]
       stats?: WasmCompileStats
-      timings?: HmiPreviewTimings
     }
 
 /** An element's bounds in logical units. */

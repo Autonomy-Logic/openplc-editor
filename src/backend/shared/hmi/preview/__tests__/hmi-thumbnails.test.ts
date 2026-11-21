@@ -17,15 +17,6 @@ import {
   renderHmiThumbnails,
 } from '../hmi-thumbnails'
 
-const TIMINGS = {
-  sourcesMs: 0,
-  generateMs: 0,
-  widgetsMs: 0,
-  strucppMs: 0,
-  fontsMs: 0,
-  toolchainMs: 0,
-  totalMs: 0,
-}
 const ELEMENT_IDS = [
   { id: 1, screen: HMI_GALLERY_SCREEN, element: 'HMI__Column' },
   { id: 2, screen: HMI_GALLERY_SCREEN, element: 'W_HmiLamp' },
@@ -91,9 +82,8 @@ describe('HMI palette thumbnails', () => {
         setters: {},
         elementIds: ELEMENT_IDS,
         warnings: [],
-        stats: { units: 1, cached: 0, compileMs: 0, linkMs: 0 },
+        stats: { units: 1, cached: 0 },
         factory: { types: {} },
-        timings: TIMINGS,
       })
     }
     const session: HmiPreviewSession = {
@@ -162,9 +152,8 @@ describe('HMI palette thumbnails', () => {
       setters: {},
       elementIds: ELEMENT_IDS,
       warnings: [],
-      stats: { units: 1, cached: 0, compileMs: 0, linkMs: 0 },
+      stats: { units: 1, cached: 0 },
       factory: { types: {} },
-      timings: TIMINGS,
     }
     const stopped = await renderHmiThumbnails(
       sources,

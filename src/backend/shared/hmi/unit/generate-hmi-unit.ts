@@ -139,8 +139,6 @@ export interface HmiUnitResult {
   textSizes: Array<{ screen: string; element: string; size: number }>
   /** What only the editor's preview uses (`resources/sources/hmi/unit/hmi_preview.h`). */
   preview: HmiPreview
-  /** How long STruC++ took, in ms: compiling the widget blocks, then the screens and glue. */
-  timings: { widgetsMs: number; strucppMs: number }
 }
 
 export interface HmiPreview {
@@ -1552,7 +1550,6 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
       factory: { types: {} },
       files: {},
     },
-    timings: { widgetsMs: 0, strucppMs: 0 },
   }
   const {
     libraries,
@@ -1571,9 +1568,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   if (d.errors.length > 0) return result
 
   const strucpp = loadStrucpp()
-  const widgetsStart = performance.now()
   const widgetLibrary = compileHmiWidgets(input.widgets, libraries, libraryCatalog)
-  result.timings.widgetsMs = performance.now() - widgetsStart
   for (const e of widgetLibrary.errors) d.error(e.file, withSkippedLibraryCause(e.message, skipped), e.line)
   if (d.errors.length > 0) return result
   const { archives, catalog } = widgetLibrary
@@ -1689,9 +1684,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
       ? { wholeLibraries: archives.map((a) => a.manifest.name).filter((name) => widgetLibraries.has(name)) }
       : {}),
   }
-  const strucppStart = performance.now()
   const compiled = strucpp.compile(first[1], options)
-  result.timings.strucppMs = performance.now() - strucppStart
   for (const e of compiled.errors) {
     const file = (e.file ?? UNIT).replace(/\.st$/, '')
     const where = sources[e.file ?? ''] !== undefined && !e.file?.startsWith('hmi_') ? file : UNIT

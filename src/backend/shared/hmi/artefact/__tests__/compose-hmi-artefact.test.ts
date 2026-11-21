@@ -32,7 +32,7 @@ function readAll(dir: string, prefix = ''): Record<string, Uint8Array> {
 
 const HMI_SOURCES = readAll(HMI_DIR)
 const RUNTIME_HEADERS = { 'strucpp_runtime/include/iec_types.hpp': '#pragma once\n' }
-const stats = { units: 1, cached: 0, compileMs: 1, linkMs: 1 }
+const stats = { units: 1, cached: 0 }
 const WASM = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])
 
 const LEAVES = [

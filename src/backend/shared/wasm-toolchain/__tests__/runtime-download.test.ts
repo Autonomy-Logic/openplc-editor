@@ -109,7 +109,7 @@ describe('prefetchFiles', () => {
 })
 
 describe('startRuntimeDownload', () => {
-  const ready: WasmToolchainReadiness = { ok: true, ms: 1 }
+  const ready: WasmToolchainReadiness = { ok: true }
 
   it('starts both downloads before either finishes', async () => {
     const toolchain = deferred<WasmToolchainReadiness>()

@@ -173,7 +173,7 @@ describe('createEditorCompilerPlatformPort', () => {
     const result = {
       ok: true as const,
       wasm: new Uint8Array([0, 97, 115, 109]),
-      stats: { units: 1, cached: 0, compileMs: 1, linkMs: 1 },
+      stats: { units: 1, cached: 0 },
       diagnostics: [],
     }
     const compile = jest.fn().mockResolvedValue(result)
@@ -202,7 +202,7 @@ describe('createEditorCompilerPlatformPort', () => {
     const result = {
       ok: true as const,
       wasm: new Uint8Array([0, 97, 115, 109]),
-      stats: { units: 1, cached: 0, compileMs: 1, linkMs: 1 },
+      stats: { units: 1, cached: 0 },
       diagnostics: [],
     }
     const compile = jest.fn().mockResolvedValue(result)

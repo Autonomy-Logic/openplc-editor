@@ -3,7 +3,6 @@
  * frames (also while a build runs), paints changed rows, keeps element bounds, applies live property edits and follows
  * structural edits without a build.
  */
-import { useOpenPLCStore } from '@root/frontend/store'
 import type { HmiPreviewSession } from '@root/middleware/shared/ports/hmi-preview-port'
 import type {
   HmiBuildStep,
@@ -30,7 +29,6 @@ import {
 } from '@root/middleware/shared/utils/hmi/designer/designer-live-module'
 import type { DesignerModel } from '@root/middleware/shared/utils/hmi/designer/designer-model'
 import type { HmiDevicePreset } from '@root/middleware/shared/utils/hmi/device-presets'
-import { formatHmiPreviewTimings } from '@root/middleware/shared/utils/hmi/preview-timings'
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 type Built = Extract<HmiPreviewBuild, { ok: true }>
@@ -40,8 +38,6 @@ export type PreviewStatus = 'building' | 'ready' | 'failed' | 'stopped' | 'unava
 export interface PreviewState {
   status: PreviewStatus
   errors: HmiDiagnostic[]
-  /** How long the last build took, in ms. */
-  buildMs: number | null
   bounds: HmiPreviewBounds[]
   page: number
   /** The step a build is on; null when no build runs. */
@@ -164,7 +160,6 @@ export function usePreviewSession({
   catalog,
 }: PreviewSessionOptions): PreviewControls {
   const port = useHmiPreview()
-  const addLog = useOpenPLCStore((s) => s.consoleActions.addLog)
   const session = useRef<HmiPreviewSession | null>(null)
   const requestRef = useRef(request)
   const builtRef = useRef<Built | null>(null)
@@ -190,7 +185,6 @@ export function usePreviewSession({
   const [state, setState] = useState<PreviewState>({
     status: port ? 'building' : 'unavailable',
     errors: [],
-    buildMs: null,
     bounds: [],
     page: 0,
     step: null,
@@ -282,14 +276,10 @@ export function usePreviewSession({
         onStep('start')
         const running = session.current
         let first: HmiPreviewFrame
-        let startMs = 0
-        let firstFrameMs = 0
         loading.current++
         try {
           if (!running) throw new Error('The preview was closed')
-          const loadStart = performance.now()
           await running.load(result.wasm, { width: device.width, height: device.height, page, design })
-          startMs = performance.now() - loadStart
           builtRef.current = result
           pageRef.current = page
           liveRef.current = compiledEntries(result.elementIds, screen)
@@ -298,9 +288,7 @@ export function usePreviewSession({
           changing.current = false
           editsRef.current = editsRef.current.filter((e) => e.seq > startedSeq)
           for (const edit of editsRef.current) applyEdit(liveRef.current, result, running, page, edit)
-          const frameStart = performance.now()
           first = await running.frame(Math.round(performance.now() - started), surface)
-          firstFrameMs = performance.now() - frameStart
         } catch (error) {
           loading.current--
           if (id !== generation.current) return
@@ -318,21 +306,15 @@ export function usePreviewSession({
           ...s,
           status: latest ? 'ready' : s.status,
           errors: latest ? [] : s.errors,
-          buildMs: latest ? Math.round(performance.now() - started) : s.buildMs,
           bounds: first.bounds,
           page: first.page,
           step: latest ? null : s.step,
           waiting: latest ? false : s.waiting,
         }))
-        if (latest)
-          addLog({
-            level: 'debug',
-            message: formatHmiPreviewTimings(result.timings, result.stats, { startMs, firstFrameMs }),
-          })
         syncRef.current()
       }, failed)
     },
-    [port, screen, device.width, device.height, design, surface, paint, addLog],
+    [port, screen, device.width, device.height, design, surface, paint],
   )
 
   const ready = request !== null

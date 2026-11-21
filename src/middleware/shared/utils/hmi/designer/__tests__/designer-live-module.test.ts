@@ -26,8 +26,7 @@ const built: Built = {
   ],
   factory: { types: { HMILABEL: { type: 3, setters: { TEXT: { index: 9, kind: 'str' } } } } },
   warnings: [],
-  stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
-  timings: { sourcesMs: 0, generateMs: 0, widgetsMs: 0, strucppMs: 0, fontsMs: 0, toolchainMs: 0, totalMs: 0 },
+  stats: { units: 0, cached: 0 },
 }
 
 describe('designer-live-module', () => {

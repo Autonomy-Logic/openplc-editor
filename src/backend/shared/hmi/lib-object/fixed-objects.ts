@@ -159,7 +159,7 @@ async function previewRequestOf(
   const notCompiled: WasmCompileResult = {
     ok: false,
     error: 'not compiled',
-    stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
+    stats: { units: 0, cached: 0 },
     diagnostics: [],
   }
   const preview = await buildHmiPreview(request, resources, (compiled) => {

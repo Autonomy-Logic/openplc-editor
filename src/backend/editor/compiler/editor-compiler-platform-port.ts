@@ -300,7 +300,7 @@ export function createEditorCompilerPlatformPort(
         return {
           ok: false,
           error: message,
-          stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
+          stats: { units: 0, cached: 0 },
           diagnostics: [{ message, level: 'error' }],
         }
       }
