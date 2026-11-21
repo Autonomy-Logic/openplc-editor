@@ -18,6 +18,8 @@ on:
     # why `workflow_dispatch` is not optional here.
     - cron: "0 6 1 * *"
   workflow_dispatch: {}      # manual "Run workflow" button
+  push:
+    branches: [test/NODE-258-monthly-sim]
 
 permissions:
   contents: write
@@ -127,6 +129,9 @@ jobs:
       # renderer: a truncated report-config.json is a parse error (loud), but a
       # truncated osv-scanner.toml silently DROPS suppressions, and a
       # half-written one can silently add them. Deliberately NO continue-on-error.
+      - name: TEMPORARY simulate a triage suppression
+        run: |
+          printf '\n[[IgnoredVulns]]\nid = "GHSA-cmwh-pvxp-8882"\nignoreUntil = "2027-01-01T00:00:00Z"\nreason = "AI-TRIAGED [unreviewed]: TEMPORARY E2E"\n' >> osv-scanner.toml
       - name: Validate the triage edits
         run: |
           node -e 'JSON.parse(require("fs").readFileSync("security/report-config.json","utf8"))' \
