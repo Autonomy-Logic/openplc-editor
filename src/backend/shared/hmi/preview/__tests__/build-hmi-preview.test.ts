@@ -213,6 +213,9 @@ describe('createHmiPreviewPort', () => {
         files: {
           'assets/hmi/core/hmi_core.c': new TextEncoder().encode('// c'),
           'assets/hmi/core/hmi_core.h': '// h',
+          'assets/hmi/preview/hmi_preview_host.cpp': '// host',
+          'assets/hmi/baremetal/hmi_baremetal.c': '// panel',
+          'assets/hmi/client/hmi_browser_host.cpp': '// browser',
           'assets/hmi/README.md': '# readme',
           'assets/hmi/fonts/A.ttf': font,
           'assets/hmi/fonts/B.ttf': 'not bytes',
@@ -221,7 +224,11 @@ describe('createHmiPreviewPort', () => {
       },
       { 'strucpp_runtime/include/iec_types.hpp': '// t' },
     )
-    expect(read.hmiSources).toEqual({ 'core/hmi_core.c': '// c', 'core/hmi_core.h': '// h' })
+    expect(read.hmiSources).toEqual({
+      'core/hmi_core.c': '// c',
+      'core/hmi_core.h': '// h',
+      'preview/hmi_preview_host.cpp': '// host',
+    })
     expect(read.runtimeHeaders).toEqual({ 'iec_types.hpp': '// t' })
     await expect(read.readFont('A.ttf')).resolves.toBe(font)
     await expect(read.readFont('B.ttf')).rejects.toThrow('The HMI font B.ttf is not available')

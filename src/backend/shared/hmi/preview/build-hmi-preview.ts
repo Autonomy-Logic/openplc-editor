@@ -111,6 +111,12 @@ function groupUnits(groups: HmiPreview['units']): Record<string, string> {
   return wrappers
 }
 
+/** Folders of the HMI sources folder whose files the preview compiles with. */
+const PREVIEW_SOURCE = /^(core|unit|preview)\/.*\.(c|h|cpp|hpp)$/
+
+/** Whether a path under the HMI sources folder is one of the sources every preview request carries. */
+export const isHmiPreviewSource = (path: string): boolean => PREVIEW_SOURCE.test(path)
+
 /**
  * The compile request of a generated unit: its files and setters under `unit/`, one wrapper per group of files that
  * change together, the HMI sources under `hmi/`, the runtime headers and the font table.

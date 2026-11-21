@@ -20,18 +20,17 @@ import {
   hmiScreenMembers,
   type HmiWidgetLibrary,
 } from '../unit/generate-hmi-unit'
-import { buildHmiPreview, type HmiPreviewResources } from './build-hmi-preview'
+import { buildHmiPreview, type HmiPreviewResources, isHmiPreviewSource } from './build-hmi-preview'
 import { renderHmiThumbnails } from './hmi-thumbnails'
 import { createHmiPreviewSession, type HmiPreviewSessionOptions } from './preview-session'
 
-const SOURCE = /\.(c|h|cpp|hpp)$/
 const FONTS = 'fonts/'
 
 const fileName = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
 /**
- * The compiled-in sources as text and the font files as bytes, out of the HMI sources folder's files, and the runtime
- * headers by file name.
+ * The compiled-in sources as text (`isHmiPreviewSource`) and the font files as bytes, out of the HMI sources folder's
+ * files, and the runtime headers by file name.
  */
 export function hmiPreviewResources(
   stored: HmiPreviewStoredFiles,
@@ -46,7 +45,7 @@ export function hmiPreviewResources(
   const hmiSources: Record<string, string> = {}
   const decoder = new TextDecoder()
   for (const [path, content] of Object.entries(hmiFiles)) {
-    if (path.startsWith(FONTS) || !SOURCE.test(path)) continue
+    if (!isHmiPreviewSource(path)) continue
     hmiSources[path] = typeof content === 'string' ? content : decoder.decode(content)
   }
   return {

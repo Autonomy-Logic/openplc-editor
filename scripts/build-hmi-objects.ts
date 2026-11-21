@@ -1,7 +1,8 @@
 /**
  * Builds the compiled objects the editor ships (`release/hmi-objects/`): the HMI core, font tables, hosts and widget
- * library units, and the bundled libraries' OpenPLC Simulator units, compiled with the pinned WebAssembly toolchain. Run before packaging
- * (`npm run build:hmi-objects`); the packaged app reads them from its resources, development builds from the folder.
+ * library units, the default palette gallery, and the bundled libraries' OpenPLC Simulator units, compiled with the
+ * pinned WebAssembly toolchain. Run before packaging (`npm run build:hmi-objects`); the packaged app reads them from
+ * its resources, development builds from the folder.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
@@ -9,6 +10,7 @@ import { join } from 'node:path'
 
 import { mergeStrucppRuntimeIntoSkeleton } from '../src/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
 import { buildHmiShippedObjects } from '../src/backend/shared/hmi/lib-object/fixed-objects'
+import { isHmiPreviewSource } from '../src/backend/shared/hmi/preview/build-hmi-preview'
 import { threadRunner } from './clang-thread-runner'
 
 const ROOT = join(__dirname, '..')
@@ -83,9 +85,7 @@ async function main(): Promise<void> {
   const hmiSources = readAll(HMI)
   const runtime = text(readAll(RUNTIME))
   const previewSources = text(
-    Object.fromEntries(
-      Object.entries(hmiSources).filter(([path]) => /^(core|unit|preview)\//.test(path) && /\.(c|h|cpp)$/.test(path)),
-    ),
+    Object.fromEntries(Object.entries(hmiSources).filter(([path]) => isHmiPreviewSource(path))),
   )
   const bundled = bundledArchives()
   const runner = threadRunner(Math.max(1, Math.min(4, cpus().length - 1)))

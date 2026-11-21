@@ -1,8 +1,8 @@
 /**
  * The compiled objects no project changes: of HMI builds, the HMI core, the font tables, the hosts and the widget
- * library units; of OpenPLC Simulator builds, the bundled libraries' units. The application's build compiles them
- * once with the pinned toolchain, from reference builds, and ships them; a project's build then compiles only its own
- * units.
+ * library units, and every object of the default palette gallery; of OpenPLC Simulator builds, the bundled libraries'
+ * units. The application's build compiles them once with the pinned toolchain, from reference builds, and ships them;
+ * a project's build then compiles only its own units.
  */
 import type { WasmClangRunner } from '../../../../middleware/shared/ports/wasm-toolchain-mechanisms'
 import type { WasmCompileRequest } from '../../../../middleware/shared/ports/wasm-toolchain-types'
@@ -109,8 +109,8 @@ async function compileSimulatorLibraries(
 }
 
 /**
- * Builds the palette gallery in every font variant and a one-screen Runtime v4 HMI, and returns the shipped set of
- * the fixed objects those builds compiled: each record by its file name, and the index.
+ * Builds the palette gallery in every font variant and a one-screen Runtime v4 HMI, and returns the shipped set: the
+ * fixed objects those builds compiled and every object of the galleries, each record by its file name, and the index.
  */
 export async function buildHmiShippedObjects(
   runner: WasmClangRunner,
@@ -123,12 +123,15 @@ export async function buildHmiShippedObjects(
     if (!result.ok) throw new Error(result.error)
     return result
   }
+  const galleryObjects: StoredWasmObject[] = []
   for (const fontVariant of HMI_FONT_VARIANTS) {
     const settings = hmiSettingsSchema.parse({ fontVariant })
     const project = { screens: [{ name: 'Reference', source: REFERENCE_SCREEN }], widgets: [], settings }
     const sources = { ...project, plcVariables: [], projectNames: [] }
+    const from = cache.collected.length
     const preview = await buildHmiPreview({ ...sources, libraries: [], gallery: true }, input.preview, compile)
     if (!preview.ok) throw new Error(preview.errors.map((e) => e.message).join('\n'))
+    galleryObjects.push(...cache.collected.slice(from))
     const artefact = await composeHmiArtefact({
       sources,
       libraries: input.preview.projectLibraries,
@@ -145,6 +148,7 @@ export async function buildHmiShippedObjects(
   if (input.simulator) await compileSimulatorLibraries(input.simulator, compile)
   return encodeShippedObjects(identity, [
     ...fixedHmiObjects(cache.collected),
+    ...galleryObjects,
     ...cache.collected.filter(isSimulatorLibraryObject),
   ])
 }
