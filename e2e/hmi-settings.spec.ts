@@ -17,6 +17,7 @@ import {
   launchHmiApp,
   leaf,
   pickLayer,
+  previewBuilds,
   save,
   screenOnDisk,
   status,
@@ -112,12 +113,12 @@ test.describe('HMI Settings', () => {
         async () => (await status(page)).startsWith('ready'),
         60000,
       )
-      const before = await status(page)
+      const before = await previewBuilds(page)
       await choose(page, 'hmi-theme', 'Theme: Brand')
       await waitFor(
         page,
         'the preview in the project theme',
-        async () => (await status(page)) !== before && (await status(page)).startsWith('ready'),
+        async () => (await previewBuilds(page)) > before && (await status(page)).startsWith('ready'),
         60000,
       )
       expect(await colorOf(page, 'AccentBox')).toBe('#E91E63')

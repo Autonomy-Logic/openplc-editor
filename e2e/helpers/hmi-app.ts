@@ -112,6 +112,38 @@ export function writeHmiFixture(f: HmiFixture, project: HmiProject): void {
 }
 
 /** Starts the built app on the fixture's user data and returns its main window. */
+/**
+ * Counts, in the page, each preview build that finishes: a `data-preview` change from `building` to `ready`, per
+ * element test id. Test-only: it observes the attribute the designer already renders for its status.
+ */
+async function countPreviewBuilds(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    if (Reflect.get(window, '__hmiPreviewBuilds') !== undefined) return
+    const counts: Record<string, number> = {}
+    Reflect.set(window, '__hmiPreviewBuilds', counts)
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (!(record.target instanceof Element)) continue
+        if (record.oldValue !== 'building' || record.target.getAttribute('data-preview') !== 'ready') continue
+        const id = record.target.getAttribute('data-testid') ?? ''
+        counts[id] = (counts[id] ?? 0) + 1
+      }
+    }).observe(document.documentElement, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-preview'],
+      attributeOldValue: true,
+    })
+  })
+}
+
+/** How many preview builds of the element with `testId` have finished since the app started. */
+export const previewBuilds = (page: Page, testId = 'hmi-canvas-area'): Promise<number> =>
+  page.evaluate((id) => {
+    const counts: unknown = Reflect.get(window, '__hmiPreviewBuilds')
+    return typeof counts === 'object' && counts !== null ? Number(Reflect.get(counts, id) ?? 0) : 0
+  }, testId)
+
 export async function launchHmiApp(f: HmiFixture): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(__dirname, '..', '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${f.userData}`],
@@ -123,6 +155,7 @@ export async function launchHmiApp(f: HmiFixture): Promise<{ app: ElectronApplic
       try {
         if (w.url().includes('index.html')) {
           await w.waitForLoadState('domcontentloaded')
+          await countPreviewBuilds(w)
           return { app, page: w }
         }
       } catch {

@@ -6,7 +6,6 @@ import type {
   HmiBuildStep,
   HmiPreviewBuild,
   HmiPreviewRequest,
-  HmiPreviewTimings,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import type {
   WasmCompileRequest,
@@ -211,24 +210,11 @@ export async function buildHmiPreview(
   compile: HmiPreviewCompile,
   onStep?: (step: HmiBuildStep) => void,
 ): Promise<HmiPreviewBuild> {
-  const started = performance.now()
-  const timings: HmiPreviewTimings = {
-    sourcesMs: 0,
-    generateMs: 0,
-    widgetsMs: 0,
-    strucppMs: 0,
-    fontsMs: 0,
-    toolchainMs: 0,
-    totalMs: 0,
-  }
-  const done = (): HmiPreviewTimings => ({ ...timings, totalMs: performance.now() - started })
   onStep?.('generate')
   await nextTask()
-  const generateStart = performance.now()
   const widgetLibraries = sharedWidgetLibraries(resources.projectLibraries)
   const libraryUnits = await hmiLibraryUnits(widgetLibraries.shared, widgetLibraries.all)
-  if (!libraryUnits.ok)
-    return { ok: false, errors: [{ file: UNIT, message: libraryUnits.error }], warnings: [], timings: done() }
+  if (!libraryUnits.ok) return { ok: false, errors: [{ file: UNIT, message: libraryUnits.error }], warnings: [] }
   const generated = generateHmiUnit({
     ...input,
     projectLibraries: resources.projectLibraries,
@@ -237,12 +223,8 @@ export async function buildHmiPreview(
     resolve: undefined,
     plcMd5: undefined,
   })
-  timings.generateMs = performance.now() - generateStart
-  timings.widgetsMs = generated.timings.widgetsMs
-  timings.strucppMs = generated.timings.strucppMs
-  if (!generated.ok) return { ok: false, errors: generated.errors, warnings: generated.warnings, timings: done() }
+  if (!generated.ok) return { ok: false, errors: generated.errors, warnings: generated.warnings }
 
-  const fontsStart = performance.now()
   let fontTable: string
   try {
     const fonts = await Promise.all(
@@ -255,9 +237,8 @@ export async function buildHmiPreview(
     fontTable = await buildHmiFontTableSource(fonts)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { ok: false, errors: [{ file: UNIT, message }], warnings: generated.warnings, timings: done() }
+    return { ok: false, errors: [{ file: UNIT, message }], warnings: generated.warnings }
   }
-  timings.fontsMs = performance.now() - fontsStart
 
   const unitFiles = withoutLibraryFiles(
     { ...generated.files, ...generated.preview.files },
@@ -272,10 +253,8 @@ export async function buildHmiPreview(
     buildHmiPreviewRequest(splitFiles, groups, fontTable, { ...resources, prelude }, libraryUnits.units)
   const request = requestWith(resources.prelude)
   onStep?.('compile')
-  const toolchainStart = performance.now()
   let result = await compile(request)
   if (!result.ok && request.files[HMI_PRELUDE_PCH] !== undefined) result = await compile(requestWith(null))
-  timings.toolchainMs = performance.now() - toolchainStart
   if (!result.ok) {
     const errors = result.diagnostics
       .filter((d) => d.level === 'error')
@@ -285,7 +264,6 @@ export async function buildHmiPreview(
       errors: errors.length > 0 ? errors : [{ file: UNIT, message: result.error }],
       warnings: generated.warnings,
       stats: result.stats,
-      timings: done(),
     }
   }
   const names = input.gallery
@@ -302,6 +280,5 @@ export async function buildHmiPreview(
     factory: generated.preview.factory,
     warnings: generated.warnings,
     stats: result.stats,
-    timings: done(),
   }
 }

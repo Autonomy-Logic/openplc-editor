@@ -56,7 +56,7 @@ const WASM = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])
 const done: WasmCompileResult = {
   ok: true,
   wasm: WASM,
-  stats: { units: 1, cached: 0, compileMs: 0, linkMs: 0 },
+  stats: { units: 1, cached: 0 },
   diagnostics: [],
 }
 

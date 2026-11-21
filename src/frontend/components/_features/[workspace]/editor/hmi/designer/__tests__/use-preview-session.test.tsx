@@ -84,8 +84,7 @@ const built = (elements: string[]): Built => ({
     },
   },
   warnings: [],
-  stats: { units: 1, cached: 1, compileMs: 0, linkMs: 0 },
-  timings: { sourcesMs: 0, generateMs: 0, widgetsMs: 0, strucppMs: 0, fontsMs: 0, toolchainMs: 0, totalMs: 0 },
+  stats: { units: 1, cached: 1 },
 })
 
 /** A promise the test settles. */

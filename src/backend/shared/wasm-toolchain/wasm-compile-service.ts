@@ -43,7 +43,7 @@ export interface WasmCompileService {
 const rejected = (error: string): WasmCompileResult => ({
   ok: false,
   error,
-  stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
+  stats: { units: 0, cached: 0 },
   diagnostics: [{ message: error, level: 'error' }],
 })
 

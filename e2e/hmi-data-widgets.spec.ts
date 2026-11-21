@@ -18,6 +18,7 @@ import {
   launchHmiApp,
   leaf,
   pickLayer,
+  previewBuilds,
   save,
   screenOnDisk,
   status,
@@ -62,8 +63,8 @@ async function previewReady(page: Page): Promise<boolean> {
   return state.startsWith('ready')
 }
 
-/** How many preview builds the Console reports. */
-const builds = (page: Page) => page.getByText(/HMI preview built in/).count()
+/** How many preview builds of the screen have finished. */
+const builds = (page: Page) => previewBuilds(page)
 
 /** Opens the project and the Panel screen, and waits for its preview. */
 async function openPanel(page: Page): Promise<void> {

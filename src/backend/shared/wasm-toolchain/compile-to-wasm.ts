@@ -5,7 +5,6 @@ import type {
   WasmClangRunner,
 } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 import type {
-  WasmCompileJobTiming,
   WasmCompileRequest,
   WasmCompileResult,
   WasmCompileStats,
@@ -21,7 +20,6 @@ import { parseDependencyFile } from './dependency-file'
 import { filesToTree, filesTreeProblem, isFileBytes, readTreeFile, toolchainPathProblem } from './file-tree'
 
 export type {
-  WasmCompileJobTiming,
   WasmCompileRequest,
   WasmCompileResult,
   WasmCompileStats,
@@ -251,7 +249,6 @@ interface CompileContext {
   report: Report
   stats: WasmCompileStats
   /** Each job's timing by its planned object path. */
-  timings: Map<string, WasmCompileJobTiming>
   onObject: WasmCompileOptions['onObject']
 }
 
@@ -286,7 +283,7 @@ async function validVariant(
  * was added or removed, and compiles the rest, largest first.
  */
 async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToTree>, ctx: CompileContext) {
-  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, timings, onObject } = ctx
+  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, onObject } = ctx
   const pending: PlannedUnit[] = []
   for (const p of jobs) {
     const hit = await validVariant(cache, p.key, ctx)
@@ -294,7 +291,6 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
       objects.set(p.object, hit.object)
       onObject?.(p.unit, p.key, hit)
       stats.cached++
-      timings.set(p.object, { source: p.unit.source, ms: 0, cached: true })
     } else {
       pending.push(p)
     }
@@ -302,9 +298,7 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
   pending.sort((x, y) => y.size - x.size)
   await runLimited(pending, runner.concurrency, async (p) => {
     if (loadFailures.length > 0) return
-    const started = performance.now()
     const result = await runSafely(runner, { argv: p.argv, tree })
-    timings.set(p.object, { source: p.unit.source, ms: performance.now() - started, cached: false })
     if (result instanceof WasmToolchainLoadError) {
       loadFailures.push(result)
       return
@@ -358,8 +352,6 @@ export async function compileToWasm(
   const stats: WasmCompileStats = {
     units: request.units.length,
     cached: 0,
-    compileMs: 0,
-    linkMs: 0,
   }
   const diagnostics: WasmDiagnostic[] = []
   const report: Report = (message, level) => {
@@ -373,14 +365,12 @@ export async function compileToWasm(
   const invalid = validate(request)
   if (invalid) return fail(invalid)
 
-  const compileStart = performance.now()
   const digests = await digestFiles(request.files)
   const linkKey = cache ? await moduleKey(request, digests) : ''
   const linked = cache?.variants(linkKey)[0]
   if (linked) {
     cache?.touch?.(linked.digest)
     stats.cached = stats.units
-    stats.compileMs = performance.now() - compileStart
     return { ok: true, wasm: linked.object, stats, diagnostics }
   }
   const digestOf = (path: string): string | undefined => digests.get(path)
@@ -388,7 +378,6 @@ export async function compileToWasm(
   const objects = new Map<string, Uint8Array>()
   const failures: string[] = []
   const loadFailures: WasmToolchainLoadError[] = []
-  const timings = new Map<string, WasmCompileJobTiming>()
   const build = (jobs: PlannedUnit[], tree: ReturnType<typeof filesToTree>): Promise<void> =>
     compileJobs(jobs, tree, {
       runner,
@@ -400,17 +389,11 @@ export async function compileToWasm(
       loadFailures,
       report,
       stats,
-      timings,
       onObject,
     })
 
   const planned = await planUnits(request)
   await build(planned, filesToTree(request.files))
-  stats.compileMs = performance.now() - compileStart
-  stats.jobs = planned.flatMap((p) => {
-    const timing = timings.get(p.object)
-    return timing ? [timing] : []
-  })
 
   const total = planned.length
   if (loadFailures.length > 0) return fail(loadFailures[0].message)
@@ -424,7 +407,6 @@ export async function compileToWasm(
     const object = objects.get(p.object)
     if (object) linkFiles[p.object] = object
   }
-  const linkStart = performance.now()
   const link = await runSafely(runner, {
     argv: [
       'clang++',
@@ -436,7 +418,6 @@ export async function compileToWasm(
     ],
     tree: filesToTree(linkFiles),
   })
-  stats.linkMs = performance.now() - linkStart
   if (link instanceof WasmToolchainLoadError) return fail(link.message)
 
   const wasm = link.exitCode === 0 ? readTreeFile(link.tree, LINK_OUTPUT) : undefined

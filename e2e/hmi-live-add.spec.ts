@@ -13,12 +13,13 @@ import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
-import { failIfAppReportedFailure, waitForText } from './helpers/app-console'
+import { failIfAppReportedFailure } from './helpers/app-console'
 import {
   hmiFixture,
   launchHmiApp,
   leaf,
   pickLayer,
+  previewBuilds,
   propertyField,
   redo,
   status,
@@ -165,11 +166,11 @@ const dropAndTime = (page: Page, widget: string, x: number, y: number, outline: 
   )
 
 /**
- * Samples the canvas on every animation frame until the preview reports a finished build other than `opened`, and
+ * Samples the canvas on every animation frame until a preview build finishes after the `opened` builds, and
  * 500 ms longer, and counts the samples that differ from `expected`. It samples in slices of a second and, between
  * them, fails at once when the app reports a failure, the designer lists errors or the preview failed.
  */
-async function watchCanvasThroughBuild(page: Page, expected: string, opened: string) {
+async function watchCanvasThroughBuild(page: Page, expected: string, opened: number) {
   const deadline = Date.now() + 60000
   await page.evaluate(() => Reflect.set(window, '__hmiWatch', { frames: 0, differing: 0, replaced: false, end: 0 }))
   for (;;) {
@@ -194,7 +195,10 @@ async function watchCanvasThroughBuild(page: Page, expected: string, opened: str
           for (let i = 0; i < data.length; i += 4) out.push(data[i + 1])
           Reflect.set(watch, 'frames', Number(Reflect.get(watch, 'frames')) + 1)
           if (out.join(',') !== expected) Reflect.set(watch, 'differing', Number(Reflect.get(watch, 'differing')) + 1)
-          if (!Reflect.get(watch, 'replaced') && /^ready \d+$/.test(state()) && state() !== opened) {
+          const counts: unknown = Reflect.get(window, '__hmiPreviewBuilds')
+          const finished =
+            typeof counts === 'object' && counts !== null ? Number(Reflect.get(counts, 'hmi-canvas-area') ?? 0) : 0
+          if (!Reflect.get(watch, 'replaced') && state() === 'ready' && finished > opened) {
             Reflect.set(watch, 'replaced', true)
             Reflect.set(watch, 'end', performance.now() + 500)
           }
@@ -238,15 +242,7 @@ test.describe('HMI live elements', () => {
       await leaf(page, 'Overview').click()
       await expect(page.getByTestId('hmi-designer')).toBeVisible({ timeout: 15000 })
       await waitFor(page, 'the preview', async () => (await status(page)).startsWith('ready'), 60000)
-      await page.getByRole('tab', { name: 'Console' }).click()
-      await waitForText(
-        page,
-        /HMI preview built in \d+ ms: files \d+, generate \d+ .*toolchain \d+ .*first frame \d+/,
-        {
-          timeout: 20000,
-        },
-      )
-      const opened = await status(page)
+      const opened = await previewBuilds(page)
 
       await holdCompiles(app)
       await pickLayer(page, 'Col')
@@ -259,7 +255,8 @@ test.describe('HMI live elements', () => {
       expect(dropMs, 'the lamp is drawn before any compile finishes').toBeGreaterThan(0)
       expect(dropMs).toBeLessThan(DRAWN_MS)
       expect(await compilesFinished(app)).toBe(0)
-      expect(await status(page)).toMatch(new RegExp(`^(ready|building) ${opened.split(' ')[1]}$`))
+      expect(await status(page)).toMatch(/^(ready|building)$/)
+      expect(await previewBuilds(page)).toBe(opened)
 
       await undo(app)
       await waitFor(page, 'the undone lamp to go', async () => (await sampleCanvas(page)) === beforeDrop, 5000)

@@ -27,7 +27,7 @@ const FONTS =
     .map((dir) => join(process.cwd(), dir))
     .find((dir) => existsSync(dir)) ?? 'missing-bundled-fonts'
 const readFont = (file: string) => Promise.resolve(new Uint8Array(readFileSync(join(FONTS, file))))
-const stats = { units: 1, cached: 0, compileMs: 1, linkMs: 1 }
+const stats = { units: 1, cached: 0 }
 
 const resources: HmiPreviewResources = {
   runtimeHeaders: { 'iec_types.hpp': '// types' },
@@ -259,14 +259,12 @@ describe('buildHmiPreview', () => {
     expect(String(files['unit/hmi_unit_glue.cpp'])).toContain('#include "hmi_unit.hpp"')
   })
 
-  it('returns the widget types the module adds without a build, and how long each step took', async () => {
+  it('returns the widget types the module adds without a build', async () => {
     const { compile } = capture()
     const build = await buildHmiPreview(sampleProject(), resources, compile)
     if (!build.ok) throw new Error('the build failed')
     expect(build.factory.types.HMILABEL?.setters.TEXT).toMatchObject({ kind: 'str' })
     expect(build.factory.types.BADGE).toBeDefined()
-    expect(build.timings.generateMs).toBeGreaterThan(0)
-    expect(build.timings.totalMs).toBeGreaterThanOrEqual(build.timings.generateMs + build.timings.toolchainMs)
   })
 
   it('builds a widget block on its own screen after the project screens', async () => {

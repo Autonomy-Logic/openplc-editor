@@ -259,9 +259,7 @@ const createMainWindow = async () => {
           showStartupFailure(toolchain.message)
           return
         }
-        logger.info(`WebAssembly toolchain files checked in ${Math.round(toolchain.ms)} ms`)
-        if (python.ok) logger.info(`Python runtime files checked in ${Math.round(python.ms)} ms`)
-        else logger.warn(python.message)
+        if (!python.ok) logger.warn(python.message)
         splash.close()
         mainWindow?.show()
       })

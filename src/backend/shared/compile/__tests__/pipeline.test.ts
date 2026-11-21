@@ -112,7 +112,7 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
     compileToWasm: jest.fn().mockResolvedValue({
       ok: true,
       wasm: new Uint8Array([0, 97, 115, 109]),
-      stats: { units: 3, cached: 1, compileMs: 10, linkMs: 2 },
+      stats: { units: 3, cached: 1 },
       diagnostics: [],
     }),
     uploadRuntimeV4: jest.fn().mockResolvedValue({ ok: true }),
@@ -124,7 +124,7 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
     compileWasmModule: jest.fn().mockResolvedValue({
       ok: true,
       wasm: new Uint8Array([0, 97, 115, 109]),
-      stats: { units: 1, cached: 0, compileMs: 1, linkMs: 1 },
+      stats: { units: 1, cached: 0 },
       diagnostics: [],
     }),
     readHmiSources: jest.fn().mockResolvedValue({}),
@@ -1717,7 +1717,7 @@ describe('runCompilePipeline — failure propagation', () => {
       compileToWasm: jest.fn().mockResolvedValue({
         ok: false,
         error: 'Compilation failed in 1 of 3 file(s)',
-        stats: { units: 3, cached: 0, compileMs: 5, linkMs: 0 },
+        stats: { units: 3, cached: 0 },
         diagnostics: [
           { message: "src/c_blocks_code.cpp:3:1: error: use of undeclared identifier 'PORTB'", level: 'error' },
         ],

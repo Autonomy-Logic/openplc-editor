@@ -1377,10 +1377,10 @@ async function compileSimulatorModule(
   emit({ stage: 'simulator-compile', message: 'Compiling the simulator module...', level: 'info' })
   const result = await port.compileToWasm(built.request, makePlatformLog(emit, 'simulator-compile'))
   if (!result.ok) return bailError(emit, 'simulator-compile', 'Simulator compilation failed.')
-  const { units, cached, compileMs, linkMs } = result.stats
+  const { units, cached } = result.stats
   emit({
     stage: 'simulator-compile',
-    message: `Simulator module compiled: ${units} files (${cached} reused) in ${Math.round(compileMs)} ms, linked in ${Math.round(linkMs)} ms.`,
+    message: `Simulator module compiled: ${units} files (${cached} reused).`,
     level: 'info',
   })
   emit({ stage: 'done', message: 'Simulator firmware ready', level: 'info' })

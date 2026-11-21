@@ -1,7 +1,7 @@
 /**
  * Timing run of the HMI preview's first build, three sessions on one profile: a fresh profile (Overview, then Layout in
  * the same session), then two restarts (Overview). Each session appends one JSON line to `FB_OUT` with the time from a
- * screen's click to its first frame and the preview's timings line. A local measurement, not a CI check:
+ * screen's click to its first frame. A local measurement, not a CI check:
  *
  *   FB_RUN=1 FB_OUT=/path/results.jsonl npx playwright test e2e/hmi-first-build-timing.spec.ts --workers=1
  *
@@ -14,7 +14,6 @@ import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
-import { waitForText } from './helpers/app-console'
 import { hmiFixture, launchHmiApp, leaf, status, waitFor, writeHmiFixture } from './helpers/hmi-app'
 
 const LAYOUT = `FUNCTION_BLOCK Layout EXTENDS HmiScreen
@@ -44,15 +43,14 @@ const MAIN = 'PROGRAM Main\n  VAR\n    Level : REAL := 6.5;\n  END_VAR\n  Level 
 const RUN = process.env.FB_RUN ?? '0'
 const OUT = process.env.FB_OUT ?? join(__dirname, '..', 'first-build-timing.jsonl')
 const F = hmiFixture(`hmi-first-build-${RUN}`)
-const TIMINGS = /HMI preview built in \d+ ms: [^\n]*first frame \d+/
 
 const wasmObjects = (): number => {
   const dir = join(F.userData, 'User', 'WasmObjects')
   return existsSync(dir) ? readdirSync(dir).length : 0
 }
 
-/** Clicks a screen and returns the ms until its preview shows its first frame, and the timings line it logged. */
-async function openScreen(page: Page, name: string, previous: number): Promise<{ ms: number; line: string }> {
+/** Clicks a screen and returns the ms until its preview shows its first frame. */
+async function openScreen(page: Page, name: string): Promise<number> {
   const started = Date.now()
   await leaf(page, name).click()
   await expect(page.getByTestId('hmi-designer').first()).toBeVisible({ timeout: 15000 })
@@ -68,12 +66,7 @@ async function openScreen(page: Page, name: string, previous: number): Promise<{
     },
     170000,
   )
-  const ms = Date.now() - started
-  await page.getByRole('tab', { name: 'Console' }).click()
-  await waitForText(page, TIMINGS, { timeout: 20000 })
-  const lines = (await page.locator('body').innerText()).split('\n').filter((l) => TIMINGS.test(l))
-  expect(lines.length).toBeGreaterThan(previous)
-  return { ms, line: lines[lines.length - 1] }
+  return Date.now() - started
 }
 
 /** Waits until no stored object was added for six seconds: the palette's gallery and every write have finished. */
@@ -98,10 +91,10 @@ async function session(label: string, screens: string[], fresh: boolean): Promis
     await page.getByText(F.name, { exact: true }).first().click({ timeout: 30000 })
     await waitFor(F, page, 'the HMI branch', async () => (await leaf(page, screens[0]).count()) > 0)
     const projectMs = Date.now() - launched
-    const opened: Array<{ screen: string; ms: number; line: string }> = []
+    const opened: Array<{ screen: string; ms: number }> = []
     for (const screen of screens) {
-      const { ms, line } = await openScreen(page, screen, opened.length)
-      opened.push({ screen, ms, line })
+      const ms = await openScreen(page, screen)
+      opened.push({ screen, ms })
     }
     await storeSettled(page)
     const load = (await import('node:os')).loadavg()[0]
