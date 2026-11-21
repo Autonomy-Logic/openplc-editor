@@ -20,6 +20,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'runtime-discover-devices',
   'retrieve-project',
   'runtime-login',
+  'runtime-no-device',
   'server-ip-mismatch',
   'runtime-connection-lost',
   'debugger-message',

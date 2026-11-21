@@ -19,6 +19,7 @@ import type { LadderFlowSlice } from '../ladder'
 import type { LibrarySlice } from '../library'
 import type { ModalSlice } from '../modal'
 import type { ProjectSlice } from '../project'
+import type { RuntimeProvisioningSlice } from '../runtime-provisioning'
 import type { SearchSlice } from '../search'
 import type { TabsSlice } from '../tabs'
 import type { VersionControlSlice } from '../version-control'
@@ -39,6 +40,7 @@ export type SharedRootState = AISlice &
   LadderFlowSlice &
   HistorySlice &
   VersionControlSlice &
+  RuntimeProvisioningSlice &
   SharedSlice
 
 export type SharedResponse = {
@@ -174,8 +176,7 @@ export type OpenProjectResponseData = {
   /** Warnings from parsing (e.g. dropped files that failed validation).
    *  Recoverable: the project opens normally and these surface in the Console. */
   warnings?: string[]
-  /** Non-empty opens the project EMPTY and read-only: partial content would look legitimate, and the first save
-   *  would overwrite the user's real diagram. */
+  /** Non-empty opens the project empty and read-only. */
   fatalErrors?: string[]
   /** `datatypes/*.dt` files that failed to parse on load, preserved
    *  raw so the save flow echoes them back verbatim. */
@@ -201,8 +202,7 @@ export type SharedWorkspaceActions = {
   /** `{ pendingConfirmation: true }` means the modal was opened, so the caller can defer post-close work
    *  (e.g. host navigation) until it resolves. */
   closeProject: () => { pendingConfirmation: boolean }
-  /** The same rule `closeProject` applies, exposed for a caller that REPLACES the project rather than
-   *  closing it, so both stay in step. */
+  /** The rule `closeProject` applies, for a caller that replaces the project instead of closing it. */
   hasUnsavedChanges: () => boolean
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
