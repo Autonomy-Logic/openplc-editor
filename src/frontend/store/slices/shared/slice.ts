@@ -1029,6 +1029,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().versionControlActions.clearVersionControlState()
       getState().aiActions.clearConversation()
       getState().aiActions.closeAIReview()
+      getState().runtimeProvisioningActions.requestDetachOnProjectClose()
     },
 
     handleOpenProjectResponse: (data) => {
@@ -1321,9 +1322,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       unparsedDataTypes.forEach(({ name }) => {
         files[name] = { type: 'data-type', filePath: name, saved: true }
       })
-      // A loaded list needs its entry like anything else in the tree: dirty
-      // tracking, the close-project check and the single-file save all read this
-      // registry, so a list missing from it can be edited and never look unsaved.
       ;(data.projectData.globalVariableLists ?? []).forEach((list) => {
         files[list.name] = { type: 'global-variable-list', filePath: list.name, saved: true }
       })
@@ -1414,8 +1412,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           })
         }
       })
-
-      // A GVL whose declaration didn't parse opens on the preserved text, not a re-serialization.
       ;(data.projectData.globalVariableLists ?? []).forEach((list) => {
         if (list.text === undefined) return
         getState().tabsActions.updateTabs({
@@ -1444,10 +1440,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       for (const flow of getState().fbdFlows) {
         getState().fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
-
-      // Alias self-upgrade pass runs in `deviceActions.setAvailableOptions`
-      // once the workspace screen finishes board discovery — capabilities
-      // depend on the active board info, which isn't loaded here yet.
     },
   },
 

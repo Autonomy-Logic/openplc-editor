@@ -246,6 +246,7 @@ The codebase uses **dependency inversion** via port interfaces. Frontend code ne
 |------|---------------|
 | `CompilerPort` | PLC compilation pipeline |
 | `RuntimePort` | Remote PLC runtime control (login, start/stop, status) |
+| `RuntimeProvisioningPort` | Install or start the OpenPLC Runtime on a device over SSH (desktop only; absent on web) |
 | `DebuggerPort` | Debug protocol (read/write variables, MD5 verification) |
 | `SimulatorPort` | Built-in OpenPLC Simulator (WebAssembly) |
 | `ProjectPort` | Project CRUD operations |
@@ -314,6 +315,9 @@ Main and renderer processes communicate through typed IPC bridges:
 
 Vendor package documents (an embedded configurator, for example) are served to a sandboxed iframe under
 the `vpp-doc://` scheme, never with `allow-same-origin`; see `docs/vendor-document-serving.md`.
+
+Installing or starting the OpenPLC Runtime on a device over SSH (`runtime-provisioning:*` channels), its
+host-key file and the test-device steps: see `docs/runtime-ssh-provisioning.md`.
 
 ### State Management (Zustand)
 
@@ -725,6 +729,7 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
 - **Socket.io** for real-time communication
 - **Winston** for structured logging (main process)
 - **serialport** for serial communication
+- **ssh2** for installing or starting the OpenPLC Runtime on a device over SSH (main process only, `src/main/modules/runtime-provisioning/`; remembered host keys in `userData/ssh-known-hosts.json`)
 - **pdf-lib** + **@pdf-lib/fontkit** for PDF export (print/export-to-PDF)
 
 ## Important Patterns

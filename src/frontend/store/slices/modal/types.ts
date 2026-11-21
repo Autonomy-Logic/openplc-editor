@@ -2,9 +2,7 @@ import type { Node } from '@xyflow/react'
 
 import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 
-// ---------------------------------------------------------------------------
-// Modal types — superset of both editor and web
-// ---------------------------------------------------------------------------
+// Modal types, a superset of both editor and web.
 
 export type ModalTypes =
   | 'ai-consent'
@@ -16,10 +14,10 @@ export type ModalTypes =
   | 'save-changes-project'
   | 'save-changes-file'
   | 'confirm-delete-element'
-  /** Start-screen 3-dot menu confirmation for deleting a recent
-   *  project's directory from disk. Data shape: `{ projectName,
-   *  projectPath }`. The "Remove from list" sibling action runs
-   *  immediately without a modal — disk is untouched there. */
+  /**
+   * Start-screen confirmation for deleting a recent project's directory from disk. Data shape: `{ projectName,
+   * projectPath }`.
+   */
   | 'confirm-delete-project'
   | 'confirm-device-switch'
   | 'quit-application'
@@ -27,6 +25,7 @@ export type ModalTypes =
   | 'runtime-discover-devices'
   | 'retrieve-project'
   | 'runtime-login'
+  | 'runtime-no-device'
   | 'server-ip-mismatch'
   | 'runtime-connection-lost'
   | 'debugger-message'
@@ -37,9 +36,7 @@ export type ModalTypes =
   /** Confirmation step chained off `public-catalog-browser` — lists
    *  the user's selection and runs the install on confirm. */
   | 'confirm-install-libraries'
-  /** Project README viewer/editor — GitHub-style edit/preview tabs +
-   *  commit-message override.  Available only when the project port
-   *  exposes the README slot (web adapter against the Edge API). */
+  /** Project README viewer/editor with edit/preview tabs and a commit-message override. */
   | 'project-readme'
   /** Confirm-overwrite gate for the File → "Import PLCopen XML" menu
    *  item. Acts on whatever project is currently open — no targeted

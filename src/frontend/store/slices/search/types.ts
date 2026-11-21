@@ -17,6 +17,8 @@ export type SearchState = {
   sensitiveCase: boolean
   regularExpression: boolean
   searchNodePosition: { x: number; y: number }
+  /** Bumped by each Find in Project that committed results; 0 until the first. */
+  revealRequestId: number
 }
 
 export type SearchActions = {
@@ -27,6 +29,8 @@ export type SearchActions = {
   removeSearchResult: (itemID: string) => void
   setSearchNodePosition: (position: { x: number; y: number }) => void
   clearSearch: () => void
+  /** Asks the workspace to show the Search results. */
+  requestReveal: () => void
 }
 
 export type SearchSlice = SearchState & { searchActions: SearchActions }
