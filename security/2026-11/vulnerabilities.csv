@@ -1,0 +1,258 @@
+severity,package,version,advisory,fixed_in,summary,url,aliases
+CRITICAL,immutable,4.3.6,GHSA-wf6x-7x77-mvgw,4.3.8 | 5.1.5 | 3.8.3,Immutable is vulnerable to Prototype Pollution,https://osv.dev/GHSA-wf6x-7x77-mvgw,CVE-2026-29063
+CRITICAL,proxy-addr,2.0.7,GHSA-jqcg-44mw-7w3h,2.0.8,proxy-addr vulnerable to IP spoofing via IPv4-mapped IPv6 trust subnet,https://osv.dev/GHSA-jqcg-44mw-7w3h,CVE-2026-90711
+CRITICAL,shell-quote,1.8.1,GHSA-w7jw-789q-3m8p,1.8.4,shell-quote quote() does not escape newlines in object .op values,https://osv.dev/GHSA-w7jw-789q-3m8p,CVE-2026-9277
+CRITICAL,tar,6.2.1,GHSA-23hp-3jrh-7fpw,7.5.19,node-tar: Decompression/parse DoS via unlimited input,https://osv.dev/GHSA-23hp-3jrh-7fpw,CVE-2026-59873
+CRITICAL,websocket-driver,0.7.4,GHSA-xv26-6w52-cph6,0.7.5,websocket-driver: Message corruption via abuse of protocol length headers,https://osv.dev/GHSA-xv26-6w52-cph6,CVE-2026-54466
+HIGH,@babel/plugin-transform-modules-systemjs,7.24.7,GHSA-fv7c-fp4j-7gwp,7.29.4 | 8.0.0-alpha.13,@babel/plugin-transform-modules-systemjs generates arbitrary code when compiling malicious input,https://osv.dev/GHSA-fv7c-fp4j-7gwp,CVE-2026-44728
+HIGH,@faker-js/faker,9.8.0,GHSA-qxc2-j82w-r537,10.5.0,Faker: helpers.fake exploitable into arbritary code execution,https://osv.dev/GHSA-qxc2-j82w-r537,CVE-2026-73231
+HIGH,@isaacs/brace-expansion,5.0.0,GHSA-7h2j-956f-4vf2,5.0.1,@isaacs/brace-expansion has Uncontrolled Resource Consumption,https://osv.dev/GHSA-7h2j-956f-4vf2,CVE-2026-25547
+HIGH,@xmldom/xmldom,0.8.13,GHSA-27p8-2357-5qqv,0.8.15 | 0.9.12,xmldom: DocType `name` Injection Bypasses requireWellFormed,https://osv.dev/GHSA-27p8-2357-5qqv,CVE-2026-83608
+HIGH,@xmldom/xmldom,0.8.13,GHSA-4w3w-2rp5-g8jm,0.9.11 | 0.8.14,xmldom: Attribute name injection via setAttribute() bypasses requireWellFormed,https://osv.dev/GHSA-4w3w-2rp5-g8jm,CVE-2026-83605
+HIGH,@xmldom/xmldom,0.8.13,GHSA-8344-3jmq-59r6,0.8.15 | 0.9.12,xmldom: Quadratic-time attribute deduplication,https://osv.dev/GHSA-8344-3jmq-59r6,CVE-2026-83613
+HIGH,@xmldom/xmldom,0.8.13,GHSA-93r5-fhx6-vmg9,0.8.15 | 0.9.12,xmldom: Quadratic-time parsing via the malformed-input recovery path — `parseElementStartPart` re-scan and `normalize()` adjacent-text merge,https://osv.dev/GHSA-93r5-fhx6-vmg9,CVE-2026-83614
+HIGH,@xmldom/xmldom,0.8.13,GHSA-965w-775f-mr7g,0.8.15 | 0.9.12,xmldom: Quadratic-memory consumption,https://osv.dev/GHSA-965w-775f-mr7g,CVE-2026-83615
+HIGH,@xmldom/xmldom,0.8.13,GHSA-c7q8-3ch8-vqpv,0.8.15 | 0.9.12,xmldom: Processing Instruction Target Injection Bypasses requireWellFormed,https://osv.dev/GHSA-c7q8-3ch8-vqpv,CVE-2026-83616
+HIGH,@xmldom/xmldom,0.8.13,GHSA-w2rr-34g9-rvrj,0.9.11 | 0.8.14,xmldom: Element name injection via createElement() bypasses requireWellFormed,https://osv.dev/GHSA-w2rr-34g9-rvrj,CVE-2026-83607
+HIGH,@xmldom/xmldom,0.8.13,GHSA-x4fp-j954-r2f4,0.8.15,xmldom: End-tag Whitespace-Trim Regex ReDoS — quadratic backtracking in the 0.8.x end-tag parser,https://osv.dev/GHSA-x4fp-j954-r2f4,CVE-2026-83619
+HIGH,app-builder-lib,26.0.12,GHSA-7g7r-gx96-252g,26.15.0,electron-updater: Uncontrolled search path elements within `AppImage` built by `app-builder-lib`,https://osv.dev/GHSA-7g7r-gx96-252g,CVE-2026-54672
+HIGH,axios,1.13.6,GHSA-35jp-ww65-95wh,1.16.0,axios Vulnerable to Full Man-in-the-Middle via Prototype Pollution Gadget in `config.proxy`,https://osv.dev/GHSA-35jp-ww65-95wh,CVE-2026-44494
+HIGH,axios,1.13.6,GHSA-3g43-6gmg-66jw,1.15.2 | 0.31.1,axios Vulnerable to Credential Theft and Response Hijacking via Prototype Pollution Gadget in Config Merge,https://osv.dev/GHSA-3g43-6gmg-66jw,CVE-2026-44495
+HIGH,axios,1.13.6,GHSA-3pq3-5fj3-cg6v,1.20.0,Axios: HTTP/2 adapter bypasses configured DNS lookup and proxy controls,https://osv.dev/GHSA-3pq3-5fj3-cg6v,CVE-2026-101898
+HIGH,axios,1.13.6,GHSA-542g-h47m-68v8,1.20.0,Axios: Denial of Service via Unhandled 'error' Event in HTTP/2 ClientHttp2Session Initialization,https://osv.dev/GHSA-542g-h47m-68v8,CVE-2026-101901
+HIGH,axios,1.13.6,GHSA-62hf-57xw-28j9,1.15.1 | 0.31.1,Axios: unbounded recursion in toFormData causes DoS via deeply nested request data,https://osv.dev/GHSA-62hf-57xw-28j9,CVE-2026-42039
+HIGH,axios,1.13.6,GHSA-6chq-wfr3-2hj9,1.15.1 | 0.31.1,Axios: Header Injection via Prototype Pollution,https://osv.dev/GHSA-6chq-wfr3-2hj9,CVE-2026-42035
+HIGH,axios,1.13.6,GHSA-777c-7fjr-54vf,1.16.0,Allocation of Resources Without Limits or Throttling in Axios,https://osv.dev/GHSA-777c-7fjr-54vf,CVE-2026-44488
+HIGH,axios,1.13.6,GHSA-hfxv-24rg-xrqf,1.16.0 | 0.32.0,Axios: Regular Expression Denial of Service (ReDoS) via Cookie Name Injection,https://osv.dev/GHSA-hfxv-24rg-xrqf,CVE-2026-44496
+HIGH,axios,1.13.6,GHSA-j5f8-grm9-p9fc,1.16.0 | 0.32.0,Axios: Proxy-Authorization header leaks to redirect target when proxy is re-evaluated to direct connection,https://osv.dev/GHSA-j5f8-grm9-p9fc,CVE-2026-44486
+HIGH,axios,1.13.6,GHSA-p92q-9vqr-4j8v,1.16.0 | 0.32.0,Axios: Proxy-Authorization Credential Leak to Origin Server Across HTTP-to-HTTPS Redirect in Axios Node.js HTTP Adapter,https://osv.dev/GHSA-p92q-9vqr-4j8v,CVE-2026-44487
+HIGH,axios,1.13.6,GHSA-pf86-5x62-jrwf,1.15.1 | 0.31.1,"Axios: Prototype Pollution Gadgets - Response Tampering, Data Exfiltration, and Request Hijacking",https://osv.dev/GHSA-pf86-5x62-jrwf,CVE-2026-42033
+HIGH,axios,1.13.6,GHSA-pmwg-cvhr-8vh7,1.15.1 | 0.31.1,Axios: Incomplete Fix for CVE-2025-62718 — NO_PROXY Protection Bypassed via RFC 1122 Loopback Subnet (127.0.0.0/8) in Axios 1.15.0,https://osv.dev/GHSA-pmwg-cvhr-8vh7,CVE-2026-42043
+HIGH,axios,1.13.6,GHSA-q8qp-cvcw-x6jj,1.15.2,Axios has prototype pollution read-side gadgets in HTTP adapter that allow credential injection and request hijacking,https://osv.dev/GHSA-q8qp-cvcw-x6jj,CVE-2026-42264
+HIGH,body-parser,1.20.3,GHSA-27r3-jxmh-p828,2.4.0 | 1.20.9,body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body,https://osv.dev/GHSA-27r3-jxmh-p828,CVE-2026-111181
+HIGH,brace-expansion,1.1.12 | 2.0.2,GHSA-3jxr-9vmj-r5cp,5.0.7 | 1.1.16 | 2.1.2,brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups,https://osv.dev/GHSA-3jxr-9vmj-r5cp,CVE-2026-13149
+HIGH,brace-expansion,1.1.12 | 2.0.2,GHSA-6j4f-fj2g-mc7p,5.0.10 | 3.0.7 | 2.1.5 | 1.1.19,brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion,https://osv.dev/GHSA-6j4f-fj2g-mc7p,CVE-2026-102276
+HIGH,brace-expansion,1.1.12 | 2.0.2,GHSA-mh99-v99m-4gvg,5.0.8 | 3.0.3 | 2.1.3 | 1.1.17,brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash,https://osv.dev/GHSA-mh99-v99m-4gvg,CVE-2026-14257
+HIGH,brace-expansion,1.1.12 | 2.0.2,GHSA-qhr7-859c-m2p7,5.0.11 | 3.0.8 | 2.1.6 | 1.1.20,brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion,https://osv.dev/GHSA-qhr7-859c-m2p7,CVE-2026-102278
+HIGH,brace-expansion,1.1.12 | 2.0.2,GHSA-rgw5-rvv9-x895,1.1.18 | 2.1.4 | 3.0.6 | 5.0.9,"brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",https://osv.dev/GHSA-rgw5-rvv9-x895,CVE-2026-69152
+HIGH,browserslist,4.24.4,GHSA-73wf-gq98-2v4g,4.28.7,Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats),https://osv.dev/GHSA-73wf-gq98-2v4g,CVE-2026-73088
+HIGH,browserslist,4.24.4,GHSA-c83g-rgw3-j3cx,4.28.7,"Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",https://osv.dev/GHSA-c83g-rgw3-j3cx,CVE-2026-73089
+HIGH,builder-util-runtime,9.3.1,GHSA-p2f4-r6v6-j797,9.7.0,electron-updater: Cross-origin redirect leaks `PRIVATE-TOKEN` and mixed-case `Authorization` credentials in `builder-util-runtime`,https://osv.dev/GHSA-p2f4-r6v6-j797,CVE-2026-54673
+HIGH,compression,1.8.1,GHSA-vc2v-76pw-4v95,1.8.2,compression vulnerable to Denial of Service via memory leak on premature response close,https://osv.dev/GHSA-vc2v-76pw-4v95,CVE-2026-87776
+HIGH,electron,37.10.3,GHSA-532v-xpq5-8h95,39.8.1 | 40.7.0 | 41.0.0,Electron: Use-after-free in offscreen child window paint callback,https://osv.dev/GHSA-532v-xpq5-8h95,CVE-2026-34774
+HIGH,electron,37.10.3,GHSA-8337-3p73-46f4,38.8.6 | 39.8.0 | 40.7.0 | 41.0.0-beta.8,"Electron: Use-after-free in WebContents fullscreen, pointer-lock, and keyboard-lock permission callbacks",https://osv.dev/GHSA-8337-3p73-46f4,CVE-2026-34771
+HIGH,electron,37.10.3,GHSA-9f4c-93c8-jc8g,42.0.1 | 41.10.3 | 39.8.10,Electron: Sandboxed iframe can bypass the allow-popups restriction via the OpenURL navigation path,https://osv.dev/GHSA-9f4c-93c8-jc8g,CVE-2026-70608
+HIGH,electron,37.10.3,GHSA-9qh4-3jw8-366w,41.10.6 | 42.9.2 | 43.4.1 | 44.0.0-beta.5,Electron: <webview> can enable Node.js integration in Web Workers despite embedder restrictions,https://osv.dev/GHSA-9qh4-3jw8-366w,CVE-2026-102676
+HIGH,electron,37.10.3,GHSA-9wfr-w7mm-pc7f,38.8.6 | 39.8.0 | 40.7.0 | 41.0.0-beta.8,Electron: Renderer command-line switch injection via undocumented commandLineSwitches webPreference,https://osv.dev/GHSA-9wfr-w7mm-pc7f,CVE-2026-34769
+HIGH,electron,37.10.3,GHSA-gr2m-v5gq-v685,41.10.6 | 42.9.2 | 43.4.1 | 44.0.0-beta.5,Electron: Windows opened from a sandboxed top-level document do not inherit its sandbox restrictions,https://osv.dev/GHSA-gr2m-v5gq-v685,CVE-2026-102674
+HIGH,electron,37.10.3,GHSA-h7rp-cf8h-j98x,39.8.9 | 40.9.2 | 41.2.2 | 42.0.0-beta.5,Electron: Context isolation bypass via Function.prototype.bind hijack,https://osv.dev/GHSA-h7rp-cf8h-j98x,CVE-2026-70601
+HIGH,electron,37.10.3,GHSA-hq2x-r82h-9wj4,41.10.4 | 42.5.2 | 43.0.0,Electron drops inherited HTML sandbox restrictions for popups opened through OpenURLFromTab,https://osv.dev/GHSA-hq2x-r82h-9wj4,CVE-2026-102673
+HIGH,electron,37.10.3,GHSA-j84w-jfhq-vhvj,41.10.6 | 42.9.2 | 43.4.1 | 44.0.0-beta.5,Electron: File and HTTP protocol handlers allow cross-origin reads without corsEnabled,https://osv.dev/GHSA-j84w-jfhq-vhvj,CVE-2026-102675
+HIGH,electron,37.10.3,GHSA-jjp3-mq3x-295m,38.8.6 | 39.8.1 | 40.8.0 | 41.0.0-beta.8,Electron: Use-after-free in PowerMonitor on Windows and macOS,https://osv.dev/GHSA-jjp3-mq3x-295m,CVE-2026-34770
+HIGH,electron,37.10.3,GHSA-jr5w-w6x2-84p9,45.0.0-beta.6 | 44.9.1 | 43.8.1 | 42.11.16,Electron: Mitigation for compromised eMudhra intermediate certificates,https://osv.dev/GHSA-jr5w-w6x2-84p9,CVE-2026-115570
+HIGH,electron,37.10.3,GHSA-v3j7-r9gq-3gjw,42.0.0 | 41.4.0 | 40.9.3 | 39.8.10,Electron: Custom protocol with supportFetchAPI but not corsEnabled allows cross-origin reads,https://osv.dev/GHSA-v3j7-r9gq-3gjw,CVE-2026-70604
+HIGH,extract-zip,2.0.1,GHSA-7pqw-9j4j-h8q3,,extract-zip allows arbitrary file writes through symlink archive entries,https://osv.dev/GHSA-7pqw-9j4j-h8q3,CVE-2026-19693
+HIGH,extract-zip,2.0.1,GHSA-jmr9-qjv8-65gv,,extract-zip unvalidated symlink path traversal,https://osv.dev/GHSA-jmr9-qjv8-65gv,CVE-2026-56876
+HIGH,fast-xml-builder,1.1.4,GHSA-5wm8-gmm8-39j9,1.1.7,fast-xml-builder allows attribute values with unwanted quotes to bypass malicious or unwanted attributes,https://osv.dev/GHSA-5wm8-gmm8-39j9,CVE-2026-44665
+HIGH,flatted,3.3.2,GHSA-25h7-pfq9-p65f,3.4.0,flatted vulnerable to unbounded recursion DoS in parse() revive phase,https://osv.dev/GHSA-25h7-pfq9-p65f,CVE-2026-32141
+HIGH,flatted,3.3.2,GHSA-rf6f-7fwh-wjgh,3.4.2,Prototype Pollution via parse() in NodeJS flatted,https://osv.dev/GHSA-rf6f-7fwh-wjgh,CVE-2026-33228
+HIGH,form-data,4.0.5,GHSA-hmw2-7cc7-3qxx,2.5.6 | 3.0.5 | 4.0.6,form-data: CRLF injection in form-data via unescaped multipart field names and filenames,https://osv.dev/GHSA-hmw2-7cc7-3qxx,CVE-2026-12143
+HIGH,glob,10.4.2 | 10.4.5,GHSA-5j98-mcp5-4vw2,11.1.0 | 10.5.0,glob CLI: Command injection via -c/--cmd executes matches with shell:true,https://osv.dev/GHSA-5j98-mcp5-4vw2,CVE-2025-64756
+HIGH,immutable,4.3.6,GHSA-v56q-mh7h-f735,4.3.9 | 5.1.8 | 3.8.4,Immutable.js `List` 32-bit trie overflow → unrecoverable DoS,https://osv.dev/GHSA-v56q-mh7h-f735,CVE-2026-59879
+HIGH,immutable,4.3.6,GHSA-xvcm-6775-5m9r,4.3.9 | 5.1.8 | 3.8.4,Immutable: Hash-collision algorithmic complexity denial of service in Immutable.Map/Set,https://osv.dev/GHSA-xvcm-6775-5m9r,CVE-2026-59880
+HIGH,ip-address,9.0.5,GHSA-mwp4-54f8-5fhr,10.3.1,"ip-address: Address4 decodes leading-zero octets as decimal while resolvers decode them as octal, allowing SSRF and trust-boundary bypass",https://osv.dev/GHSA-mwp4-54f8-5fhr,CVE-2026-69192
+HIGH,js-yaml,3.14.1 | 4.1.0,GHSA-2883-xcg3-v3hh,4.3.2 | 3.15.2,js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources,https://osv.dev/GHSA-2883-xcg3-v3hh,CVE-2026-84375
+HIGH,js-yaml,3.14.1 | 4.1.0,GHSA-52cp-r559-cp3m,3.15.0 | 4.3.0,js-yaml: YAML merge-key chains can force quadratic CPU consumption,https://osv.dev/GHSA-52cp-r559-cp3m,CVE-2026-59869
+HIGH,js-yaml,3.14.1 | 4.1.0,GHSA-5p4m-2wfm-xmqj,4.3.1 | 3.15.1,JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported,https://osv.dev/GHSA-5p4m-2wfm-xmqj,
+HIGH,launch-editor,2.8.0,GHSA-587h-7wmj-h5pm,2.14.2 | 8.3.3 | 8.2.4 | 8.1.6 | 7.3.7 | 6.4.4 | 1.1.0,launch-editor: `fs.existsSync()` existence check can be bypassed on Windows,https://osv.dev/GHSA-587h-7wmj-h5pm,CVE-2026-112942
+HIGH,launch-editor,2.8.0,GHSA-c27g-q93r-2cwf,2.9.0 | 5.4.9,launch-editor vulnerable to command injection via the crafted request on Windows,https://osv.dev/GHSA-c27g-q93r-2cwf,CVE-2024-52011
+HIGH,lodash,4.17.21,GHSA-r5fr-rjxr-66jc,4.18.0,lodash vulnerable to Code Injection via `_.template` imports key names,https://osv.dev/GHSA-r5fr-rjxr-66jc,CVE-2026-4800
+HIGH,minimatch,10.0.3 | 3.1.2 | 5.1.6 | 9.0.5,GHSA-23c5-xmqv-rm74,10.2.3 | 9.0.7 | 8.0.6 | 7.4.8 | 6.2.2 | 5.1.8 | 4.2.5 | 3.1.4,minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions,https://osv.dev/GHSA-23c5-xmqv-rm74,CVE-2026-27904
+HIGH,minimatch,10.0.3 | 3.1.2 | 5.1.6 | 9.0.5,GHSA-3ppc-4f35-3m26,10.2.1 | 9.0.6 | 8.0.5 | 7.4.7 | 6.2.1 | 5.1.7 | 4.2.4 | 3.1.3,minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern,https://osv.dev/GHSA-3ppc-4f35-3m26,CVE-2026-26996
+HIGH,minimatch,10.0.3 | 3.1.2 | 5.1.6 | 9.0.5,GHSA-7r86-cg39-jmmj,10.2.3 | 9.0.7 | 8.0.6 | 7.4.8 | 6.2.2 | 5.1.8 | 4.2.5 | 3.1.3,minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments,https://osv.dev/GHSA-7r86-cg39-jmmj,CVE-2026-27903
+HIGH,nanoid,3.3.11,GHSA-28wg-ghj8-5hjv,3.3.16 | 5.1.16,nanoid: non-secure generators can loop indefinitely with negative size,https://osv.dev/GHSA-28wg-ghj8-5hjv,CVE-2026-67214
+HIGH,nanoid,3.3.11,GHSA-2v37-7h3g-55p8,3.3.18 | 5.1.6,nanoid: custom generators can loop indefinitely when size is zero,https://osv.dev/GHSA-2v37-7h3g-55p8,CVE-2026-67213
+HIGH,nanoid,3.3.11,GHSA-xwg4-73v4-xw9w,3.3.12 | 5.1.11,nanoid: Integer Overflow or Wraparound,https://osv.dev/GHSA-xwg4-73v4-xw9w,CVE-2026-73086
+HIGH,node-forge,1.3.1,GHSA-2328-f5f3-gj25,1.4.0,Forge has a basicConstraints bypass in its certificate chain verification (RFC 5280 violation),https://osv.dev/GHSA-2328-f5f3-gj25,CVE-2026-33896
+HIGH,node-forge,1.3.1,GHSA-554w-wpv2-vw27,1.3.2,node-forge has ASN.1 Unbounded Recursion,https://osv.dev/GHSA-554w-wpv2-vw27,CVE-2025-66031
+HIGH,node-forge,1.3.1,GHSA-5gfm-wpxj-wjgq,1.3.2,node-forge has an Interpretation Conflict vulnerability via its ASN.1 Validator Desynchronization,https://osv.dev/GHSA-5gfm-wpxj-wjgq,CVE-2025-12816
+HIGH,node-forge,1.3.1,GHSA-5m6q-g25r-mvwx,1.4.0,Forge has Denial of Service via Infinite Loop in BigInteger.modInverse() with Zero Input,https://osv.dev/GHSA-5m6q-g25r-mvwx,CVE-2026-33891
+HIGH,node-forge,1.3.1,GHSA-5x38-2vff-x55p,1.4.1,Forge: X.509 basicConstraints bypass in verifyCertificateChain() via deprecated extension OIDs 2.5.29.10 and 2.5.29.13,https://osv.dev/GHSA-5x38-2vff-x55p,CVE-2026-119190
+HIGH,node-forge,1.3.1,GHSA-6qrw-m8cv-hcxf,1.4.1,Forge: RSA PKCS#1 v1.5 signature forgery via non-canonical DigestInfo encoding,https://osv.dev/GHSA-6qrw-m8cv-hcxf,CVE-2026-119192
+HIGH,node-forge,1.3.1,GHSA-7wch-p9px-956x,1.4.1,Forge: Regular expression denial of service in PEM decoding (pem.decode),https://osv.dev/GHSA-7wch-p9px-956x,CVE-2026-118779
+HIGH,node-forge,1.3.1,GHSA-86w9-cpqp-85rv | GHSA-ppp5-5v6c-4jwp,1.4.0,node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements,https://osv.dev/GHSA-86w9-cpqp-85rv,CVE-2026-33894 | CVE-2026-85393
+HIGH,node-forge,1.3.1,GHSA-8hrf-8g6f-7xwp,1.4.1,Forge: Denial of service in TLS record processing via a record interleaved with a fragmented handshake message,https://osv.dev/GHSA-8hrf-8g6f-7xwp,CVE-2026-119188
+HIGH,node-forge,1.3.1,GHSA-hqq3-7jhf-c5jx,1.4.1,Forge: Denial of service in TLS record processing via call stack exhaustion,https://osv.dev/GHSA-hqq3-7jhf-c5jx,CVE-2026-119187
+HIGH,node-forge,1.3.1,GHSA-jc66-7q78-782g,1.4.1,Forge: PKCS#12 MAC forgery and constant-key PBE via zero iteration count,https://osv.dev/GHSA-jc66-7q78-782g,CVE-2026-118782
+HIGH,node-forge,1.3.1,GHSA-q67f-28xg-22rw,1.4.0,Forge has signature forgery in Ed25519 due to missing S > L check,https://osv.dev/GHSA-q67f-28xg-22rw,CVE-2026-33895
+HIGH,node-forge,1.3.1,GHSA-rhr8-3pm8-cq29,1.4.1,Forge: ASN.1 resource exhaustion via BIT STRING decoding in asn1.fromDer,https://osv.dev/GHSA-rhr8-3pm8-cq29,CVE-2026-119191
+HIGH,path-to-regexp,0.1.12,GHSA-37ch-88jc-xwx2,0.1.13,path-to-regexp vulnerable to Regular Expression Denial of Service via multiple route parameters,https://osv.dev/GHSA-37ch-88jc-xwx2,CVE-2024-45296 | CVE-2026-4867 | GHSA-9wv6-86v2-598j
+HIGH,picomatch,2.3.1 | 4.0.3,GHSA-c2c7-rcm5-vvqj,4.0.4 | 3.0.2 | 2.3.2,Picomatch has a ReDoS vulnerability via extglob quantifiers,https://osv.dev/GHSA-c2c7-rcm5-vvqj,CVE-2026-33671
+HIGH,playwright,1.52.0,GHSA-7mvr-c777-76hp,1.55.1,Playwright downloads and installs browsers without verifying the authenticity of the SSL certificate,https://osv.dev/GHSA-7mvr-c777-76hp,CVE-2025-59288
+HIGH,postcss,8.5.8,GHSA-6g55-p6wh-862q,8.5.12,PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments,https://osv.dev/GHSA-6g55-p6wh-862q,CVE-2026-45623
+HIGH,postcss,8.5.8,GHSA-r28c-9q8g-f849,8.5.18,PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure,https://osv.dev/GHSA-r28c-9q8g-f849,CVE-2026-73646
+HIGH,serialize-javascript,6.0.2,GHSA-5c6j-r48x-rmvq,7.0.3,Serialize JavaScript is Vulnerable to RCE via RegExp.flags and Date.prototype.toISOString(),https://osv.dev/GHSA-5c6j-r48x-rmvq,
+HIGH,shell-quote,1.8.1,GHSA-395f-4hp3-45gv,1.9.0,shell-quote: Quadratic-complexity Denial of Service in `parse()` (CWE-407),https://osv.dev/GHSA-395f-4hp3-45gv,CVE-2026-13311
+HIGH,socket.io-parser,4.2.4,GHSA-2m8v-j782-fhvr,4.2.7 | 3.4.5 | 3.3.6,Socket.IO: Zero-attachment Memory Exhaustion,https://osv.dev/GHSA-2m8v-j782-fhvr,CVE-2026-69185
+HIGH,socket.io-parser,4.2.4,GHSA-677m-j7p3-52f9,3.3.5 | 3.4.4 | 4.2.6,socket.io allows an unbounded number of binary attachments,https://osv.dev/GHSA-677m-j7p3-52f9,CVE-2026-33151
+HIGH,source-map-js,1.2.1,GHSA-68fv-2mgg-jv7q,1.2.2,source-map-js allows event-loop denial of service through indexed source-map section offsets,https://osv.dev/GHSA-68fv-2mgg-jv7q,CVE-2026-93749
+HIGH,svgo,3.3.2,GHSA-2p49-hgcm-8545,2.8.3 | 3.3.4 | 4.0.2,SVGO removeScripts plugin leaves some executable scripts intact,https://osv.dev/GHSA-2p49-hgcm-8545,CVE-2026-73650
+HIGH,svgo,3.3.2,GHSA-w27v-7q3p-w38r,2.8.4 | 3.3.5 | 4.1.0,SVGO: removeScripts allows executable links through namespace and control-character bypasses,https://osv.dev/GHSA-w27v-7q3p-w38r,CVE-2026-84370
+HIGH,svgo,3.3.2,GHSA-xpqw-6gx7-v673,2.8.1 | 3.3.3 | 4.0.1,SVGO DoS through entity expansion in DOCTYPE (Billion Laughs),https://osv.dev/GHSA-xpqw-6gx7-v673,CVE-2026-29074
+HIGH,tar,6.2.1,GHSA-34x7-hfp2-rc4v,7.5.7,node-tar Vulnerable to Arbitrary File Creation/Overwrite via Hardlink Path Traversal,https://osv.dev/GHSA-34x7-hfp2-rc4v,CVE-2026-24842
+HIGH,tar,6.2.1,GHSA-83g3-92jg-28cx,7.5.8,Arbitrary File Read/Write via Hardlink Target Escape Through Symlink Chain in node-tar Extraction,https://osv.dev/GHSA-83g3-92jg-28cx,CVE-2026-26960
+HIGH,tar,6.2.1,GHSA-8qq5-rm4j-mr97,7.5.3,node-tar is Vulnerable to Arbitrary File Overwrite and Symlink Poisoning via Insufficient Path Sanitization,https://osv.dev/GHSA-8qq5-rm4j-mr97,CVE-2026-23745
+HIGH,tar,6.2.1,GHSA-8x88-c5mf-7j5w,7.5.18,node-tar: Negative tar entry size causes infinite loop in archive replace,https://osv.dev/GHSA-8x88-c5mf-7j5w,CVE-2026-59874
+HIGH,tar,6.2.1,GHSA-9ppj-qmqm-q256,7.5.11,node-tar Symlink Path Traversal via Drive-Relative Linkpath,https://osv.dev/GHSA-9ppj-qmqm-q256,CVE-2026-31802
+HIGH,tar,6.2.1,GHSA-qffp-2rhf-9h96,7.5.10,tar has Hardlink Path Traversal via Drive-Relative Linkpath,https://osv.dev/GHSA-qffp-2rhf-9h96,CVE-2026-29786
+HIGH,tar,6.2.1,GHSA-r292-9mhp-454m,7.5.21,node-tar: Uncontrolled recursion in mapHas/filesFilter allows uncatchable stack-overflow DoS via crafted long-path tar with member selection,https://osv.dev/GHSA-r292-9mhp-454m,CVE-2026-73566
+HIGH,tar,6.2.1,GHSA-r6q2-hw4h-h46w,7.5.4,Race Condition in node-tar Path Reservations via Unicode Ligature Collisions on macOS APFS,https://osv.dev/GHSA-r6q2-hw4h-h46w,CVE-2026-23950
+HIGH,tmp,0.2.3,GHSA-ph9p-34f9-6g65,0.2.6,tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape,https://osv.dev/GHSA-ph9p-34f9-6g65,CVE-2026-44705
+HIGH,uuid,11.1.0 | 8.3.2,GHSA-w5hq-g745-h8pq,11.1.1 | 12.0.1 | 13.0.1,uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided,https://osv.dev/GHSA-w5hq-g745-h8pq,CVE-2026-41907 | CVE-2026-41988
+HIGH,webpack-dev-middleware,7.4.2,GHSA-g84c-rxfj-3j2c,8.3.0 | 7.4.6,webpack-dev-middleware vulnerable to Path Traversal via non-slash-terminated publicPath,https://osv.dev/GHSA-g84c-rxfj-3j2c,CVE-2026-76844
+HIGH,ws,7.5.10 | 8.17.1,GHSA-96hv-2xvq-fx4p,5.2.5 | 6.2.4 | 7.5.11 | 8.21.0,ws: Memory exhaustion DoS from tiny fragments and data chunks,https://osv.dev/GHSA-96hv-2xvq-fx4p,CVE-2026-48779
+HIGH,zod,3.25.67,GHSA-mrhx-c7xc-m3w5,4.6.6,Zod can exhaust memory while validating oversized constrained collections,https://osv.dev/GHSA-mrhx-c7xc-m3w5,CVE-2023-54404
+MODERATE,@humanfs/node,0.16.6,GHSA-p498-v437-472g,0.16.8,humanfs: Recursive copy follows symlinked files and copies data from outside the source tree,https://osv.dev/GHSA-p498-v437-472g,
+MODERATE,@xmldom/xmldom,0.8.13,GHSA-6gmq-8vp8-gcm6,0.8.15 | 0.9.12,xmldom: XML fragment injection via invalid EntityReference.nodeName during requireWellFormed serialization,https://osv.dev/GHSA-6gmq-8vp8-gcm6,CVE-2026-83610
+MODERATE,@xmldom/xmldom,0.8.13,GHSA-6h8r-xr42-gp59,0.8.15 | 0.9.12,xmldom: Parser silently accepts a not-well-formed end tag whose name is followed by a line break and trailing content,https://osv.dev/GHSA-6h8r-xr42-gp59,CVE-2026-83611
+MODERATE,ajv,6.12.6 | 8.16.0,GHSA-2g4f-4pwh-qvx6,8.18.0 | 6.14.0,ajv has ReDoS when using `$data` option,https://osv.dev/GHSA-2g4f-4pwh-qvx6,CVE-2025-69873
+MODERATE,axios,1.13.6,GHSA-3p68-rc4w-qgx5,1.15.0 | 0.31.0,Axios has a NO_PROXY Hostname Normalization Bypass that Leads to SSRF,https://osv.dev/GHSA-3p68-rc4w-qgx5,CVE-2025-62718
+MODERATE,axios,1.13.6,GHSA-3w6x-2g7m-8v23,1.15.2,Axios: Invisible JSON Response Tampering via Prototype Pollution Gadget in `parseReviver`,https://osv.dev/GHSA-3w6x-2g7m-8v23,CVE-2026-42044
+MODERATE,axios,1.13.6,GHSA-42h9-826w-cgv3,0.33.0 | 1.18.0,Axios: Excessive recursion in formDataToJSON can cause denial of service,https://osv.dev/GHSA-42h9-826w-cgv3,CVE-2026-67313
+MODERATE,axios,1.13.6,GHSA-445q-vr5w-6q77,1.15.1,Axios: CRLF Injection in multipart/form-data body via unsanitized blob.type in formDataToStream,https://osv.dev/GHSA-445q-vr5w-6q77,CVE-2026-42037
+MODERATE,axios,1.13.6,GHSA-4hqw-qxg8-jxx2,1.20.0,Axios: Fetch Adapter Header Injection via Inherited FormData getHeaders,https://osv.dev/GHSA-4hqw-qxg8-jxx2,CVE-2026-101900
+MODERATE,axios,1.13.6,GHSA-5c9x-8gcm-mpgx,1.15.1 | 0.31.1,Axios' HTTP adapter-streamed uploads bypass maxBodyLength when maxRedirects: 0,https://osv.dev/GHSA-5c9x-8gcm-mpgx,CVE-2026-42034
+MODERATE,axios,1.13.6,GHSA-7q8q-rj6j-mhjq,0.33.0 | 1.18.0,Axios: Nested axios option objects can consume polluted prototype values,https://osv.dev/GHSA-7q8q-rj6j-mhjq,CVE-2026-67319
+MODERATE,axios,1.13.6,GHSA-898c-q2cr-xwhg,1.16.0 | 0.32.0,axios has DoS & Header Injection via Prototype Pollution Read-Side Gadgets in axios merge functions,https://osv.dev/GHSA-898c-q2cr-xwhg,CVE-2026-44490
+MODERATE,axios,1.13.6,GHSA-9fr6-4gfg-395g,0.34.0 | 1.20.0,Axios: Prototype-Pollution Gadget in the Default Instance Allows Inherited Object.prototype.method to Override HTTP Method,https://osv.dev/GHSA-9fr6-4gfg-395g,CVE-2026-101902
+MODERATE,axios,1.13.6,GHSA-fvcv-3m26-pcqx,1.15.0 | 0.31.0,Axios has Unrestricted Cloud Metadata Exfiltration via Header Injection Chain,https://osv.dev/GHSA-fvcv-3m26-pcqx,CVE-2026-40175
+MODERATE,axios,1.13.6,GHSA-j8rh-479h-cp32,1.20.0,Axios: Header Injection via Inherited headers After Minimal Interceptor,https://osv.dev/GHSA-j8rh-479h-cp32,CVE-2026-101904
+MODERATE,axios,1.13.6,GHSA-jqh4-m9w3-8hp9,1.18.0,Axios: Fetch adapter `ReadableStream` uploads bypass `maxBodyLength`,https://osv.dev/GHSA-jqh4-m9w3-8hp9,CVE-2026-67317
+MODERATE,axios,1.13.6,GHSA-m7pr-hjqh-92cm,1.15.1 | 0.31.1,Axios: no_proxy bypass via IP alias allows SSRF,https://osv.dev/GHSA-m7pr-hjqh-92cm,CVE-2026-42038
+MODERATE,axios,1.13.6,GHSA-mmx7-hfxf-jppx,1.18.0 | 0.33.0,Axios: Prototype pollution gadgets can alter axios request construction,https://osv.dev/GHSA-mmx7-hfxf-jppx,CVE-2026-67316
+MODERATE,axios,1.13.6,GHSA-mwf2-3pr3-8698,1.18.0,Axios: HTTP/2 streamed uploads bypass `maxBodyLength`,https://osv.dev/GHSA-mwf2-3pr3-8698,CVE-2026-67318
+MODERATE,axios,1.13.6,GHSA-pmv8-rq9r-6j72,0.33.0 | 1.18.0,Axios: Deep formToJSON Key Recursion Can Cause Denial of Service,https://osv.dev/GHSA-pmv8-rq9r-6j72,CVE-2026-67312
+MODERATE,axios,1.13.6,GHSA-vf2m-468p-8v99,1.15.1 | 0.31.1,Axios: HTTP adapter streamed responses bypass maxContentLength,https://osv.dev/GHSA-vf2m-468p-8v99,CVE-2026-42036
+MODERATE,axios,1.13.6,GHSA-vh66-26gq-q6x8,1.20.0,Axios: Prototype pollution gadget in fetch adapter can alter outbound requests,https://osv.dev/GHSA-vh66-26gq-q6x8,CVE-2026-101908
+MODERATE,axios,1.13.6,GHSA-w9j2-pvgh-6h63,1.15.1 | 0.31.1,Axios: Authentication Bypass via Prototype Pollution Gadget in `validateStatus` Merge Strategy,https://osv.dev/GHSA-w9j2-pvgh-6h63,CVE-2026-42041
+MODERATE,axios,1.13.6,GHSA-xx6v-rp6x-q39c,1.15.1 | 0.31.1,Axios: XSRF Token Cross-Origin Leakage via Prototype Pollution Gadget in `withXSRFToken` Boolean Coercion,https://osv.dev/GHSA-xx6v-rp6x-q39c,CVE-2026-42042
+MODERATE,brace-expansion,1.1.12 | 2.0.2,GHSA-f886-m6hf-6m8v,5.0.5 | 3.0.2 | 2.0.3 | 1.1.13,brace-expansion: Zero-step sequence causes process hang and memory exhaustion,https://osv.dev/GHSA-f886-m6hf-6m8v,CVE-2026-33750
+MODERATE,brace-expansion,1.1.12 | 2.0.2,GHSA-q2hr-2g5m-vwhr,5.0.12 | 3.0.9 | 2.1.7 | 1.1.21,"brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",https://osv.dev/GHSA-q2hr-2g5m-vwhr,CVE-2026-102277
+MODERATE,colord,2.9.3,GHSA-2wm5-q62r-hmrv,2.9.4,Colord: Slow rejection of oversized malformed color strings,https://osv.dev/GHSA-2wm5-q62r-hmrv,CVE-2026-85062
+MODERATE,dompurify,3.1.7,GHSA-39q2-94rc-95cp,3.4.0,DOMPurify's ADD_TAGS function form bypasses FORBID_TAGS due to short-circuit evaluation,https://osv.dev/GHSA-39q2-94rc-95cp,CVE-2026-65903
+MODERATE,dompurify,3.1.7 | 3.4.0,GHSA-55q2-fjhq-7xh7,3.4.13,"DOMPurify: IN_PLACE hook removal leaves a detached subtree executable, causing XSS",https://osv.dev/GHSA-55q2-fjhq-7xh7,CVE-2026-75838
+MODERATE,dompurify,3.1.7 | 3.4.0,GHSA-76mc-f452-cxcm,3.4.7,DOMPurify: Hook mutation of `data.allowedTags` / `data.allowedAttributes` permanently pollutes `DEFAULT_ALLOWED_TAGS` / `DEFAULT_ALLOWED_ATT,https://osv.dev/GHSA-76mc-f452-cxcm,CVE-2026-65902
+MODERATE,dompurify,3.1.7,GHSA-cj63-jhhr-wcxv,3.3.2,DOMPurify USE_PROFILES prototype pollution allows event handlers,https://osv.dev/GHSA-cj63-jhhr-wcxv,CVE-2026-65913
+MODERATE,dompurify,3.1.7,GHSA-cjmm-f4jc-qw8r,3.3.2,DOMPurify ADD_ATTR predicate skips URI validation,https://osv.dev/GHSA-cjmm-f4jc-qw8r,CVE-2026-65912
+MODERATE,dompurify,3.1.7,GHSA-crv5-9vww-q3g8,3.4.0,DOMPurify has a SAFE_FOR_TEMPLATES bypass in RETURN_DOM mode,https://osv.dev/GHSA-crv5-9vww-q3g8,CVE-2026-41239
+MODERATE,dompurify,3.1.7,GHSA-h7mw-gpvr-xq4m,3.4.0,DOMPurify: FORBID_TAGS bypassed by function-based ADD_TAGS predicate (asymmetry with FORBID_ATTR fix),https://osv.dev/GHSA-h7mw-gpvr-xq4m,CVE-2026-41240
+MODERATE,dompurify,3.1.7,GHSA-h8r8-wccr-v5f2,3.3.2,DOMPurify is vulnerable to mutation-XSS via Re-Contextualization,https://osv.dev/GHSA-h8r8-wccr-v5f2,CVE-2026-65914
+MODERATE,dompurify,3.1.7 | 3.4.0,GHSA-hpcv-96wg-7vj8,3.4.6,DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks,https://osv.dev/GHSA-hpcv-96wg-7vj8,CVE-2026-49458
+MODERATE,dompurify,3.1.7 | 3.4.0,GHSA-r47g-fvhr-h676,3.4.6,"DOMPurify: IN_PLACE mode preserves attributes of a clobbered root element, allowing XSS via attacker-controlled root DOM",https://osv.dev/GHSA-r47g-fvhr-h676,CVE-2026-49459
+MODERATE,dompurify,3.1.7 | 3.4.0,GHSA-rp9w-3fw7-7cwq,3.4.7,DOMPurify IN_PLACE Sanitization Bypass via Attached Shadow Root Inside <template>.content,https://osv.dev/GHSA-rp9w-3fw7-7cwq,CVE-2026-49978
+MODERATE,dompurify,3.1.7,GHSA-v2wj-7wpq-c8vv,3.3.2 | 2.5.9,DOMPurify contains a Cross-site Scripting vulnerability,https://osv.dev/GHSA-v2wj-7wpq-c8vv,CVE-2026-0540
+MODERATE,dompurify,3.1.7,GHSA-v8jm-5vwx-cfxm,3.2.7,DOMPurify contains a Cross-site Scripting vulnerability,https://osv.dev/GHSA-v8jm-5vwx-cfxm,CVE-2025-15599
+MODERATE,dompurify,3.1.7,GHSA-v9jr-rg53-9pgp,3.4.0,DOMPurify: Prototype Pollution to XSS Bypass via CUSTOM_ELEMENT_HANDLING Fallback,https://osv.dev/GHSA-v9jr-rg53-9pgp,CVE-2026-41238
+MODERATE,dompurify,3.1.7,GHSA-vhxf-7vqr-mrjg,3.2.4,DOMPurify allows Cross-site Scripting (XSS),https://osv.dev/GHSA-vhxf-7vqr-mrjg,CVE-2025-26791
+MODERATE,electron,37.10.3,GHSA-2p8c-gr87-2676,45.0.0-alpha.6 | 44.3.0 | 43.7.0 | 42.11.3,Electron: SameSite cookie restrictions are not applied to windows opened from links,https://osv.dev/GHSA-2p8c-gr87-2676,CVE-2026-113796
+MODERATE,electron,37.10.3,GHSA-3c8v-cfp5-9885,38.8.6 | 39.8.1 | 40.8.1 | 41.0.0,Electron: Out-of-bounds read in second-instance IPC on macOS and Linux,https://osv.dev/GHSA-3c8v-cfp5-9885,CVE-2026-34776
+MODERATE,electron,37.10.3,GHSA-4f78-qhmw-8j8m,39.8.7 | 40.9.0 | 41.2.0 | 42.0.0-beta.1,Electron: DevTools JavaScript Injection via Unsanitized Dock State Parameter,https://osv.dev/GHSA-4f78-qhmw-8j8m,CVE-2026-70609
+MODERATE,electron,37.10.3,GHSA-4p4r-m79c-wq3v,38.8.6 | 39.8.3 | 40.8.3 | 41.0.3,Electron: HTTP Response Header Injection in custom protocol handlers and webRequest,https://osv.dev/GHSA-4p4r-m79c-wq3v,CVE-2026-34767
+MODERATE,electron,37.10.3,GHSA-5c9j-mhmv-5xgx,42.0.0-beta.1 | 41.1.1 | 40.9.0 | 39.8.6,Electron: shell.openPath path validation bypass via embedded null byte,https://osv.dev/GHSA-5c9j-mhmv-5xgx,CVE-2026-70603
+MODERATE,electron,37.10.3,GHSA-5rqw-r77c-jp79,38.8.6 | 39.8.1 | 40.8.0 | 41.0.0-beta.8,Electron: AppleScript injection in app.moveToApplicationsFolder on macOS,https://osv.dev/GHSA-5rqw-r77c-jp79,CVE-2026-34779
+MODERATE,electron,37.10.3,GHSA-997q-gvvc-jwmx,42.11.3 | 43.7.0 | 44.3.0 | 45.0.0-alpha.5,Electron: openExternal permission requests can be attributed to the wrong origin,https://osv.dev/GHSA-997q-gvvc-jwmx,CVE-2026-114121
+MODERATE,electron,37.10.3,GHSA-9pf5-hg6p-4pwp,39.8.7 | 40.9.0 | 41.2.0 | 42.0.0-beta.1,Electron: Permission Check Handler Receives Main Frame Origin Instead of Requesting Iframe Origin,https://osv.dev/GHSA-9pf5-hg6p-4pwp,CVE-2026-70599
+MODERATE,electron,37.10.3,GHSA-9w97-2464-8783,38.8.6 | 39.8.0 | 40.7.0 | 41.0.0-beta.7,Electron: Use-after-free in download save dialog callback,https://osv.dev/GHSA-9w97-2464-8783,CVE-2026-34772
+MODERATE,electron,37.10.3,GHSA-f2r8-jv7c-xqmp,39.8.9 | 40.9.2 | 41.2.1 | 42.0.0-beta.3,Electron: DevTools embedder handler executes arbitrary files via shell open,https://osv.dev/GHSA-f2r8-jv7c-xqmp,CVE-2026-70611
+MODERATE,electron,37.10.3,GHSA-f3pv-wv63-48x8,39.8.5 | 40.8.5 | 41.1.0 | 42.0.0-alpha.5,Electron: Named window.open targets not scoped to the opener's browsing context,https://osv.dev/GHSA-f3pv-wv63-48x8,CVE-2026-34765
+MODERATE,electron,37.10.3,GHSA-ff2p-hmqr-hxm4,39.8.9 | 40.9.2 | 41.2.2 | 42.0.0-beta.4,Electron: contextBridge object copy honors prototype setters,https://osv.dev/GHSA-ff2p-hmqr-hxm4,CVE-2026-70610
+MODERATE,electron,37.10.3,GHSA-fw47-9c62-h3vw,45.0.0-alpha.5 | 44.3.0 | 43.7.0 | 42.11.3,Electron: HID and USB permission checks can be attributed to the wrong origin,https://osv.dev/GHSA-fw47-9c62-h3vw,CVE-2026-113800
+MODERATE,electron,37.10.3,GHSA-jm7p-cc5g-qwxx,39.8.8 | 40.9.1 | 41.2.1 | 42.0.0-beta.3,Electron: Parent process code-sign check is spoofable,https://osv.dev/GHSA-jm7p-cc5g-qwxx,CVE-2026-70597
+MODERATE,electron,37.10.3,GHSA-m55f-7gqj-fr98,39.8.8 | 40.9.0 | 41.2.1 | 42.0.0-beta.3,Electron: Extension tab APIs operate across session boundaries,https://osv.dev/GHSA-m55f-7gqj-fr98,CVE-2026-70602
+MODERATE,electron,37.10.3,GHSA-mwmh-mq4g-g6gr,38.8.6 | 39.8.1 | 40.8.1 | 41.0.0,Electron: Registry key path injection in app.setAsDefaultProtocolClient on Windows,https://osv.dev/GHSA-mwmh-mq4g-g6gr,CVE-2026-34773
+MODERATE,electron,37.10.3,GHSA-p2rr-rvmm-c5fp,39.8.8 | 40.9.0 | 41.2.1 | 42.0.0-beta.3,Electron: Sandboxed iframes can launch external protocol handlers,https://osv.dev/GHSA-p2rr-rvmm-c5fp,CVE-2026-70612
+MODERATE,electron,37.10.3,GHSA-r5p7-gp4j-qhrx,38.8.6 | 39.8.1 | 40.8.1 | 41.0.0,Electron: Incorrect origin passed to permission request handler for iframe requests,https://osv.dev/GHSA-r5p7-gp4j-qhrx,CVE-2026-34777
+MODERATE,electron,37.10.3,GHSA-v64r-4m7r-3mvq,39.8.8 | 40.9.1 | 41.2.1 | 42.0.0-beta.3,Electron: HTTP redirect followed into local file loader,https://osv.dev/GHSA-v64r-4m7r-3mvq,CVE-2026-70605
+MODERATE,electron,37.10.3,GHSA-v93f-fgjr-hjrj,39.8.8 | 40.9.0 | 41.2.1 | 42.0.0-beta.3,Electron: window.open features string controls some window options considered privileged,https://osv.dev/GHSA-v93f-fgjr-hjrj,CVE-2026-70607
+MODERATE,electron,37.10.3,GHSA-vv43-5jgx-7qv8,39.8.10 | 41.10.5 | 42.0.0-beta.2,Electron: Local race condition in Squirrel.Mac update installation on macOS,https://osv.dev/GHSA-vv43-5jgx-7qv8,CVE-2026-102672
+MODERATE,electron,37.10.3,GHSA-x562-297c-g43g,45.0.0-alpha.13 | 44.5.0 | 43.7.6 | 42.11.9,Electron: Pointer lock permission requests can be attributed to the wrong frame,https://osv.dev/GHSA-x562-297c-g43g,CVE-2026-113798
+MODERATE,electron,37.10.3,GHSA-xj5x-m3f3-5x3h,38.8.6 | 39.8.1 | 40.8.1 | 41.0.0,Electron: Service worker can spoof executeJavaScript IPC replies,https://osv.dev/GHSA-xj5x-m3f3-5x3h,CVE-2026-34778
+MODERATE,electron,37.10.3,GHSA-xwr5-m59h-vwqr,38.8.6 | 39.8.4 | 40.8.4 | 41.0.0,Electron: nodeIntegrationInWorker not correctly scoped in shared renderer processes,https://osv.dev/GHSA-xwr5-m59h-vwqr,CVE-2026-34775
+MODERATE,elliptic,6.6.1,GHSA-848j-6mx2-7j84,,Elliptic Uses a Cryptographic Primitive with a Risky Implementation,https://osv.dev/GHSA-848j-6mx2-7j84,CVE-2025-14505
+MODERATE,fast-xml-parser,5.6.0,GHSA-gh4j-gqv2-49f6,5.7.0 | 4.5.7,fast-xml-parser XMLBuilder: XML Comment and CDATA Injection via Unescaped Delimiters,https://osv.dev/GHSA-gh4j-gqv2-49f6,CVE-2026-41650
+MODERATE,follow-redirects,1.15.11,GHSA-r4q5-vmmm-2653,1.16.0,follow-redirects leaks Custom Authentication Headers to Cross-Domain Redirect Targets,https://osv.dev/GHSA-r4q5-vmmm-2653,CVE-2026-40895
+MODERATE,glob,10.4.2 | 10.4.5,GHSA-3g3m-2fjr-6pw4,14.0.2,Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal,https://osv.dev/GHSA-3g3m-2fjr-6pw4,CVE-2026-118773
+MODERATE,http-proxy-middleware,2.0.9,GHSA-64mm-vxmg-q3vj,3.0.6 | 4.1.0 | 2.0.10,http-proxy-middleware `router` host+path substring matching allows Host-header-driven backend routing bypass,https://osv.dev/GHSA-64mm-vxmg-q3vj,CVE-2026-55602
+MODERATE,ip-address,9.0.5,GHSA-h3mg-xc3c-68pw,10.7.1,"ip-address: Address6 builds a parse diagnostic proportional to the input with no length bound, allowing a single long string to stall or cra",https://osv.dev/GHSA-h3mg-xc3c-68pw,CVE-2026-101911
+MODERATE,ip-address,9.0.5,GHSA-j6r3-76f7-8jcv,10.7.1,"ip-address: isInSubnet() and isHostInSubnet() compare addresses of different families as if they shared an address space, allowing an allowl",https://osv.dev/GHSA-j6r3-76f7-8jcv,CVE-2026-101912
+MODERATE,ip-address,9.0.5,GHSA-rpw4-54j3-4h4q,10.5.1,"ip-address: Address6.isLinkLocal() recognizes fe80::/64 rather than fe80::/10, allowing SSRF and trust-boundary bypass to on-link hosts",https://osv.dev/GHSA-rpw4-54j3-4h4q,CVE-2026-101913
+MODERATE,ip-address,9.0.5,GHSA-rxp7-6hxx-x8q5,10.7.4,"ip-address: Address6 matches a zone identifier in quadratic time ahead of its length limit, allowing a single long string to stall the proce",https://osv.dev/GHSA-rxp7-6hxx-x8q5,CVE-2026-111997
+MODERATE,ip-address,9.0.5,GHSA-v2v4-37r5-5v8g,10.1.1,ip-address has XSS in Address6 HTML-emitting methods,https://osv.dev/GHSA-v2v4-37r5-5v8g,CVE-2026-42338
+MODERATE,js-yaml,3.14.1 | 4.1.0,GHSA-h67p-54hq-rp68,4.2.0 | 3.15.0,JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases,https://osv.dev/GHSA-h67p-54hq-rp68,CVE-2026-53550
+MODERATE,js-yaml,3.14.1 | 4.1.0,GHSA-mh29-5h37-fv8m,4.1.1 | 3.14.2,js-yaml has prototype pollution in merge (<<),https://osv.dev/GHSA-mh29-5h37-fv8m,CVE-2025-64718
+MODERATE,launch-editor,2.8.0,GHSA-698v-4r3x-3vcv,2.14.2 | 8.3.3 | 8.2.4 | 8.1.6 | 7.3.7 | 6.4.4 | 1.1.0,launch-editor: escapeCmdArgs() omits % escaping on Windows,https://osv.dev/GHSA-698v-4r3x-3vcv,CVE-2026-112943
+MODERATE,launch-editor,2.8.0,GHSA-r825-w8mm-5pxw,2.14.2 | 8.3.3 | 8.2.4 | 8.1.6 | 7.3.7 | 6.4.4 | 1.1.0,launch-editor: Editor CLI flag misinterpretation causing arbitrary command execution for some editors,https://osv.dev/GHSA-r825-w8mm-5pxw,CVE-2026-112944
+MODERATE,launch-editor,2.8.0,GHSA-v6wh-96g9-6wx3,2.14.1 | 8.0.16 | 7.3.5 | 6.4.3 | 0.1.24,launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows,https://osv.dev/GHSA-v6wh-96g9-6wx3,CVE-2026-53632
+MODERATE,lodash,4.17.21,GHSA-xxjr-mmjv-4gpg,4.17.23 | 4.18.0,"Lodash has Prototype Pollution Vulnerability in `_.unset`, `_.omit`, and `_.pullAt` functions",https://osv.dev/GHSA-xxjr-mmjv-4gpg,CVE-2025-13465
+MODERATE,minimatch,10.0.3 | 9.0.5,GHSA-g3hv-75wg-m249,11.0.1,minimatch has potential denial of service via globparts amplification,https://osv.dev/GHSA-g3hv-75wg-m249,CVE-2026-118764
+MODERATE,node-forge,1.3.1,GHSA-525v-9gp9-w22h,1.4.1,Forge: TLS client crash when the server sends no certificate,https://osv.dev/GHSA-525v-9gp9-w22h,CVE-2026-118778
+MODERATE,node-forge,1.3.1,GHSA-5cwg-6vw7-rj6p,1.4.1,Forge: AES-GCM authentication bypass via unvalidated tagLength option,https://osv.dev/GHSA-5cwg-6vw7-rj6p,CVE-2026-119186
+MODERATE,node-forge,1.3.1,GHSA-65ch-62r8-g69g,1.3.2,node-forge is vulnerable to ASN.1 OID Integer Truncation,https://osv.dev/GHSA-65ch-62r8-g69g,CVE-2025-66030
+MODERATE,node-forge,1.3.1,GHSA-6cv4-p8m7-4r25,1.4.3,Forge: ReDoS in forge.http response header and cookie trimming,https://osv.dev/GHSA-6cv4-p8m7-4r25,CVE-2026-125333
+MODERATE,node-forge,1.3.1,GHSA-6wvx-3r32-xmcg,1.4.1,Forge: Prototype Pollution in forge.http cookie handling via a malicious Set-Cookie,https://osv.dev/GHSA-6wvx-3r32-xmcg,CVE-2026-118777
+MODERATE,node-forge,1.3.1,GHSA-h46v-rmh6-fq4f,1.4.1,Forge: X.509 pathLenConstraint not enforced by verifyCertificateChain() for CA certificates without keyUsage,https://osv.dev/GHSA-h46v-rmh6-fq4f,CVE-2026-119189
+MODERATE,node-forge,1.3.1,GHSA-j8rw-jp99-435v,1.4.3,Forge: TLS client crash on a handshake record received without a session,https://osv.dev/GHSA-j8rw-jp99-435v,CVE-2026-125334
+MODERATE,node-forge,1.3.1,GHSA-w4xr-hqv8-ch44,1.4.3,Forge: TLS client crash on an unsupported ServerHello compression method,https://osv.dev/GHSA-w4xr-hqv8-ch44,CVE-2026-125332
+MODERATE,pbkdf2,3.1.6,GHSA-477h-4r7f-fvrx,3.1.7,"pbkdf2 rehashes long passwords on every iteration, enabling denial of service",https://osv.dev/GHSA-477h-4r7f-fvrx,CVE-2026-102414
+MODERATE,picomatch,2.3.1 | 4.0.3,GHSA-3v7f-55p6-f55p,4.0.4 | 3.0.2 | 2.3.2,Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching,https://osv.dev/GHSA-3v7f-55p6-f55p,CVE-2026-33672
+MODERATE,postcss,8.5.8,GHSA-fxqj-rqcc-2cmp,8.5.23,PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset,https://osv.dev/GHSA-fxqj-rqcc-2cmp,CVE-2026-69153
+MODERATE,postcss,8.5.8,GHSA-qx2v-qp2m-jg93,8.5.10,PostCSS has XSS via Unescaped </style> in its CSS Stringify Output,https://osv.dev/GHSA-qx2v-qp2m-jg93,CVE-2026-41305
+MODERATE,postcss-selector-parser,6.1.2,GHSA-rj75-hqrm-r3gf,7.1.6 | 6.1.5,PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion,https://osv.dev/GHSA-rj75-hqrm-r3gf,CVE-2026-104844
+MODERATE,postcss-selector-parser,6.1.2,GHSA-w9m9-85wc-3x92,6.1.3 | 7.1.3,postcss-selector-parser allows denial of service through uncontrolled AST recursion,https://osv.dev/GHSA-w9m9-85wc-3x92,CVE-2026-9358
+MODERATE,qs,6.13.0,GHSA-4mjr-xmp4-gh2g,6.16.0,qs: Denial of Service via Attacker Controlled isBuffer,https://osv.dev/GHSA-4mjr-xmp4-gh2g,CVE-2026-82417
+MODERATE,qs,6.13.0,GHSA-6pq8-jhm2-2vcw,6.16.1,qs : qs.stringify with arrayFormat 'comma' throws an uncaught TypeError on array elements carrying a non-callable own toString (DoS),https://osv.dev/GHSA-6pq8-jhm2-2vcw,CVE-2026-110816
+MODERATE,qs,6.13.0,GHSA-6rw7-vpxm-498p,6.14.1,qs's arrayLimit bypass in its bracket notation allows DoS via memory exhaustion,https://osv.dev/GHSA-6rw7-vpxm-498p,CVE-2025-15284
+MODERATE,qs,6.13.0,GHSA-q8mj-m7cp-5q26,6.15.2,qs has a remotely triggerable DoS: qs.stringify crashes with TypeError on null/undefined entries in comma-format arrays when encodeValuesOnl,https://osv.dev/GHSA-q8mj-m7cp-5q26,CVE-2026-8723
+MODERATE,serialize-javascript,6.0.2,GHSA-qj8w-gfj5-8c6v,7.0.5,Serialize JavaScript has CPU Exhaustion Denial of Service via crafted array-like objects,https://osv.dev/GHSA-qj8w-gfj5-8c6v,CVE-2026-34043
+MODERATE,svgo,3.3.2,GHSA-4vpr-x523-8j87,2.8.4 | 3.3.5 | 4.1.0,SVGO: removeScripts incompletely sanitizes executable HTML in SVG foreignObject elements,https://osv.dev/GHSA-4vpr-x523-8j87,CVE-2026-84369
+MODERATE,tar,6.2.1,GHSA-gvwx-54wh-qm9j,7.5.17,node-tar: Uncaught Exception DoS via NUL byte in PAX path/linkpath records,https://osv.dev/GHSA-gvwx-54wh-qm9j,CVE-2026-59875
+MODERATE,tar,6.2.1,GHSA-vmf3-w455-68vh,7.5.16,"node-tar applies PAX size override to intermediary GNU long-name/long-link headers, causing tar parser interpretation differential (file smu",https://osv.dev/GHSA-vmf3-w455-68vh,CVE-2026-53655
+MODERATE,tar,6.2.1,GHSA-w8wr-v893-vjvp,7.5.18,node-tar: Process crash via PAX numeric path type confusion,https://osv.dev/GHSA-w8wr-v893-vjvp,CVE-2026-59871
+MODERATE,webpack-dev-server,5.2.2,GHSA-79cf-xcqc-c78w,5.2.4,webpack-dev-server vulnerable to cross-origin source code exposure on non-HTTPS origins,https://osv.dev/GHSA-79cf-xcqc-c78w,CVE-2026-6402
+MODERATE,webpack-dev-server,5.2.2,GHSA-f5vj-f2hx-8m93,5.2.6,webpack-dev-server vulnerable to cross-site request forgery via internal developer endpoints,https://osv.dev/GHSA-f5vj-f2hx-8m93,CVE-2026-14620
+MODERATE,webpack-dev-server,5.2.2,GHSA-m28w-2pqf-7qgj,5.2.6,webpack-dev-server vulnerable to denial of service via a malformed Host or Origin header,https://osv.dev/GHSA-m28w-2pqf-7qgj,CVE-2026-14631
+MODERATE,webpack-dev-server,5.2.2,GHSA-mx8g-39q3-5c79,5.2.5,webpack-dev-server vulnerable to HMR WebSocket interception via permissive user proxies,https://osv.dev/GHSA-mx8g-39q3-5c79,CVE-2026-9595
+MODERATE,websocket-driver,0.7.4,GHSA-mp7j-qc5w-4988,0.7.5,websocket-driver: Resource limit bypass via message compression,https://osv.dev/GHSA-mp7j-qc5w-4988,CVE-2026-54490
+MODERATE,ws,8.17.1,GHSA-58qx-3vcg-4xpx,8.20.1,ws: Uninitialized memory disclosure,https://osv.dev/GHSA-58qx-3vcg-4xpx,CVE-2026-45736
+LOW,@babel/core,7.28.0,GHSA-4x5r-pxfx-6jf8,8.0.0-rc.6 | 7.29.6,@babel/core: Arbitrary File Read via sourceMappingURL Comment,https://osv.dev/GHSA-4x5r-pxfx-6jf8,CVE-2026-49356
+LOW,@tootallnate/once,2.0.0,GHSA-vpq2-c234-7xj6,3.0.1 | 2.0.1,@tootallnate/once vulnerable to Incorrect Control Flow Scoping,https://osv.dev/GHSA-vpq2-c234-7xj6,CVE-2026-3449
+LOW,axios,1.13.6,GHSA-xhjh-pmcv-23jw,1.15.1 | 0.31.1,Axios: Null Byte Injection via Reverse-Encoding in AxiosURLSearchParams,https://osv.dev/GHSA-xhjh-pmcv-23jw,CVE-2026-42040
+LOW,body-parser,1.20.3,GHSA-v422-hmwv-36x6,1.20.6 | 2.3.0,body-parser vulnerable to denial of service when invalid limit value silently disables size enforcement,https://osv.dev/GHSA-v422-hmwv-36x6,CVE-2026-12590
+LOW,dompurify,3.1.7 | 3.4.0,GHSA-6688-9rhm-gjv2,3.4.16,DOMPurify: IN_PLACE returns a force-removed rawtext root whose text carries attacker markup — pure HTML reparse executes,https://osv.dev/GHSA-6688-9rhm-gjv2,CVE-2026-109345
+LOW,dompurify,3.1.7 | 3.4.0,GHSA-c2j3-45gr-mqc4,3.4.12,DOMPurify: `CUSTOM_ELEMENT_HANDLING` bypasses `afterSanitizeElements` for allowed custom elements.,https://osv.dev/GHSA-c2j3-45gr-mqc4,CVE-2026-66010
+LOW,dompurify,3.1.7 | 3.4.0,GHSA-c6gr-qvv4-5v3f,3.4.17,DOMPurify: SMIL attributeName=href guard is skipped when PARSER_MEDIA_TYPE is application/xhtml+xml,https://osv.dev/GHSA-c6gr-qvv4-5v3f,CVE-2026-116802
+LOW,dompurify,3.1.7 | 3.4.0,GHSA-gvmj-g25r-r7wr,3.4.8,DOMPurify: SAFE_FOR_TEMPLATES bypass - template expressions survive sanitization inside <template> content when using DOM output modes,https://osv.dev/GHSA-gvmj-g25r-r7wr,CVE-2026-65900
+LOW,dompurify,3.1.7 | 3.4.0,GHSA-mrv2-3pqr-j5jr,3.4.17,DOMPurify IN_PLACE: hook that removes a parent or sibling leaves the detached subtree's event handlers armed (incomplete fix for GHSA-p98j-9,https://osv.dev/GHSA-mrv2-3pqr-j5jr,CVE-2026-116803
+LOW,dompurify,3.1.7 | 3.4.0,GHSA-vxr8-fq34-vvx9,3.4.9,DOMPurify: Trusted Types policy survives `clearConfig()` and can poison later `RETURN_TRUSTED_TYPE` output,https://osv.dev/GHSA-vxr8-fq34-vvx9,CVE-2026-65899
+LOW,dompurify,3.1.7 | 3.4.0,GHSA-x4vx-rjvf-j5p4,,"DOMPurify: `IN_PLACE` mode trusts attacker-controlled `nodeName` on live non-form nodes, allowing script retention and XSS via attacker-supp",https://osv.dev/GHSA-x4vx-rjvf-j5p4,CVE-2026-65901
+LOW,electron,37.10.3,GHSA-3qxv-5xgr-q7w9,42.11.6 | 43.7.3 | 44.4.3 | 45.0.0-alpha.9,Electron: Frame subscription trusts GPU-supplied frame geometry,https://osv.dev/GHSA-3qxv-5xgr-q7w9,CVE-2026-114122
+LOW,electron,37.10.3,GHSA-8x5q-pvf5-64mp,39.8.5 | 40.8.5 | 41.1.0 | 42.0.0-alpha.5,Electron: Use-after-free in offscreen shared texture release() callback,https://osv.dev/GHSA-8x5q-pvf5-64mp,CVE-2026-34764
+LOW,electron,37.10.3,GHSA-9899-m83m-qhpj,38.8.6 | 39.8.0 | 40.7.0 | 41.0.0-beta.8,Electron: USB device selection not validated against filtered device list,https://osv.dev/GHSA-9899-m83m-qhpj,CVE-2026-34766
+LOW,electron,37.10.3,GHSA-98mx-cjp9-gchm,45.0.0-alpha.4 | 44.1.1 | 43.5.1 | 42.11.1,Electron: Extension tabs.query returns tab URLs and titles without the tabs permission,https://osv.dev/GHSA-98mx-cjp9-gchm,CVE-2026-113797
+LOW,electron,37.10.3,GHSA-f37v-82c4-4x64,39.8.5 | 40.8.5 | 41.1.0 | 42.0.0-alpha.5,Electron: Crash in clipboard.readImage() on malformed clipboard image data,https://osv.dev/GHSA-f37v-82c4-4x64,CVE-2026-34781
+LOW,electron,37.10.3,GHSA-h3v5-h239-pg29,42.11.6 | 43.7.3 | 44.4.3 | 45.0.0-alpha.9,Electron: Off-screen rendering on macOS trusts GPU-supplied frame geometry,https://osv.dev/GHSA-h3v5-h239-pg29,CVE-2026-114124
+LOW,electron,37.10.3,GHSA-jfqx-fxh3-c62j,38.8.6 | 39.8.1 | 40.8.0 | 41.0.0-beta.8,Electron: Unquoted executable path in app.setLoginItemSettings on Windows,https://osv.dev/GHSA-jfqx-fxh3-c62j,CVE-2026-34768
+LOW,electron,37.10.3,GHSA-pfmc-3mgc-p6fp,39.8.10 | 40.9.0 | 41.2.1 | 42.0.0-beta.3,Electron: Off-screen rendering trusts GPU-supplied geometry over shared-memory size,https://osv.dev/GHSA-pfmc-3mgc-p6fp,CVE-2026-70598
+LOW,electron,37.10.3,GHSA-x8rc-wpg4-grpf,39.8.8 | 40.9.1 | 41.2.1 | 42.0.0-beta.3,Electron: Cross-origin iframe can position native autofill popup,https://osv.dev/GHSA-x8rc-wpg4-grpf,CVE-2026-70600
+LOW,fast-xml-parser,5.6.0,GHSA-474x-hrwr-fgx4,5.12.0,fast-xml-parser: Quadratic CPU consumption scanning unterminated stop-node tags,https://osv.dev/GHSA-474x-hrwr-fgx4,CVE-2026-126066
+LOW,node-forge,1.3.1,GHSA-2vgq-wchc-25w7,1.4.1,Forge: Incomplete PKCS#7 padding validation in AES/DES CBC and ECB decryption,https://osv.dev/GHSA-2vgq-wchc-25w7,CVE-2026-118776
+LOW,node-forge,1.3.1,GHSA-4487-j8r4-4g2f,1.4.1,Forge: verifyCertificateChain() removes trusted CA certificates with the same subject from the CA store,https://osv.dev/GHSA-4487-j8r4-4g2f,CVE-2026-118780
+LOW,node-forge,1.3.1,GHSA-4642-5mcj-2rqw,1.4.1,Forge: ASN.1 OID first arc truncation in asn1.oidToDer,https://osv.dev/GHSA-4642-5mcj-2rqw,CVE-2026-118775
+LOW,node-forge,1.3.1,GHSA-6889-vf6x-f3g5,1.4.3,Forge: Ed25519 signature verification accepts small-order public keys,https://osv.dev/GHSA-6889-vf6x-f3g5,CVE-2026-125335
+LOW,node-forge,1.3.1,GHSA-9wg5-mj3p-v49q,1.4.1,Forge: Certificate signature verified with the issuer's RSA signature scheme,https://osv.dev/GHSA-9wg5-mj3p-v49q,CVE-2026-118774
+LOW,node-forge,1.3.1,GHSA-h6cr-wjv9-3cpp,1.4.1,Forge: Denial of Service via infinite loop in BigInteger.modInverse() with negative input (incomplete fix of CVE-2026-33891),https://osv.dev/GHSA-h6cr-wjv9-3cpp,CVE-2026-118781
+LOW,qs,6.13.0,GHSA-w7fw-mjwx-w883,6.14.2,qs's arrayLimit bypass in comma parsing allows denial of service,https://osv.dev/GHSA-w7fw-mjwx-w883,CVE-2026-2391
+LOW,serialize-javascript,6.0.2,GHSA-m5mm-p8h7-m29v,7.1.3,Serialize JavaScript: Cross-site scripting (XSS) via unescaped </script at the end of a serialized function body,https://osv.dev/GHSA-m5mm-p8h7-m29v,CVE-2026-115754 | CVE-2026-115897
+LOW,tmp,0.2.3,GHSA-52f5-9888-hmc6,0.2.4,tmp allows arbitrary temporary file / directory write via symbolic link `dir` parameter,https://osv.dev/GHSA-52f5-9888-hmc6,CVE-2025-54798
+LOW,webpack,5.97.1,GHSA-38r7-794h-5758,5.104.0,webpack buildHttp HttpUriPlugin allowedUris bypass via HTTP redirects → SSRF + cache persistence,https://osv.dev/GHSA-38r7-794h-5758,CVE-2025-68157
+LOW,webpack,5.97.1,GHSA-8fgc-7cc6-rx7x,5.104.1,webpack buildHttp: allowedUris allow-list bypass via URL userinfo (@) leading to build-time SSRF behavior,https://osv.dev/GHSA-8fgc-7cc6-rx7x,CVE-2025-68458

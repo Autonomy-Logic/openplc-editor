@@ -11,3 +11,8 @@
 # id = "GHSA-xxxx-xxxx-xxxx"
 # ignoreUntil = "2027-03-01T00:00:00Z"
 # reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: <why> — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-cmwh-pvxp-8882"
+ignoreUntil = "2027-01-01T00:00:00Z"
+reason = "AI-TRIAGED [unreviewed]: TEMPORARY E2E"
