@@ -31,6 +31,7 @@ import { VENDOR_DOCUMENT_SCHEME } from '../middleware/shared/vendor-document/doc
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
+import { createDesktopRuntimeProvisioningService, registerRuntimeProvisioning } from './modules/runtime-provisioning'
 import { store } from './modules/store'
 import { createElectronUpdateService } from './modules/updater'
 import { createVendorDocumentHandler, leavesVendorDocument } from './modules/vendor-document/serve'
@@ -61,6 +62,11 @@ const quitCoordinator = createQuitCoordinator({
   stopSimulator: () => mainIpcModule?.stopSimulator(),
   canPrompt: () => mainIpcModule?.canPromptQuit() ?? false,
 })
+registerRuntimeProvisioning({
+  ipcMain,
+  app,
+  service: createDesktopRuntimeProvisioningService(app.getPath('userData')),
+})
 
 if (process.env.NODE_ENV === 'production') {
   async function loadSourceMapSupport(): Promise<void> {
@@ -71,10 +77,8 @@ if (process.env.NODE_ENV === 'production') {
   void loadSourceMapSupport()
 }
 
-// Create the user service instance to initialize the user settings and history files.
 const userService = new UserService()
 
-// Retrieves the system information
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.
 type OptTitlebar = {
@@ -125,7 +129,7 @@ const installExtensions = async () => {
   }
 }
 
-/** The browser has the user's attention; once the session is in, the editor asks for it back. */
+/** Brings the main window back to the front. */
 function bringMainWindowToFront(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return

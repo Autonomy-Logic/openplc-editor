@@ -9,6 +9,7 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
   sensitiveCase: false,
   regularExpression: false,
   searchNodePosition: { x: 0, y: 0 },
+  revealRequestId: 0,
 
   searchActions: {
     setSearchQuery: (searchQuery) => {
@@ -71,6 +72,8 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
         }),
       )
     },
+
+    requestReveal: () => setState((state) => ({ revealRequestId: state.revealRequestId + 1 })),
   },
 })
 

@@ -44,6 +44,13 @@ import { Search } from '../components/_features/[workspace]/search'
 import { SourceControlPanel } from '../components/_features/[workspace]/source-control'
 import { HostLockBoundary } from '../components/_molecules/editing-lock-boundary'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
+import { BottomPanelHideButton, BottomPanelStrip, BottomPanelTabTrigger } from '../components/_organisms/bottom-panel'
+import {
+  BOTTOM_PANEL_DEFAULT_SIZE,
+  type BottomPanelTabId,
+  isBottomPanelTabId,
+  visibleBottomPanelTabs,
+} from '../components/_organisms/bottom-panel/tabs'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { ConsoleFilters } from '../components/_organisms/console/filters'
 import { Debugger } from '../components/_organisms/debugger'
@@ -56,6 +63,7 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent } from '../components/_templates/[workspace]/main-content'
 import { WorkspaceSideContent } from '../components/_templates/[workspace]/side-content'
+import { useBottomPanelShortcut } from '../hooks/use-bottom-panel-shortcut'
 import {
   useDebugBoolValuesMap,
   useDebugForcedVariablesMap,
@@ -382,9 +390,19 @@ const WorkspaceScreen = () => {
   const leftPanelRef = useRef<PanelMethods | null>(null)
   const workspacePanelRef = useRef<PanelMethods | null>(null)
   const consolePanelRef = useRef<PanelMethods | null>(null)
-  const [activeTab, setActiveTab] = useState('console')
+  const [activeTab, setActiveTab] = useState<BottomPanelTabId>('console')
+  const [isBottomPanelOpen, setIsBottomPanelOpen] = useState(false)
+  const bottomPanelWasOpenedRef = useRef(false)
+  const bottomPanelOpenBeforePerspectiveRef = useRef(false)
+  const previousIsCollapsedRef = useRef(isCollapsed)
   const consoleFollowRequestId = useOpenPLCStore((state) => state.followRequestId)
+  const searchRevealRequestId = useOpenPLCStore((state) => state.revealRequestId)
   const hasSearchResults = searchResults.length > 0
+  const bottomPanelTabs = visibleBottomPanelTabs({
+    debug: isDebuggerVisible,
+    search: hasSearchResults,
+    plcLogs: isPlcLogsVisible,
+  })
 
   const togglePanel = () => {
     if (panelRef.current) {
@@ -392,13 +410,37 @@ const WorkspaceScreen = () => {
     }
   }
 
+  const openBottomPanel = useCallback((tab?: BottomPanelTabId) => {
+    if (tab) setActiveTab(tab)
+    consolePanelRef.current?.expand(bottomPanelWasOpenedRef.current ? undefined : BOTTOM_PANEL_DEFAULT_SIZE)
+    bottomPanelWasOpenedRef.current = true
+  }, [])
+
+  const hideBottomPanel = useCallback(() => consolePanelRef.current?.collapse(), [])
+
+  const toggleBottomPanel = useCallback(() => {
+    if (consolePanelRef.current?.isCollapsed() ?? true) openBottomPanel()
+    else hideBottomPanel()
+  }, [openBottomPanel, hideBottomPanel])
+
+  useBottomPanelShortcut(toggleBottomPanel)
+
+  // Every project opens with the panel hidden, also when the workspace stays mounted across projects.
   useEffect(() => {
-    if (hasSearchResults) {
-      setActiveTab('search')
-    } else {
-      setActiveTab((prev) => (prev === 'search' ? 'console' : prev))
-    }
+    hideBottomPanel()
+    setActiveTab('console')
+    bottomPanelWasOpenedRef.current = false
+  }, [projectPath, hideBottomPanel])
+
+  useEffect(() => {
+    if (!hasSearchResults) setActiveTab((prev) => (prev === 'search' ? 'console' : prev))
   }, [hasSearchResults])
+
+  // Each Find in Project that found something shows its results. Skips the initial value (0).
+  useEffect(() => {
+    if (searchRevealRequestId === 0) return
+    openBottomPanel('search')
+  }, [searchRevealRequestId, openBottomPanel])
 
   useEffect(() => {
     if (!isPlcLogsVisible) {
@@ -408,27 +450,35 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     if (isDebuggerVisible) {
-      setActiveTab('debug')
+      openBottomPanel('debug')
     } else {
       setActiveTab((prev) => (prev === 'debug' ? 'console' : prev))
     }
-  }, [isDebuggerVisible])
+  }, [isDebuggerVisible, openBottomPanel])
 
+  // Switch Perspective hides the side and bottom panels, and restores the bottom one only if it was open before.
   useEffect(() => {
+    if (previousIsCollapsedRef.current === isCollapsed) return
+    previousIsCollapsedRef.current = isCollapsed
     const action = isCollapsed ? 'collapse' : 'expand'
-    ;[leftPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
+    ;[leftPanelRef, workspacePanelRef].forEach((ref) => {
       if (ref.current && typeof ref.current[action] === 'function') {
         ref.current[action]()
       }
     })
-  }, [isCollapsed])
+    if (isCollapsed) {
+      bottomPanelOpenBeforePerspectiveRef.current = !(consolePanelRef.current?.isCollapsed() ?? true)
+      hideBottomPanel()
+    } else if (bottomPanelOpenBeforePerspectiveRef.current) {
+      openBottomPanel()
+    }
+  }, [isCollapsed, openBottomPanel, hideBottomPanel])
 
   // A build (or other producer) requested the console. Skips the initial value (0) so it never forces the console open on first render.
   useEffect(() => {
     if (consoleFollowRequestId === 0) return
-    consolePanelRef.current?.expand()
-    setActiveTab('console')
-  }, [consoleFollowRequestId])
+    openBottomPanel('console')
+  }, [consoleFollowRequestId, openBottomPanel])
 
   // `setAvailableOptions` owns the alias sync for the active target once boards land; the project's saved board is never overridden on load.
   useEffect(() => {
@@ -591,7 +641,7 @@ const WorkspaceScreen = () => {
                     id='editorPanel'
                     order={1}
                     minSize={15}
-                    defaultSize={69}
+                    defaultSize={100}
                     className={cn(
                       'relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white px-4 py-4 dark:border-neutral-800 dark:bg-neutral-950',
                       {
@@ -822,47 +872,43 @@ const WorkspaceScreen = () => {
                     id='consolePanel'
                     order={2}
                     collapsible
-                    defaultSize={31}
+                    defaultSize={0}
                     minSize={22}
-                    className='min-h-0 flex-1 grow rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
+                    onCollapse={() => setIsBottomPanelOpen(false)}
+                    onExpand={() => setIsBottomPanelOpen(true)}
+                    className='min-h-0 flex-1 grow rounded-lg border-2 border-neutral-200 bg-white px-4 pb-4 pt-2 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                   >
                     <Tabs.Root
                       value={activeTab}
-                      onValueChange={setActiveTab}
+                      onValueChange={(value) => isBottomPanelTabId(value) && setActiveTab(value)}
                       className='relative flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden'
                     >
-                      <Tabs.List className='flex h-7 w-64 select-none gap-4'>
-                        <Tabs.Trigger
-                          value='console'
-                          className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900 dark:text-neutral-700 dark:data-[state=active]:bg-blue-500 dark:data-[state=active]:text-white'
-                        >
-                          Console
-                        </Tabs.Trigger>
-                        {isDebuggerVisible && (
-                          <Tabs.Trigger
-                            value='debug'
-                            className='h-7 w-20 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900 dark:text-neutral-700 dark:data-[state=active]:bg-blue-500 dark:data-[state=active]:text-white'
-                          >
-                            Debugger
-                          </Tabs.Trigger>
-                        )}
-                        {hasSearchResults && (
-                          <Tabs.Trigger
-                            value='search'
-                            className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900 dark:text-neutral-700 dark:data-[state=active]:bg-blue-500 dark:data-[state=active]:text-white'
-                          >
-                            Search
-                          </Tabs.Trigger>
-                        )}
-                        {isPlcLogsVisible && (
-                          <Tabs.Trigger
-                            value='plc-logs'
-                            className='h-7 w-20 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900 dark:text-neutral-700 dark:data-[state=active]:bg-blue-500 dark:data-[state=active]:text-white'
-                          >
-                            PLC Logs
-                          </Tabs.Trigger>
-                        )}
-                      </Tabs.List>
+                      <div className='flex h-8 flex-none items-center gap-2'>
+                        <Tabs.List className='flex h-7 items-center gap-4'>
+                          {bottomPanelTabs.map((tab) => (
+                            <BottomPanelTabTrigger key={tab.id} tab={tab} />
+                          ))}
+                        </Tabs.List>
+                        <div className='ml-auto flex items-center gap-2'>
+                          {activeTab === 'console' && (
+                            <>
+                              <ConsoleFilters />
+                              <ClearConsoleButton />
+                            </>
+                          )}
+                          {activeTab === 'plc-logs' && (
+                            <>
+                              <PlcLogsFilters />
+                              <ClearConsoleButton
+                                onClear={clearPlcLogs}
+                                isEmpty={typeof plcLogs === 'string' ? plcLogs.length === 0 : plcLogs.length === 0}
+                                label='Clear logs'
+                              />
+                            </>
+                          )}
+                          <BottomPanelHideButton onHide={hideBottomPanel} />
+                        </div>
+                      </div>
                       <Tabs.Content
                         aria-label='Console panel content'
                         value='console'
@@ -920,25 +966,16 @@ const WorkspaceScreen = () => {
                           <PlcLogs />
                         </Tabs.Content>
                       )}
-                      {activeTab === 'console' && (
-                        <div className='absolute right-2 top-1 flex items-center gap-2'>
-                          <ConsoleFilters />
-                          <ClearConsoleButton />
-                        </div>
-                      )}
-                      {activeTab === 'plc-logs' && (
-                        <div className='absolute right-2 top-1 flex items-center gap-2'>
-                          <PlcLogsFilters />
-                          <ClearConsoleButton
-                            onClear={clearPlcLogs}
-                            isEmpty={typeof plcLogs === 'string' ? plcLogs.length === 0 : plcLogs.length === 0}
-                            label='Clear logs'
-                          />
-                        </div>
-                      )}
                     </Tabs.Root>
                   </ResizablePanel>
                 </ResizablePanelGroup>
+                {!isBottomPanelOpen && (
+                  <BottomPanelStrip
+                    tabs={bottomPanelTabs}
+                    onOpenTab={openBottomPanel}
+                    onReopen={() => openBottomPanel()}
+                  />
+                )}
               </div>
             </ResizablePanel>
             {ChatPanel && capabilities.hasAIAssistant && isChatOpen && isAIEnabled && hasAIConsented && (

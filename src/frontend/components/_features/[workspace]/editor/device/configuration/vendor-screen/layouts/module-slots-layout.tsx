@@ -856,7 +856,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
         </SlotList>
 
         {/* ------ Right: contextual detail pane ------ */}
-        <SlotDetailPane>
+        <SlotDetailPane scrollResetKey={selectedSlot}>
           {stackable && populatedCount === 0 ? (
             <div className='flex flex-1 flex-col items-center justify-center text-center text-sm text-neutral-500 dark:text-neutral-400'>
               <p>No modules configured.</p>
