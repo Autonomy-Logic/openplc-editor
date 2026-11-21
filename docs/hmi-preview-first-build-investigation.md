@@ -402,10 +402,10 @@ FB_RUN=1 FB_OUT=/path/results.jsonl npx playwright test e2e/hmi-first-build-timi
 Web worktree (Playwright starts its dev servers): the same command with `--project=chromium`; `FB_SEED` reads the
 same records. A seed folder is the fixed units' records of a fresh run's store (`<userData>/User/WasmObjects`).
 
-## 10. Follow-up DOPE-896: what was built, and the numbers after it
+## 10. Follow-up: what was built, and the numbers after it
 
 Reading guide as above. The investigation sections 1 to 9 describe the state of 2026-11-19; this section describes the
-code on the DOPE-896 branch (editor and web), after the HMI widgets moved to the pinned openplc-hmi-widgets release.
+code on this branch (editor and web), after the HMI widgets moved to the pinned openplc-hmi-widgets release.
 
 ### 10.1 Final design
 
