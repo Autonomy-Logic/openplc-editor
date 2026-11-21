@@ -11,6 +11,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { ORDER, UNKNOWN, rank, normWord, indexAdvisories, introducedAdvisories, bySeverity } from './lib/severity.mjs';
 
+// Markdown table cell: a literal '|' or newline would split the row.
+const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 const [baseP, headP, thresholdArg] = process.argv.slice(2);
 const THRESHOLD = normWord((thresholdArg || 'HIGH').toUpperCase());
 const COMMENT_FILE = process.env.GATE_COMMENT_FILE || '/tmp/gate-comment.md';
@@ -70,7 +72,7 @@ console.log(policySentence);
 
 // ---- PR comment body ----
 const advLink = (id) => (id.startsWith('GHSA') ? `https://github.com/advisories/${id}` : `https://osv.dev/${id}`);
-const rows = introduced.map((a) => `| ${a.sev} | \`${a.pkg}\` | ${a.ver} | [${a.id}](${advLink(a.id)}) | ${a.fixed || '—'} |`).join('\n');
+const rows = introduced.map((a) => `| ${a.sev} | \`${a.pkg}\` | ${cell(a.ver)} | [${a.id}](${advLink(a.id)}) | ${cell(a.fixed || '—')} |`).join('\n');
 const table = introduced.length
   ? `| Severity | Package | Version | Advisory | Fixed in |\n|---|---|---|---|---|\n${rows}${hasUnknown ? `\n\n_${unknownNote}_` : ''}`
   : '';

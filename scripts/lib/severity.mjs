@@ -74,8 +74,19 @@ export function severityOfGroup(vulns, groups = []) {
   return maxSev([...vulns.map(severityOf), ...groups.map(groupScoreSeverity)]);
 }
 
-export function fixedOf(v) {
-  return [...new Set((v?.affected || []).flatMap((a) => (a.ranges || [])
+// Package names compare case-insensitively, PyPI-style separators folded; the
+// ecosystem compares on its base name (`Debian:12` -> `debian`).
+const normPkg = (n) => String(n ?? '').toLowerCase().replace(/[-_.]+/g, '-');
+const normEco = (e) => String(e ?? '').split(':')[0].toLowerCase();
+
+// Fix versions of an OSV record. With `pkg`, only from the affected[] entries of
+// that package (and ecosystem, when both sides name one); one record can cover
+// several packages. If no entry names the package, every entry is used.
+export function fixedOf(v, pkg, ecosystem) {
+  const all = v?.affected || [];
+  const mine = pkg === undefined ? all : all.filter((a) => normPkg(a.package?.name) === normPkg(pkg)
+    && (!ecosystem || !a.package?.ecosystem || normEco(a.package.ecosystem) === normEco(ecosystem)));
+  return [...new Set((mine.length ? mine : all).flatMap((a) => (a.ranges || [])
     .flatMap((r) => (r.events || []).filter((e) => e.fixed).map((e) => e.fixed))))];
 }
 
@@ -92,14 +103,14 @@ export function indexAdvisories(data) {
   const perPkg = new Map();
   for (const r of (data?.results || [])) for (const p of (r.packages || [])) {
     const pkg = p.package?.name || '?';
-    if (!perPkg.has(pkg)) perPkg.set(pkg, { occ: [], groups: [] });
+    if (!perPkg.has(pkg)) perPkg.set(pkg, { occ: [], groups: [], eco: p.package?.ecosystem || '' });
     const slot = perPkg.get(pkg);
     for (const v of (p.vulnerabilities || [])) if (v?.id) slot.occ.push({ v, ver: p.package?.version || '' });
     for (const g of (p.groups || [])) slot.groups.push(g);
   }
 
   const m = new Map();
-  for (const [pkg, { occ, groups }] of perPkg) {
+  for (const [pkg, { occ, groups, eco }] of perPkg) {
     const parent = new Map();
     const find = (x) => {
       if (!parent.has(x)) parent.set(x, x);
@@ -135,7 +146,7 @@ export function indexAdvisories(data) {
       const vulns = [...byId.values()];
       const myGroups = groups.filter((g) => [...(g.ids || []), ...(g.aliases || [])].some((n) => namesOf.get(root).has(n)));
       const rep = byId.get(id);
-      const fixedVersions = [...new Set([rep, ...vulns].flatMap(fixedOf))];
+      const fixedVersions = [...new Set([rep, ...vulns].flatMap((v) => fixedOf(v, pkg, eco)))];
       const versions = [...new Set(members.map((o) => o.ver).filter(Boolean))].sort();
       m.set(`${id}|${pkg}`, {
         key: `${id}|${pkg}`, id, ids, aliases, pkg,

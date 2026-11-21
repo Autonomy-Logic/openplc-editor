@@ -11,6 +11,8 @@ import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs'
 import { collectComponents, licenseIdsOf } from './lib/cdx.mjs';
 import { UNKNOWN, indexAdvisories, tallyBySeverity, sevStr, isClaimed, bySeverity } from './lib/severity.mjs';
 
+// Markdown table cell: a literal '|' or newline would split the row.
+const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, arr) => {
   if (v.startsWith('--')) a.push([v.slice(2), arr[i + 1]]);
   return a;
@@ -143,20 +145,20 @@ md.push('## 4. Findings Requiring Remediation (Affected)\n');
 if (cfg.affected.length) {
   md.push('| Priority | Component | Installed | Fixed in | Severity | Reachability rationale |');
   md.push('|---|---|---|---|---|---|');
-  for (const f of cfg.affected) md.push(`| ${f.priority} | \`${f.component}\` | ${f.installed} | ${f.fixedIn} | ${f.severity} | ${stripTags(f.rationale)} |`);
+  for (const f of cfg.affected) md.push(`| ${f.priority} | \`${f.component}\` | ${cell(f.installed)} | ${cell(f.fixedIn)} | ${f.severity} | ${cell(stripTags(f.rationale))} |`);
 } else md.push('**None.**');
 if (untriaged.length) {
   md.push('\n## 4a. Untriaged in This Scan (no VEX determination yet)\n');
   md.push('These advisories surfaced after the VEX baseline was applied and are not accounted for by any entry in sections 4, 5 or 6. **No reachability determination has been made.** They must be triaged — upgraded, or documented as not-affected in `osv-scanner.toml` — before this report can be treated as a complete assessment.\n');
   md.push('| Severity | Component | Installed | Advisory | Fixed in | Summary |');
   md.push('|---|---|---|---|---|---|');
-  for (const a of untriaged) md.push(`| ${a.sev} | \`${a.pkg}\` | ${a.ver} | [${a.id}](https://osv.dev/${a.id}) | ${a.fixed || '—'} | ${stripTags(a.summary)} |`);
+  for (const a of untriaged) md.push(`| ${a.sev} | \`${a.pkg}\` | ${cell(a.ver)} | [${a.id}](https://osv.dev/${a.id}) | ${cell(a.fixed || '—')} | ${cell(stripTags(a.summary))} |`);
   if (hasUnknown) md.push(`\n_${unknownNote}_\n`);
 }
 md.push('\n## 5. Not Affected — VEX Justifications\n');
 md.push('| VEX justification (CISA) | Count | Representative components | Basis |');
 md.push('|---|---|---|---|');
-for (const n of cfg.notAffected) md.push(`| \`${n.justification}\` | ${n.count} | ${stripTags(n.components)} | ${stripTags(n.basis)} |`);
+for (const n of cfg.notAffected) md.push(`| \`${n.justification}\` | ${n.count} | ${cell(stripTags(n.components))} | ${cell(stripTags(n.basis))} |`);
 if (cfg.criticalNote) {
   md.push(`\n**On critical severity.** ${stripTags(cfg.criticalNote)}`);
   if (untriagedCritical.length) md.push(`\n> This statement covers assessed advisories only. ${untriagedCritical.length} high/critical advisory(ies) in section 4a are still unassessed.`);
@@ -165,7 +167,7 @@ if (cfg.criticalNote) {
 md.push('\n## 6. Mitigated Findings\n');
 md.push('| Component | Advisories | Existing control |');
 md.push('|---|---|---|');
-for (const m of cfg.mitigated) md.push(`| \`${m.component}\` | ${m.advisories} | ${stripTags(m.control)} |`);
+for (const m of cfg.mitigated) md.push(`| \`${m.component}\` | ${cell(m.advisories)} | ${cell(stripTags(m.control))} |`);
 md.push('\n## 7. Remediation Plan\n');
 for (const r of cfg.remediation) md.push(`- ${stripTags(r)}`);
 if (untriaged.length) md.push(`- **Triage the ${untriaged.length} advisory(ies) in section 4a** and record a CISA VEX determination for each.`);

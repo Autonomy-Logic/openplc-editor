@@ -11,7 +11,9 @@ const SRC = process.argv[2] || 'sbom/bom.cdx.json';
 const OUT = process.argv[3] || 'sbom/bom.spdx.json';
 
 const cdx = JSON.parse(readFileSync(SRC, 'utf8'));
-const created = cdx.metadata?.timestamp || new Date().toISOString();
+// SPDX 2.3 `created` is YYYY-MM-DDThh:mm:ssZ: UTC, second precision.
+const spdxTime = (t) => { const d = new Date(t ?? NaN); return Number.isNaN(d.getTime()) ? null : d.toISOString().replace(/\.\d+Z$/, 'Z'); };
+const created = spdxTime(cdx.metadata?.timestamp) || spdxTime(Date.now());
 
 // The actual SBOM generator(s), read from the CycloneDX metadata (cdxgen,
 // cyclonedx-py, …) — never hardcoded.
@@ -55,12 +57,21 @@ const licenseExpr = (c) => {
 // in that order. A string supplier (hand-maintained component lists) is accepted.
 const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const nameOf = (x) => oneLine(typeof x === 'string' ? x : x?.name);
-const personOf = (s) => s.replace(/\s*<([^>]*)>\s*$/, ' ($1)');
+// Author strings from registries can nest '<name <email>>' or carry stray quotes.
+const personOf = (s) => {
+  const email = (s.match(/[^\s<>()"']+@[^\s<>()"']+/) || [])[0];
+  let name = s;
+  while (/<[^<>]*>/.test(name)) name = name.replace(/<[^<>]*>/g, ' ');
+  name = oneLine(name.replace(/[<>"]/g, ' ').replace(/\([^)]*@[^)]*\)/g, ' ')).replace(/[,;]+$/, '');
+  if (email && name.includes(email)) name = oneLine(name.replace(email, ''));
+  if (!email) return name;
+  return name ? `${name} (${email})` : email;
+};
 function supplierOf(c) {
   const org = [c.supplier, c.manufacturer, c.manufacture, c.publisher].map(nameOf).find(Boolean);
   if (org) return `Organization: ${org}`;
-  const person = [...(c.authors || []), c.author].map(nameOf).find(Boolean);
-  return person ? `Person: ${personOf(person)}` : 'NOASSERTION';
+  const person = [...(c.authors || []), c.author].map(nameOf).filter(Boolean).map(personOf).find(Boolean);
+  return person ? `Person: ${person}` : 'NOASSERTION';
 }
 
 const packages = comps.map((c) => {

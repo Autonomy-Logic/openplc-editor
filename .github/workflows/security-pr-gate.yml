@@ -37,7 +37,9 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR head
+      # pull_request checks out the merge commit; its first parent is the base the
+      # merge was computed on (needs fetch-depth >= 2).
+      - name: Checkout PR merge commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -74,10 +76,13 @@ jobs:
           fi
           [ -s /tmp/head.json ] || echo '{"results":[]}' > /tmp/head.json
 
+      # Base = first parent of the merge commit, not the event's base sha, which
+      # goes stale when the base branch moves after the PR was opened.
       - name: Scan BASE
         run: |
-          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-          git worktree add -f /tmp/base "${{ github.event.pull_request.base.sha }}"
+          BASE_SHA="$(git rev-parse HEAD^1)"
+          echo "Base commit: $BASE_SHA"
+          git worktree add -f /tmp/base "$BASE_SHA"
           CFG=""; [ -f /tmp/head-config.toml ] && CFG="--config=/tmp/head-config.toml"
           set +e
           osv-scanner scan $CFG --recursive --format=json --output=/tmp/base.json /tmp/base
