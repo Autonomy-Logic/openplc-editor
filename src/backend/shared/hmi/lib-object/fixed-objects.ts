@@ -116,11 +116,11 @@ export async function buildHmiPrelude(runner: WasmClangRunner, request: WasmComp
   if (header === null || typeof libraries !== 'string')
     throw new Error('The preview request has no unit header to take the prelude from.')
   const files: WasmCompileRequest['files'] = { ...request.files, [HMI_PRELUDE_SOURCE]: header }
+  const flags = [`--target=${WASM_TARGET}`, ...(request.cxxFlags ?? [])]
   const result = await runner.run({
     argv: [
       'clang++',
-      `--target=${WASM_TARGET}`,
-      ...(request.cxxFlags ?? []),
+      ...flags,
       '-x',
       'c++-header',
       HMI_PRELUDE_SOURCE,
@@ -147,7 +147,7 @@ export async function buildHmiPrelude(runner: WasmClangRunner, request: WasmComp
     if (content === undefined) throw new Error(`The HMI preview prelude read ${path}, which is not a request file.`)
     inputs.push([path, await sha256Hex(content)])
   }
-  return { prelude: { header, libraries, pch }, inputs }
+  return { prelude: { header, libraries, pch, flags }, inputs }
 }
 
 /** The request a preview build compiles, generated without compiling it; throws when the build fails before that. */

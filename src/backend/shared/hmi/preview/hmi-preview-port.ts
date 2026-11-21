@@ -23,6 +23,7 @@ import {
 } from '../unit/generate-hmi-unit'
 import {
   buildHmiPreview,
+  HMI_PREVIEW_PRELUDE_FLAGS,
   hmiPreviewFixedFiles,
   type HmiPreviewResources,
   isHmiPreviewSource,
@@ -118,7 +119,13 @@ export function createHmiPreviewPort(
     ]).then(async ([hmiFiles, runtimeHeaders, preludeIndex, preludePch]) => {
       const files = hmiPreviewResources(hmiFiles, runtimeHeaders)
       const fixed = hmiPreviewFixedFiles(files)
-      const prelude = await loadHmiPrelude(preludeIndex, preludePch, WASM_TOOLCHAIN_IDENTITY, fixed).catch(() => null)
+      const prelude = await loadHmiPrelude(
+        preludeIndex,
+        preludePch,
+        WASM_TOOLCHAIN_IDENTITY,
+        HMI_PREVIEW_PRELUDE_FLAGS,
+        fixed,
+      ).catch(() => null)
       return { ...files, prelude }
     })
     resources.catch(() => {

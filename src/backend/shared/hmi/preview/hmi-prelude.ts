@@ -1,7 +1,8 @@
 /**
  * The preview's precompiled prelude: the opening of the generated unit header, up to and including its libraries
  * header, compiled once with the preview's C++ flags and shipped with the compiled objects. A preview unit whose header
- * opens with the same text, over the same libraries header and the same runtime and HMI files, starts from it.
+ * opens with the same text, over the same libraries header and the same runtime and HMI files, and compiles with the
+ * flags it was built with, starts from it.
  */
 import { sha256Hex } from '../../wasm-toolchain/content-digest'
 
@@ -19,7 +20,7 @@ export const HMI_UNIT_LIBRARIES_HEADER = 'hmi_unit_libraries.hpp'
 /** Request path of the unit's libraries header. */
 const LIBRARIES_PATH = `unit/${HMI_UNIT_LIBRARIES_HEADER}`
 const LIBRARIES_INCLUDE = `#include "${HMI_UNIT_LIBRARIES_HEADER}"`
-const FORMAT = 1
+const FORMAT = 2
 const DIGEST = /^[0-9a-f]{64}$/
 
 export interface HmiPrelude {
@@ -29,6 +30,8 @@ export interface HmiPrelude {
   libraries: string
   /** The precompiled header. */
   pch: Uint8Array
+  /** The exact clang flags it was compiled with, the target included. */
+  flags: readonly string[]
 }
 
 interface HmiPreludeIndex {
@@ -36,6 +39,7 @@ interface HmiPreludeIndex {
   toolchain: string
   header: string
   libraries: string
+  flags: string[]
   /** SHA-256 of the precompiled header. */
   pch: string
   /** Every request file the precompiled header was built from, with its SHA-256. */
@@ -48,14 +52,22 @@ export function hmiPreludeText(unitHeader: string): string | null {
   return at < 0 ? null : unitHeader.slice(0, at + LIBRARIES_INCLUDE.length + 2)
 }
 
-/** Whether a unit's files start from `prelude`: its header opens with the prelude, over the same libraries header. */
+const sameFlags = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((flag, index) => flag === b[index])
+
+/**
+ * Whether a unit's files start from `prelude`: it was compiled with `flags`, the flags of the units that would use it,
+ * and the unit's header opens with the prelude, over the same libraries header.
+ */
 export function hmiPreludeFits(
   prelude: HmiPrelude | null | undefined,
   unitFiles: Readonly<Record<string, string>>,
+  flags: readonly string[],
 ): prelude is HmiPrelude {
   return (
     prelude !== null &&
     prelude !== undefined &&
+    sameFlags(prelude.flags, flags) &&
     unitFiles[HMI_UNIT_HEADER]?.startsWith(prelude.header) === true &&
     unitFiles[HMI_UNIT_LIBRARIES_HEADER] === prelude.libraries
   )
@@ -72,6 +84,7 @@ export async function encodeHmiPrelude(
     toolchain,
     header: prelude.header,
     libraries: prelude.libraries,
+    flags: [...prelude.flags],
     pch: await sha256Hex(prelude.pch),
     inputs: [...inputs].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
   }
@@ -99,30 +112,32 @@ function parseIndex(bytes: Uint8Array): HmiPreludeIndex | null {
     return null
   }
   if (!isRecord(value) || value.format !== FORMAT) return null
-  const { toolchain, header, libraries, pch, inputs } = value
+  const { toolchain, header, libraries, flags, pch, inputs } = value
   if (typeof toolchain !== 'string' || typeof header !== 'string' || typeof libraries !== 'string') return null
+  if (!Array.isArray(flags) || !flags.every((flag): flag is string => typeof flag === 'string')) return null
   if (typeof pch !== 'string' || !DIGEST.test(pch) || !Array.isArray(inputs) || !inputs.every(isInput)) return null
-  return { format: FORMAT, toolchain, header, libraries, pch, inputs }
+  return { format: FORMAT, toolchain, header, libraries, flags, pch, inputs }
 }
 
 /**
- * The shipped prelude, or null when there is none, it was built by another toolchain, its files are damaged, or it
- * was built from a file that differs from the one the preview compiles with. `fixedFiles` are the preview's runtime
- * headers and HMI sources by request path.
+ * The shipped prelude, or null when there is none, it was built by another toolchain or with other flags than `flags`,
+ * its files are damaged, or it was built from a file that differs from the one the preview compiles with.
+ * `fixedFiles` are the preview's runtime headers and HMI sources by request path.
  */
 export async function loadHmiPrelude(
   indexBytes: Uint8Array | null,
   pch: Uint8Array | null,
   toolchain: string,
+  flags: readonly string[],
   fixedFiles: Readonly<Record<string, string>>,
 ): Promise<HmiPrelude | null> {
   const index = indexBytes === null ? null : parseIndex(indexBytes)
-  if (index === null || pch === null || index.toolchain !== toolchain) return null
+  if (index === null || pch === null || index.toolchain !== toolchain || !sameFlags(index.flags, flags)) return null
   if (hmiPreludeText(index.header) !== index.header || (await sha256Hex(pch)) !== index.pch) return null
   const own: Record<string, string> = { [HMI_PRELUDE_SOURCE]: index.header, [LIBRARIES_PATH]: index.libraries }
   for (const [path, digest] of index.inputs) {
     const text = own[path] ?? fixedFiles[path]
     if (text === undefined || (await sha256Hex(text)) !== digest) return null
   }
-  return { header: index.header, libraries: index.libraries, pch }
+  return { header: index.header, libraries: index.libraries, pch, flags: index.flags }
 }

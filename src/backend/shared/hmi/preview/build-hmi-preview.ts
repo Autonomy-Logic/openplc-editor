@@ -14,6 +14,7 @@ import type {
   WasmCompileUnit,
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { withoutLibraryFiles } from '../../library/library-unit'
+import { WASM_TARGET } from '../../wasm-toolchain/compile-to-wasm'
 import { buildHmiFontTableSource, HmiFontError } from '../fonts/font-table-source'
 import { vettedHmiFont } from '../fonts/vetted-fonts'
 import {
@@ -94,6 +95,8 @@ export const HMI_PREVIEW_CXX_FLAGS = [
   '-ffp-contract=off',
   ...INCLUDES,
 ]
+/** The exact clang flags of the preview units that start from the prelude, which the prelude must be built with. */
+export const HMI_PREVIEW_PRELUDE_FLAGS: readonly string[] = [`--target=${WASM_TARGET}`, ...HMI_PREVIEW_CXX_FLAGS]
 export const HMI_PREVIEW_LINK_FLAGS = [
   '-mexec-model=reactor',
   `-Wl,--max-memory=${HMI_PREVIEW_MAX_MEMORY}`,
@@ -154,7 +157,7 @@ export function buildHmiPreviewRequest(
   for (const [name, text] of Object.entries(unitFiles)) files[`${UNIT_DIR}/${name}`] = text
   files[FONT_TABLE] = fontTable
   const shipped = resources.prelude
-  const prelude = hmiPreludeFits(shipped, unitFiles) ? shipped : null
+  const prelude = hmiPreludeFits(shipped, unitFiles, HMI_PREVIEW_PRELUDE_FLAGS) ? shipped : null
   if (prelude) {
     files[HMI_PRELUDE_SOURCE] = prelude.header
     files[HMI_PRELUDE_PCH] = prelude.pch
@@ -198,7 +201,10 @@ const UNIT = 'HMI'
 /** Resolves on a later task, so a step reported before synchronous work can be drawn first. */
 const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
-/** Builds the preview of a project's screens, of one widget block when `input.widgetPreview` names it, or the gallery. */
+/**
+ * Builds the preview of a project's screens, of one widget block when `input.widgetPreview` names it, or the gallery.
+ * A build that started from the prelude and failed to compile is compiled once more without it.
+ */
 export async function buildHmiPreview(
   input: HmiPreviewRequest,
   resources: HmiPreviewResources,
@@ -261,16 +267,14 @@ export async function buildHmiPreview(
     ...generated.preview.units,
     library: generated.preview.units.library.filter((f) => f in unitFiles),
   }
-  const request = buildHmiPreviewRequest(
-    splitScreenHeaders(unitFiles, groups.screens),
-    groups,
-    fontTable,
-    resources,
-    libraryUnits.units,
-  )
+  const splitFiles = splitScreenHeaders(unitFiles, groups.screens)
+  const requestWith = (prelude: HmiPrelude | null | undefined): WasmCompileRequest =>
+    buildHmiPreviewRequest(splitFiles, groups, fontTable, { ...resources, prelude }, libraryUnits.units)
+  const request = requestWith(resources.prelude)
   onStep?.('compile')
   const toolchainStart = performance.now()
-  const result = await compile(request)
+  let result = await compile(request)
+  if (!result.ok && request.files[HMI_PRELUDE_PCH] !== undefined) result = await compile(requestWith(null))
   timings.toolchainMs = performance.now() - toolchainStart
   if (!result.ok) {
     const errors = result.diagnostics

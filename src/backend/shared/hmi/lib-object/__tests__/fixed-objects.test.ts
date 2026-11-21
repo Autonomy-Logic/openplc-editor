@@ -7,7 +7,7 @@ import { FakeRunner } from '../../../wasm-toolchain/__tests__/fixtures/fake-runn
 import type { CachedWasmObject } from '../../../wasm-toolchain/compile-to-wasm'
 import { readShippedObjects } from '../../../wasm-toolchain/shipped-objects'
 import { WASM_TOOLCHAIN_IDENTITY } from '../../../wasm-toolchain/toolchain-identity'
-import { HMI_PREVIEW_CXX_FLAGS, hmiPreviewFixedFiles } from '../../preview/build-hmi-preview'
+import { HMI_PREVIEW_CXX_FLAGS, HMI_PREVIEW_PRELUDE_FLAGS, hmiPreviewFixedFiles } from '../../preview/build-hmi-preview'
 import {
   HMI_PRELUDE_FILE,
   HMI_PRELUDE_INDEX,
@@ -109,14 +109,19 @@ describe('buildHmiShippedObjects', () => {
       files[HMI_PRELUDE_INDEX],
       files[HMI_PRELUDE_FILE],
       WASM_TOOLCHAIN_IDENTITY,
+      HMI_PREVIEW_PRELUDE_FLAGS,
       hmiPreviewFixedFiles(preview),
     )
     expect(loaded?.header).toMatch(/#include "hmi_unit_libraries\.hpp"\n$/)
+    expect(loaded?.flags).toEqual(HMI_PREVIEW_PRELUDE_FLAGS)
     expect(
-      await loadHmiPrelude(files[HMI_PRELUDE_INDEX], files[HMI_PRELUDE_FILE], WASM_TOOLCHAIN_IDENTITY, {
-        ...hmiPreviewFixedFiles(preview),
-        'hmi/core/hmi_core.h': '// changed',
-      }),
+      await loadHmiPrelude(
+        files[HMI_PRELUDE_INDEX],
+        files[HMI_PRELUDE_FILE],
+        WASM_TOOLCHAIN_IDENTITY,
+        HMI_PREVIEW_PRELUDE_FLAGS,
+        { ...hmiPreviewFixedFiles(preview), 'hmi/core/hmi_core.h': '// changed' },
+      ),
     ).toBeNull()
   })
 
