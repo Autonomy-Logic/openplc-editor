@@ -35,3 +35,32 @@ export function parseRuntimeHardwareId(body: unknown): RuntimeHardwareId | null 
     source: source === 'device' || source === 'orchestrator' ? source : null,
   }
 }
+
+/** One hardware element the runtime hashed into its ID: `kind` and `sha256("openplc-hw-v2|<kind>|<value>")`. */
+export interface RuntimeHardwareElement {
+  kind: string
+  hash: string
+}
+
+const ELEMENT_KIND_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/
+const ELEMENT_HASH_PATTERN = /^[0-9a-f]{64}$/
+
+/** The well-formed `elements` of a `GET /api/hardware-id` body, duplicates removed; anything else is dropped. */
+export function parseRuntimeHardwareElements(body: unknown): RuntimeHardwareElement[] {
+  if (typeof body !== 'object' || body === null) return []
+  const { elements } = body as { elements?: unknown }
+  if (!Array.isArray(elements)) return []
+  const seen = new Set<string>()
+  const out: RuntimeHardwareElement[] = []
+  for (const entry of elements) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const { kind, hash } = entry as { kind?: unknown; hash?: unknown }
+    if (typeof kind !== 'string' || !ELEMENT_KIND_PATTERN.test(kind)) continue
+    if (typeof hash !== 'string' || !ELEMENT_HASH_PATTERN.test(hash)) continue
+    const key = `${kind} ${hash}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ kind, hash })
+  }
+  return out
+}

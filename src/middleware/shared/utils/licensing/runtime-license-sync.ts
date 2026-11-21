@@ -1,27 +1,36 @@
 /**
  * Runtime commercial licence check for OpenPLC Runtime v4, shared by every
- * platform: read the licences the runtime holds with its hardware ID, verify
- * them here, and when none is valid ask Edge for the licences bought for that
- * hardware ID, verify each one and upload the valid ones. The runtime checks no
- * signature; the status comes from this verification. Platforms supply only
- * `RuntimeLicenseMechanisms`.
+ * platform. One runtime ID holds one licence. On connect the stored licence is
+ * verified offline, then confirmed against Edge's active licences for that ID
+ * (short timeout, fail-open): a stored licence Edge no longer lists is removed
+ * from the runtime, and a missing or invalid one is replaced by a valid one Edge
+ * holds. The runtime checks no signature; the status comes from this
+ * verification. Platforms supply only `RuntimeLicenseMechanisms`.
  *
- * `GET /api/runtime-license` answers `{ hardwareId, source, licenses }`; in a
- * vPLC `licenses` holds only the seat licence orchestrator-agent assigned.
- * `POST {edge}/runtime-licenses/lookup` is public and rate-limited; it takes
- * `{ hardwareId }` and answers `{ hardwareId, seats, licenses }` inside the
- * `{ statusCode, data }` envelope.
+ * `GET /api/runtime-license` is public and answers `{ hardwareId, licenses }`
+ * (0 or 1 entries); runtimes without it answer 401. `GET /api/hardware-id`
+ * answers `{ hardwareId, elements }`. `POST {edge}/runtime-licenses/lookup` is
+ * public and rate-limited; it takes `{ hardwareId }` and answers the active
+ * licences inside the `{ statusCode, data }` envelope.
  *
  * Best-effort throughout: nothing here throws.
  */
 
+import type { PublicRuntimeLicenseStatus } from '../../ports/orchestrator-port'
 import type { RawHttpReply, RuntimeLicenseMechanisms } from '../../ports/runtime-license-mechanisms'
 import type {
   RuntimeHardwareIdResult,
+  RuntimeLicenseRevocation,
   RuntimeLicenseSyncResult,
   RuntimeLicenseUploadOutcome,
 } from '../../ports/runtime-port'
-import { isRuntimeHardwareId, parseRuntimeHardwareId, type RuntimeHardwareIdSource } from './runtime-commercial-license'
+import {
+  isRuntimeHardwareId,
+  parseRuntimeHardwareElements,
+  parseRuntimeHardwareId,
+  type RuntimeHardwareElement,
+  type RuntimeHardwareIdSource,
+} from './runtime-commercial-license'
 import { type RuntimeLicenseFileVerdict, verifyRuntimeLicenseFile } from './runtime-license-file'
 import { RUNTIME_LICENSE_PRODUCT_ID, type RuntimeLicenseKeys } from './runtime-license-keys'
 
@@ -32,6 +41,10 @@ export const RUNTIME_LICENSE_LOOKUP_PATH = '/runtime-licenses/lookup'
 export const RUNTIME_HARDWARE_ID_PATH = '/api/hardware-id'
 export const RUNTIME_LICENSE_UPLOAD_PATH = '/api/runtime-license'
 export const RUNTIME_LICENSE_REPORT_PATH = '/api/runtime-license'
+export const RUNTIME_LICENSE_REMOVE_PATH = '/api/runtime-license'
+
+/** How long the Edge lookup may take before the offline verdict stands. */
+export const RUNTIME_LICENSE_LOOKUP_TIMEOUT_MS = 2000
 
 const ORDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 
@@ -67,14 +80,15 @@ export function selectRuntimeLicenseFiles(payload: unknown, hardwareId: string):
   return files
 }
 
-/** The runtime's hardware ID from `GET /api/hardware-id`. Never throws. */
+/** The runtime's hardware ID and element hashes from `GET /api/hardware-id`. Never throws. */
 export async function readRuntimeHardwareId(mechanisms: RuntimeLicenseMechanisms): Promise<RuntimeHardwareIdResult> {
   try {
     const reply = await mechanisms.runtimeGet(RUNTIME_HARDWARE_ID_PATH)
     if (!isSuccess(reply)) return { success: false, error: `Get hardware ID failed: ${reply.status}` }
-    const parsed = parseRuntimeHardwareId(bodyJson(reply))
+    const body = bodyJson(reply)
+    const parsed = parseRuntimeHardwareId(body)
     return parsed
-      ? { success: true, ...parsed }
+      ? { success: true, ...parsed, elements: parseRuntimeHardwareElements(body) }
       : { success: false, error: 'The runtime sent a hardware ID the editor could not read.' }
   } catch (err) {
     return { success: false, error: errorMessage(err) }
@@ -92,7 +106,10 @@ export async function lookupRuntimeLicenses(
     if (!isSuccess(reply)) {
       return { ok: false, error: `The licence server refused the lookup (HTTP ${reply.status}).` }
     }
-    return { ok: true, licenses: selectRuntimeLicenseFiles(bodyJson(reply), hardwareId) }
+    const body = bodyJson(reply)
+    if (!hasLicenseList(body))
+      return { ok: false, error: 'The licence server sent a lookup answer the editor could not read.' }
+    return { ok: true, licenses: selectRuntimeLicenseFiles(body, hardwareId) }
   } catch (err) {
     return { ok: false, error: errorMessage(err) }
   }
@@ -115,18 +132,10 @@ export async function uploadRuntimeLicense(
 /** What `GET /api/runtime-license` reported: the hardware ID and the licences, unverified. */
 export interface RuntimeLicenseReport {
   hardwareId: string | null
-  /** `orchestrator` in a vPLC, where only the seat licence orchestrator-agent assigned is listed. */
+  /** Reported by older runtimes only; not used for any decision. */
   source: RuntimeHardwareIdSource | null
   licenses: unknown[]
 }
-
-/** How often, and how far apart, a vPLC is read again after an upload while its seat is assigned. */
-export const VPLC_SEAT_RECHECKS = 3
-export const VPLC_SEAT_RECHECK_MS = 2000
-
-/** Waits between vPLC rechecks; replaceable in tests. */
-export type Sleep = (ms: number) => Promise<void>
-const sleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export type RuntimeLicenseReportResult = { ok: true; report: RuntimeLicenseReport } | { ok: false; error: string }
 
@@ -149,13 +158,54 @@ export async function readRuntimeLicenseReport(
   }
 }
 
+/** Order ID of the first reported licence that verifies for the reported hardware ID, or null. */
+export async function validReportedOrderId(
+  report: RuntimeLicenseReport,
+  keys: RuntimeLicenseKeys,
+): Promise<string | null> {
+  if (report.hardwareId === null) return null
+  for (const license of report.licenses) {
+    const verdict = await verifyRuntimeLicenseFile(license, report.hardwareId, keys)
+    if (verdict.ok) return verdict.orderId
+  }
+  return null
+}
+
 /** True when any reported licence verifies for the reported hardware ID. */
 export async function reportHasValidLicense(report: RuntimeLicenseReport, keys: RuntimeLicenseKeys): Promise<boolean> {
-  if (report.hardwareId === null) return false
-  for (const license of report.licenses) {
-    if ((await verifyRuntimeLicenseFile(license, report.hardwareId, keys)).ok) return true
+  return (await validReportedOrderId(report, keys)) !== null
+}
+
+/** Remove the stored licence with `DELETE /api/runtime-license`. Never throws. */
+export async function removeRuntimeLicense(
+  mechanisms: RuntimeLicenseMechanisms,
+  orderId: string,
+): Promise<RuntimeLicenseRevocation> {
+  try {
+    const reply = await mechanisms.runtimeDelete(RUNTIME_LICENSE_REMOVE_PATH)
+    if (isSuccess(reply)) return { orderId, removed: true }
+    return { orderId, removed: false, error: replyError(reply) }
+  } catch (err) {
+    return { orderId, removed: false, error: errorMessage(err) }
   }
-  return false
+}
+
+/**
+ * Licence status from a public `GET /api/runtime-license` reply, verified here: 401 is a runtime
+ * without the endpoint (`mit`), a verified licence `commercial`, none `gpl`, anything else `unknown`.
+ */
+export async function classifyPublicRuntimeLicense(
+  reply: RawHttpReply,
+  keys: RuntimeLicenseKeys,
+): Promise<PublicRuntimeLicenseStatus> {
+  if (reply.status === 401) return 'mit'
+  if (!isSuccess(reply)) return 'unknown'
+  const body = bodyJson(reply)
+  const id = parseRuntimeHardwareId(body)
+  const { licenses } = (body ?? {}) as { licenses?: unknown }
+  if (!id || id.hardwareId === null || !Array.isArray(licenses)) return 'unknown'
+  const orderId = await validReportedOrderId({ hardwareId: id.hardwareId, source: id.source, licenses }, keys)
+  return orderId ? 'commercial' : 'gpl'
 }
 
 const VERDICT_REASONS: Record<Exclude<RuntimeLicenseFileVerdict, { ok: true }>['reason'], string> = {
@@ -165,50 +215,80 @@ const VERDICT_REASONS: Record<Exclude<RuntimeLicenseFileVerdict, { ok: true }>['
   signature: 'its signature is not accepted',
 }
 
+/** The element hashes of `hardwareId`, or none when the runtime cannot say. */
+async function readElementsFor(
+  mechanisms: RuntimeLicenseMechanisms,
+  hardwareId: string,
+): Promise<RuntimeHardwareElement[]> {
+  const id = await readRuntimeHardwareId(mechanisms)
+  return id.success && id.hardwareId === hardwareId ? id.elements : []
+}
+
+/** The lookup, or a failure once `ms` has passed. */
+function lookupWithTimeout(
+  mechanisms: RuntimeLicenseMechanisms,
+  hardwareId: string,
+  ms: number,
+): Promise<RuntimeLicenseLookupResult> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ ok: false, error: 'The licence server did not answer in time.' }), ms)
+    void lookupRuntimeLicenses(mechanisms, hardwareId).then((result) => {
+      clearTimeout(timer)
+      resolve(result)
+    })
+  })
+}
+
 /**
- * Read the runtime's licences and verify them; when none is valid, look up Edge, verify each
- * file and upload only the valid ones, then read the runtime again (in a vPLC up to
- * `VPLC_SEAT_RECHECKS` more times, while orchestrator-agent assigns the seat). Never throws.
+ * Verify the stored licence offline, then confirm it against Edge's active licences for the
+ * runtime's ID. Edge reachable and the stored order not active: remove it from the runtime.
+ * Stored licence missing, invalid or removed: upload the first valid Edge licence and read the
+ * runtime back. Edge unreachable: the offline verdict stands. Never throws.
  */
 export async function syncRuntimeLicenses(
   mechanisms: RuntimeLicenseMechanisms,
   keys: RuntimeLicenseKeys,
-  wait: Sleep = sleep,
+  lookupTimeoutMs: number = RUNTIME_LICENSE_LOOKUP_TIMEOUT_MS,
 ): Promise<RuntimeLicenseSyncResult> {
   const first = await readRuntimeLicenseReport(mechanisms)
   if (!first.ok) return { status: 'failed', error: first.error }
   const { hardwareId } = first.report
   if (hardwareId === null) return { status: 'no-hardware-id' }
-  if (await reportHasValidLicense(first.report, keys)) {
-    return { status: 'synced', hardwareId, license: 'commercial', uploads: [] }
+  const elements = await readElementsFor(mechanisms, hardwareId)
+  const storedOrderId = await validReportedOrderId(first.report, keys)
+
+  const found = await lookupWithTimeout(mechanisms, hardwareId, lookupTimeoutMs)
+  if (!found.ok) {
+    return storedOrderId
+      ? { status: 'synced', hardwareId, license: 'commercial', uploads: [], elements }
+      : { status: 'synced', hardwareId, license: 'gpl', uploads: [], elements, detail: found.error }
+  }
+  if (storedOrderId && found.licenses.some((file) => file.orderId === storedOrderId)) {
+    return { status: 'synced', hardwareId, license: 'commercial', uploads: [], elements }
   }
 
-  const found = await lookupRuntimeLicenses(mechanisms, hardwareId)
-  if (!found.ok) return { status: 'synced', hardwareId, license: 'gpl', uploads: [], detail: found.error }
+  const revoked = storedOrderId ? await removeRuntimeLicense(mechanisms, storedOrderId) : undefined
+  const withRevocation = revoked ? { revoked } : {}
 
   const uploads: RuntimeLicenseUploadOutcome[] = []
   for (const file of found.licenses) {
     const verdict = await verifyRuntimeLicenseFile(file.license, hardwareId, keys)
-    uploads.push(
-      verdict.ok
-        ? await uploadRuntimeLicense(mechanisms, file)
-        : { orderId: file.orderId, stored: false, error: VERDICT_REASONS[verdict.reason] },
-    )
+    const outcome: RuntimeLicenseUploadOutcome = verdict.ok
+      ? await uploadRuntimeLicense(mechanisms, file)
+      : { orderId: file.orderId, stored: false, error: VERDICT_REASONS[verdict.reason] }
+    uploads.push(outcome)
+    if (outcome.stored) break
   }
-  if (!uploads.some((upload) => upload.stored)) return { status: 'synced', hardwareId, license: 'gpl', uploads }
+  if (!uploads.some((upload) => upload.stored)) {
+    return { status: 'synced', hardwareId, license: 'gpl', uploads, elements, ...withRevocation }
+  }
 
-  const rechecks = first.report.source === 'orchestrator' ? VPLC_SEAT_RECHECKS : 0
-  for (let attempt = 0; ; attempt++) {
-    const again = await readRuntimeLicenseReport(mechanisms)
-    if (!again.ok) {
-      return { status: 'failed', error: `License uploaded, but the runtime could not be read back: ${again.error}` }
-    }
-    if (await reportHasValidLicense(again.report, keys)) {
-      return { status: 'synced', hardwareId, license: 'commercial', uploads }
-    }
-    if (attempt >= rechecks) return { status: 'synced', hardwareId, license: 'gpl', uploads }
-    await wait(VPLC_SEAT_RECHECK_MS)
+  const again = await readRuntimeLicenseReport(mechanisms)
+  if (!again.ok) {
+    return { status: 'failed', error: `License uploaded, but the runtime could not be read back: ${again.error}` }
   }
+  const license = (await reportHasValidLicense(again.report, keys)) ? 'commercial' : 'gpl'
+  return { status: 'synced', hardwareId, license, uploads, elements, ...withRevocation }
 }
 
 function isSuccess(reply: RawHttpReply): boolean {
@@ -238,6 +318,12 @@ function replyError(reply: RawHttpReply): string {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+/** True when the (possibly enveloped) lookup body carries a `licenses` array. */
+function hasLicenseList(payload: unknown): boolean {
+  const data = unwrapEnvelope(payload)
+  return typeof data === 'object' && data !== null && Array.isArray((data as { licenses?: unknown }).licenses)
 }
 
 function unwrapEnvelope(payload: unknown): unknown {

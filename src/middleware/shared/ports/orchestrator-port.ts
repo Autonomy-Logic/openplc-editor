@@ -1,5 +1,8 @@
 import type { DeviceVpp } from './vpp-types'
 
+/** Licence a vPLC holds as the editor verified it; `mit` for a runtime without the public endpoint. */
+export type PublicRuntimeLicenseStatus = 'commercial' | 'gpl' | 'mit' | 'unknown'
+
 /**
  * OrchestratorPort — Abstracts orchestrator discovery and device listing.
  *
@@ -138,4 +141,10 @@ export interface OrchestratorPort {
    * to listing devices without saying what they hold.
    */
   discoverRuntimes?(agentId: string): Promise<DiscoveredOrchestratorRuntime[]>
+
+  /**
+   * Licence of one vPLC from its public `GET /api/runtime-license`, sent through the agent relay
+   * without credentials and verified locally. Never throws; a failure answers `unknown`.
+   */
+  getRuntimeLicenseStatus?(agentId: string, deviceId: string): Promise<PublicRuntimeLicenseStatus>
 }

@@ -38,7 +38,11 @@
  */
 
 import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
-import type { RuntimeCommercialLicense, RuntimeHardwareId } from '../utils/licensing/runtime-commercial-license'
+import type {
+  RuntimeCommercialLicense,
+  RuntimeHardwareElement,
+  RuntimeHardwareId,
+} from '../utils/licensing/runtime-commercial-license'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -140,7 +144,9 @@ export interface RuntimeStatusResult {
 }
 
 /** `GET /api/hardware-id`; `hardwareId` is null when the target derives none. */
-export type RuntimeHardwareIdResult = ({ success: true } & RuntimeHardwareId) | { success: false; error: string }
+export type RuntimeHardwareIdResult =
+  | ({ success: true; elements: RuntimeHardwareElement[] } & RuntimeHardwareId)
+  | { success: false; error: string }
 
 /** One licence file sent to `POST /api/runtime-license`, identified by its order. */
 export interface RuntimeLicenseUploadOutcome {
@@ -149,9 +155,17 @@ export interface RuntimeLicenseUploadOutcome {
   error?: string
 }
 
+/** A stored licence Edge no longer lists as active, and whether `DELETE /api/runtime-license` removed it. */
+export interface RuntimeLicenseRevocation {
+  orderId: string
+  removed: boolean
+  error?: string
+}
+
 /**
  * The runtime's commercial licence as the editor verified it, and the Edge licences it uploaded.
  * `detail` says why a licence could not be confirmed when Edge could not be reached.
+ * `elements` are the runtime's hardware elements from `GET /api/hardware-id`, empty when unknown.
  */
 export type RuntimeLicenseSyncResult =
   | {
@@ -159,6 +173,8 @@ export type RuntimeLicenseSyncResult =
       hardwareId: string
       license: RuntimeCommercialLicense
       uploads: RuntimeLicenseUploadOutcome[]
+      elements: RuntimeHardwareElement[]
+      revoked?: RuntimeLicenseRevocation
       detail?: string
     }
   | { status: 'no-hardware-id' }
@@ -413,13 +429,13 @@ export interface RuntimePort {
   /** Get current PLC runtime status with optional timing statistics. */
   getStatus(includeStats?: boolean): Promise<RuntimeStatusResult>
 
-  /** Read the hardware ID the runtime is bound to (the host's in a vPLC). */
+  /** Read the runtime's hardware ID and the element hashes it is computed from. */
   getHardwareId?(): Promise<RuntimeHardwareIdResult>
 
   /**
-   * Verify the licences the runtime holds; when none is valid, fetch the ones Edge holds for its
-   * hardware ID, upload the valid ones and verify again. Never throws; absent on platforms that
-   * do not check runtime licences.
+   * Verify the stored licence offline, confirm it against Edge's active licences (short timeout,
+   * fail-open), remove a revoked one and install a missing one. Never throws; absent on platforms
+   * that do not check runtime licences.
    */
   syncRuntimeLicenses?(): Promise<RuntimeLicenseSyncResult>
 

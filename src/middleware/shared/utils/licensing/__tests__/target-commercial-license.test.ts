@@ -3,6 +3,7 @@ import {
   buildRuntimeLicenseBuyUrl,
   COMMERCIAL_LICENSE_DISCLAIMER,
   commercialLicenseConsoleLines,
+  encodeRuntimeHardwareElements,
   isMitLicensedRuntime,
   resolveTargetCommercialLicense,
 } from '../target-commercial-license'
@@ -130,6 +131,26 @@ describe('buildRuntimeLicenseBuyUrl', () => {
       `https://example.com/edge/buy?hardwareId=${encodeURIComponent(ID)}`,
     )
     expect(buildRuntimeLicenseBuyUrl('/', ID)).toBe(`/buy?hardwareId=${encodeURIComponent(ID)}`)
+  })
+
+  it('adds the element hashes as base64url JSON when known', () => {
+    const elements = [
+      { kind: 'machine_id', hash: '11'.repeat(32) },
+      { kind: 'instance', hash: '22'.repeat(32) },
+    ]
+    const url = new URL(buildRuntimeLicenseBuyUrl('https://edge.autonomylogic.com', ID, elements) ?? '')
+    expect(url.searchParams.get('hardwareId')).toBe(ID)
+    const encoded = url.searchParams.get('elements') ?? ''
+    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))).toEqual(elements)
+    expect(encodeRuntimeHardwareElements(elements)).toBe(encoded)
+  })
+
+  it('omits elements when none are known', () => {
+    expect(buildRuntimeLicenseBuyUrl('https://edge.autonomylogic.com', ID, [])).toBe(
+      `https://edge.autonomylogic.com/buy?hardwareId=${encodeURIComponent(ID)}`,
+    )
+    expect(buildRuntimeLicenseBuyUrl('https://edge.autonomylogic.com', ID, null)).not.toContain('elements')
   })
 
   it('refuses a missing or malformed ID', () => {

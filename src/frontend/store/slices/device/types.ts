@@ -17,6 +17,7 @@ import type {
 import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
 import type {
   RuntimeCommercialLicense,
+  RuntimeHardwareElement,
   TargetCommercialLicenseStatus,
 } from '../../../../middleware/shared/utils/licensing'
 import type { DeviceSetupRecord } from '../../../utils/vpp/device-setup'
@@ -127,8 +128,10 @@ export type RuntimeConnection = {
 
 /** Commercial licence of the connected runtime target, resolved in one place for every view. */
 export type RuntimeCommercialLicenseInfo = {
-  /** Hardware ID the connected runtime reports (the host's in a vPLC), or null. */
+  /** Hardware ID the connected runtime reports, or null. */
   hardwareId: string | null
+  /** Element hashes of `hardwareId` from `GET /api/hardware-id`; absent or empty when unknown. */
+  hardwareElements?: RuntimeHardwareElement[]
   /** Device ID (32 hex) of the connected built-in board, derived from its 0x48 report, or null. */
   boardDeviceId: string | null
   /** Runtime licence the editor verified on the connected built-in board, or null when not known. */
@@ -327,6 +330,7 @@ export type DeviceActions = {
   setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
   setRuntimeLicense: (license: RuntimeCommercialLicense | null) => void
   setRuntimeHardwareId: (hardwareId: string | null) => void
+  setRuntimeHardwareElements: (elements: RuntimeHardwareElement[]) => void
   setBoardRuntimeLicense: (board: { deviceId: string | null; license: RuntimeCommercialLicense | null }) => void
   setRuntimeCommercialLicenseStatus: (status: TargetCommercialLicenseStatus | null) => void
   setRuntimeLicensePurchaseWatch: (until: number | null) => void

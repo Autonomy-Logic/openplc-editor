@@ -48,7 +48,7 @@ function decodeSignature(sig: string): Uint8Array {
  * Verify a licence file for the runtime whose hardware ID is `hardwareId`.
  *
  * @param file The licence as the runtime or Edge returned it; anything else is `not-a-license`.
- * @param hardwareId The runtime's hardware ID v2 (in a vPLC, the host's).
+ * @param hardwareId The runtime's own hardware ID v2.
  * @param keys Accepted public keys by `key_id`.
  */
 export async function verifyRuntimeLicenseFile(

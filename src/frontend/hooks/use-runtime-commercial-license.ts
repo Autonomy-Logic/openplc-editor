@@ -2,9 +2,9 @@
  * Commercial licence of the connected target: a runtime, or a built-in board.
  *
  * `useRuntimeCommercialLicenseOwner` is mounted ONCE, next to the runtime
- * polling. On every runtime connect it verifies the licences the runtime holds
- * and, when none is valid, fetches the ones Edge holds for its hardware ID,
- * uploads the valid ones and verifies again. On every board connect (simulator excluded) whose VPP is `user`
+ * polling. On every runtime connect it verifies the stored licence, confirms it
+ * against Edge (removing a revoked one, installing a missing one) and keeps the
+ * runtime's hardware elements for the purchase link. On every board connect (simulator excluded) whose VPP is `user`
  * it runs the board licence flow for the baremetal runtime product: read the board ID and
  * the stored licence, verify it, and recover it from Edge when missing. It
  * resolves the status from the board's `runtimeLicense`, the VPP licence state
@@ -69,6 +69,7 @@ export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
   const system = useSystem()
   const status = useOpenPLCStore((state) => state.runtimeCommercialLicense.status)
   const runtimeHardwareId = useOpenPLCStore((state) => state.runtimeCommercialLicense.hardwareId)
+  const runtimeElements = useOpenPLCStore((state) => state.runtimeCommercialLicense.hardwareElements)
   const boardDeviceId = useOpenPLCStore((state) => state.runtimeCommercialLicense.boardDeviceId)
   const awaitingPurchaseUntil = useOpenPLCStore((state) => state.runtimeCommercialLicense.awaitingPurchaseUntil)
   const checking = useOpenPLCStore((state) => state.runtimeCommercialLicense.checking)
@@ -79,11 +80,11 @@ export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
   const buyUrl = useMemo(() => {
     if (status === 'mit') return null
     const baseUrl = system.getEdgeFrontendUrl()
-    if (runtimeHardwareId) return buildRuntimeLicenseBuyUrl(baseUrl, runtimeHardwareId)
+    if (runtimeHardwareId) return buildRuntimeLicenseBuyUrl(baseUrl, runtimeHardwareId, runtimeElements)
     if (boardDeviceId)
       return buildLicenseBuyUrl({ baseUrl, vppId: BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID, deviceId: boardDeviceId })
     return null
-  }, [status, system, runtimeHardwareId, boardDeviceId])
+  }, [status, system, runtimeHardwareId, runtimeElements, boardDeviceId])
 
   const buy = useCallback(async () => {
     if (!buyUrl) return
@@ -181,13 +182,16 @@ export function useRuntimeCommercialLicenseOwner(): void {
       const { deviceActions, consoleActions } = store.getState()
       if (mitRuntime) {
         deviceActions.setRuntimeHardwareId(null)
+        deviceActions.setRuntimeHardwareElements([])
         return
       }
       const result = await runtime.syncRuntimeLicenses?.()
       if (!isCurrent()) return
       if (!result) {
         const id = await runtime.getHardwareId?.()
-        if (isCurrent()) deviceActions.setRuntimeHardwareId(id?.success ? id.hardwareId : null)
+        if (!isCurrent()) return
+        deviceActions.setRuntimeHardwareId(id?.success ? id.hardwareId : null)
+        deviceActions.setRuntimeHardwareElements(id?.success ? id.elements : [])
         return
       }
       // A failed check keeps what the last successful one found.
@@ -197,6 +201,7 @@ export function useRuntimeCommercialLicenseOwner(): void {
       }
       if (result.status === 'no-hardware-id') {
         deviceActions.setRuntimeHardwareId(null)
+        deviceActions.setRuntimeHardwareElements([])
         deviceActions.setRuntimeLicense('gpl')
         consoleActions.addLog({
           level: 'debug',
@@ -205,7 +210,16 @@ export function useRuntimeCommercialLicenseOwner(): void {
         return
       }
       deviceActions.setRuntimeHardwareId(result.hardwareId)
+      deviceActions.setRuntimeHardwareElements(result.elements)
       deviceActions.setRuntimeLicense(result.license)
+      if (result.revoked) {
+        consoleActions.addLog({
+          level: 'warning',
+          message: result.revoked.removed
+            ? `Runtime license ${result.revoked.orderId} was revoked and removed from the target.`
+            : `Runtime license ${result.revoked.orderId} was revoked; removing it failed: ${result.revoked.error ?? 'refused'}`,
+        })
+      }
       if (result.detail) {
         consoleActions.addLog({ level: 'debug', message: `Runtime license not confirmed: ${result.detail}` })
       }
@@ -242,6 +256,7 @@ export function useRuntimeCommercialLicenseOwner(): void {
     setDelivered(false)
     if (deliveryKey === null) {
       deviceActions.setRuntimeHardwareId(null)
+      deviceActions.setRuntimeHardwareElements([])
       deviceActions.setRuntimeLicense(null)
       deviceActions.setBoardRuntimeLicense({ deviceId: null, license: null })
       deviceActions.setRuntimeLicenseChecking(false)
