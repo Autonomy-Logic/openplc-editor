@@ -1,7 +1,7 @@
 /**
  * Desktop mechanisms of the HMI preview: the HMI sources, STruC++ runtime headers, files shipped with the compiled
- * objects and installed libraries read by the main process, the main process's WebAssembly toolchain, and a renderer Worker for each module. The port is the
- * shared one.
+ * objects and installed libraries read by the main process, the main process's WebAssembly toolchain, and a renderer
+ * Worker for each module. The port is the shared one.
  */
 import { createHmiPreviewPort } from '../../../backend/shared/hmi/preview/hmi-preview-port'
 import type { HmiPreviewPort } from '../../shared/ports/hmi-preview-port'
