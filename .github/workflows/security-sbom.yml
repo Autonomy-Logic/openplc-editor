@@ -1,0 +1,80 @@
+name: Security — release SBOM
+
+# SBOM flow. Runs once per release (a commit landing on main) and records the
+# software bill of materials of that exact state: CycloneDX 1.6, SPDX 2.3 and a
+# component CSV with the licence of each dependency. A released version's SBOM
+# does not change, so it is never regenerated on a schedule. No vulnerability
+# scan runs here; that is security-release-vulns.yml, a separate flow.
+#
+# Output goes to the orphan branch `security-archive` under pr-<n>-<date>/ (see
+# scripts/security-archive.sh), next to that release's vulnerability report.
+#
+# workflow_dispatch exists for testing: from any ref other than main it writes
+# archive_branch (default security-archive-test); security-archive.sh refuses
+# security-archive outside main.
+
+on:
+  push:
+    branches: [main]
+    # A commit touching only these (e.g. the merged monthly report PR) is not a release.
+    paths-ignore:
+      - "security/**"
+      - "osv-scanner.toml"
+  workflow_dispatch:
+    inputs:
+      archive_branch:
+        description: "Archive branch for runs outside main (must start with security-archive-)"
+        required: true
+        default: security-archive-test
+
+permissions:
+  contents: write
+
+concurrency:
+  group: security-sbom-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    env:
+      # main always writes security-archive (the input is ignored there); other refs
+      # write the input or security-archive-test.
+      ARCHIVE_BRANCH: ${{ github.ref == 'refs/heads/main' && 'security-archive' || inputs.archive_branch || 'security-archive-test' }}
+    steps:
+      - name: Checkout (release state)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          # The archive step gets GH_TOKEN explicitly; no token is left in .git/config
+          # for the downloaded tools that run before it.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+
+      - name: Generate SBOM (CycloneDX + SPDX + components.csv)
+        run: |
+          bash scripts/generate-sbom.sh
+          NAME=$(basename "$(ls sbom/*.cdx.json | head -1)" .cdx.json)
+          echo "NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: Cross-check the three artifacts agree on the component count
+        run: |
+          CDX=$(node -e 'import("./scripts/lib/cdx.mjs").then(({collectComponents})=>console.log(collectComponents(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))).length))' "sbom/$NAME.cdx.json")
+          SPDX=$(node -p "JSON.parse(require('fs').readFileSync('sbom/$NAME.spdx.json','utf8')).packages.length")
+          # grep -c '' counts lines whether or not the file ends in a newline.
+          CSV=$(( $(grep -c '' "sbom/$NAME.components.csv") - 1 ))
+          echo "cdx=$CDX spdx=$SPDX csv=$CSV"
+          [ "$CDX" = "$SPDX" ] && [ "$CDX" = "$CSV" ] || {
+            echo "::error::component counts disagree (cdx=$CDX spdx=$SPDX csv=$CSV)"; exit 1; }
+
+      - name: Archive the SBOM with this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE_PROVENANCE: PROVENANCE-sbom.txt
+        run: |
+          DIR=$(bash scripts/security-archive.sh dir)
+          bash scripts/security-archive.sh publish "$DIR" \
+            "sbom/$NAME.cdx.json" "sbom/$NAME.spdx.json" "sbom/$NAME.components.csv"
+          echo "Archived to $ARCHIVE_BRANCH/$DIR" >> "$GITHUB_STEP_SUMMARY"

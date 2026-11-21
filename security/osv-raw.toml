@@ -1,0 +1,3 @@
+# Empty osv-scanner config for the unfiltered ("raw") scan. Passing it with
+# --config replaces the per-directory osv-scanner.toml, so no suppression applies.
+# Keep it free of [[IgnoredVulns]] and [[PackageOverrides]].
