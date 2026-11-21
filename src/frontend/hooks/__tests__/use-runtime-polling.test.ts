@@ -239,3 +239,20 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     expect(data).toHaveProperty('label', '192.168.2.4')
   })
 })
+
+describe('useRuntimePolling — runtime commercial licence', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
+    mockRuntime.getEthercatRuntimeStatus = undefined
+    connectRuntime()
+  })
+
+  it('leaves the licence the editor verified alone while polling', async () => {
+    store.getState().deviceActions.setRuntimeLicense('commercial')
+    mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
+    renderPolling()
+    await flushAll()
+    expect(store.getState().runtimeConnection.license).toBe('commercial')
+  })
+})

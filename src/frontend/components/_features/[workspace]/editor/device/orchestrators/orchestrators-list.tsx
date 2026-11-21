@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   OrchestratorDevice,
   OrchestratorInfo,
+  PublicRuntimeLicenseStatus,
 } from '../../../../../../../middleware/shared/ports/orchestrator-port'
 import { useOrchestrator, usePlatform, useRuntime } from '../../../../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
+import { useRuntimeCommercialLicense } from '../../../../../../hooks/use-runtime-commercial-license'
 import { toProjectTargetDevice, toSelectedDevice } from '../../../../../../services/project-target-device'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import type { SelectedDevice } from '../../../../../../store/slices/device'
@@ -16,6 +18,7 @@ import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { RuntimeCommercialLicenseStatus } from '../configuration/components/runtime-commercial-license-status'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
@@ -72,6 +75,29 @@ const BackplaneBadge = () => (
   </span>
 )
 
+const LICENSE_BADGE: Record<Exclude<PublicRuntimeLicenseStatus, 'unknown'>, { label: string; className: string }> = {
+  commercial: {
+    label: 'Commercial',
+    className: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
+  },
+  gpl: { label: 'GPLv3', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' },
+  mit: { label: 'MIT', className: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400' },
+}
+
+/** Licence a vPLC holds, read from its public licence endpoint; nothing while unknown. */
+const RowLicenseBadge = ({ status }: { status: PublicRuntimeLicenseStatus | undefined }) => {
+  if (!status || status === 'unknown') return null
+  const { label, className } = LICENSE_BADGE[status]
+  return (
+    <span
+      className={cn('inline-flex items-center rounded px-2 py-0.5 text-xs font-medium', className)}
+      title='Runtime license'
+    >
+      {label}
+    </span>
+  )
+}
+
 /** Same rule for both: absent clears the key, a value writes it. */
 function sameBinding(a: SelectedDevice['vpp'], b: SelectedDevice['vpp']): boolean {
   if (a === b) return true
@@ -121,6 +147,8 @@ const OrchestratorsList = () => {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
+  const runtimeLicense = useRuntimeCommercialLicense()
+  const [rowLicenses, setRowLicenses] = useState<Record<string, PublicRuntimeLicenseStatus>>({})
   const [connectionError, setConnectionError] = useState<string | null>(null)
   // Note: Status polling is handled globally by useRuntimePolling hook.
   // This component sets includeTimingStatsInPolling=true to request timing stats.
@@ -225,6 +253,28 @@ const OrchestratorsList = () => {
       })
     }
   }, [runtimeConnection.selectedDevice])
+
+  useEffect(() => {
+    const read = orchestratorPort.getRuntimeLicenseStatus?.bind(orchestratorPort)
+    if (!read) return
+    let cancelled = false
+    for (const orchestrator of orchestrators) {
+      if (!expandedOrchestrators.has(orchestrator.id)) continue
+      for (const device of orchestrator.devices) {
+        if (device.active === false) continue
+        const key = `${orchestrator.agentId}:${device.id}`
+        void Promise.resolve(read(orchestrator.agentId, device.id))
+          .then((status) => {
+            if (cancelled || !status) return
+            setRowLicenses((prev) => (prev[key] === status ? prev : { ...prev, [key]: status }))
+          })
+          .catch(() => undefined)
+      }
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [orchestratorPort, orchestrators, expandedOrchestrators, runtimeLicense.status])
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
@@ -601,6 +651,7 @@ const OrchestratorsList = () => {
                                   {device.name}
                                 </span>
                                 {device.backplaneAccess === true && <BackplaneBadge />}
+                                <RowLicenseBadge status={rowLicenses[`${orchestrator.agentId}:${device.id}`]} />
                                 <StatusBadge status={device.status} />
                                 {isConnected && (
                                   <span className='text-xs font-medium text-green-600 dark:text-green-400'>
@@ -649,6 +700,16 @@ const OrchestratorsList = () => {
                       {isConnecting ? 'Connecting...' : 'Connect'}
                     </button>
                   )}
+                  {runtimeConnection.connectionStatus === 'connected' ? (
+                    <RuntimeCommercialLicenseStatus
+                      status={runtimeLicense.status}
+                      hardwareId={runtimeLicense.hardwareId}
+                      idLabel={runtimeLicense.idLabel}
+                      buyUrl={runtimeLicense.buyUrl}
+                      awaitingPurchase={runtimeLicense.awaitingPurchase}
+                      onBuy={() => void runtimeLicense.buy()}
+                    />
+                  ) : null}
                 </div>
                 {runtimeConnection.connectionStatus === 'connected' && runtimeConnection.plcStatus && (
                   <div className='flex items-center gap-2'>
