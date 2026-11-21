@@ -7,6 +7,14 @@ import { FakeRunner } from '../../../wasm-toolchain/__tests__/fixtures/fake-runn
 import type { CachedWasmObject } from '../../../wasm-toolchain/compile-to-wasm'
 import { readShippedObjects } from '../../../wasm-toolchain/shipped-objects'
 import { WASM_TOOLCHAIN_IDENTITY } from '../../../wasm-toolchain/toolchain-identity'
+import { HMI_PREVIEW_CXX_FLAGS, hmiPreviewFixedFiles } from '../../preview/build-hmi-preview'
+import {
+  HMI_PRELUDE_FILE,
+  HMI_PRELUDE_INDEX,
+  HMI_PRELUDE_PCH,
+  HMI_PRELUDE_SOURCE,
+  loadHmiPrelude,
+} from '../../preview/hmi-prelude'
 import { hmiPreviewResources } from '../../preview/hmi-preview-port'
 import { installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
 import { buildHmiShippedObjects, fixedHmiObjects, isFixedHmiPath } from '../fixed-objects'
@@ -64,24 +72,64 @@ function readAll(dir: string, prefix = ''): Record<string, Uint8Array> {
 }
 
 describe('buildHmiShippedObjects', () => {
-  it('ships every object of the gallery, its linked module too', async () => {
-    const hmiFiles = readAll(HMI_DIR)
-    const runner = new FakeRunner(4)
-    const files = await buildHmiShippedObjects(runner, {
-      preview: {
-        ...hmiPreviewResources({ root: '', files: hmiFiles }, { 'iec_types.hpp': '#pragma once\n' }),
-        projectLibraries: installedWidgetArchives(),
-      },
-      hmiSources: hmiFiles,
-      runtimeHeaders: { 'strucpp_runtime/include/iec_types.hpp': '#pragma once\n' },
-    })
-    const objects = await readShippedObjects(
-      { read: (name) => Promise.resolve(files[name] ?? null) },
+  const hmiFiles = readAll(HMI_DIR)
+  const runtimeHeaders = { 'iec_types.hpp': '#pragma once\n', 'iec_var.hpp': '#pragma once\n' }
+  const preview = {
+    ...hmiPreviewResources({ root: '', files: hmiFiles }, runtimeHeaders),
+    projectLibraries: installedWidgetArchives(),
+  }
+  /* The prelude reads the runtime headers and the HMI core header, as clang would list them. */
+  const runner = new FakeRunner(4, () => ({ exitCode: 0 }), null, {
+    [HMI_PRELUDE_SOURCE]: [
+      'strucpp_runtime/include/iec_types.hpp',
+      'hmi/core/hmi_core.h',
+      'unit/hmi_unit_libraries.hpp',
+    ],
+    'groups/glue.cpp': [HMI_PRELUDE_PCH],
+  })
+  const shipped = buildHmiShippedObjects(runner, {
+    preview,
+    hmiSources: hmiFiles,
+    runtimeHeaders: { 'strucpp_runtime/include/iec_types.hpp': '#pragma once\n' },
+  })
+  const source = (files: Record<string, Uint8Array>) => ({
+    read: (name: string) => Promise.resolve(files[name] ?? null),
+  })
+
+  it('compiles the prelude from the gallery unit header with the preview C++ flags', async () => {
+    await shipped
+    const prelude = runner.jobs.filter((job) => job.argv.includes(HMI_PRELUDE_SOURCE))
+    expect(prelude).toHaveLength(1)
+    expect(prelude[0].argv).toEqual(expect.arrayContaining([...HMI_PREVIEW_CXX_FLAGS, '-x', 'c++-header']))
+  })
+
+  it('ships the prelude, which the preview loads from the same files', async () => {
+    const files = await shipped
+    const loaded = await loadHmiPrelude(
+      files[HMI_PRELUDE_INDEX],
+      files[HMI_PRELUDE_FILE],
       WASM_TOOLCHAIN_IDENTITY,
+      hmiPreviewFixedFiles(preview),
     )
+    expect(loaded?.header).toMatch(/#include "hmi_unit_libraries\.hpp"\n$/)
+    expect(
+      await loadHmiPrelude(files[HMI_PRELUDE_INDEX], files[HMI_PRELUDE_FILE], WASM_TOOLCHAIN_IDENTITY, {
+        ...hmiPreviewFixedFiles(preview),
+        'hmi/core/hmi_core.h': '// changed',
+      }),
+    ).toBeNull()
+  })
+
+  it("starts the gallery's groups from the prelude and ships every object of the gallery, its module too", async () => {
+    const files = await shipped
+    const compiled = (unit: string) => runner.jobs.filter((job) => job.argv.includes(unit))
+    expect(compiled('groups/glue.cpp').every((job) => job.argv.includes('-include-pch'))).toBe(true)
+    expect(compiled('groups/factory.cpp').some((job) => job.argv.includes('-include-pch'))).toBe(false)
+    const objects = await readShippedObjects(source(files), WASM_TOOLCHAIN_IDENTITY)
     const builtFrom = (path: string) => objects.filter(({ entry }) => entry.dependencies.some(([p]) => p === path))
     expect(builtFrom('groups/glue.cpp').length).toBeGreaterThan(0)
     expect(builtFrom('groups/factory.cpp').length).toBeGreaterThan(0)
+    expect(builtFrom(HMI_PRELUDE_PCH).length).toBeGreaterThan(0)
     expect(objects.filter(({ entry }) => entry.dependencies.length === 0).length).toBe(HMI_FONT_VARIANTS.length)
   })
 })

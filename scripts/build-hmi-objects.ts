@@ -1,8 +1,8 @@
 /**
  * Builds the compiled objects the editor ships (`release/hmi-objects/`): the HMI core, font tables, hosts and widget
- * library units, the default palette gallery, and the bundled libraries' OpenPLC Simulator units, compiled with the
- * pinned WebAssembly toolchain. Run before packaging (`npm run build:hmi-objects`); the packaged app reads them from
- * its resources, development builds from the folder.
+ * library units, the default palette gallery, the preview's precompiled prelude, and the bundled libraries' OpenPLC
+ * Simulator units, compiled with the pinned WebAssembly toolchain. Run before packaging (`npm run build:hmi-objects`);
+ * the packaged app reads them from its resources, development builds from the folder.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
     }
     const seconds = ((performance.now() - started) / 1000).toFixed(1)
     console.log(
-      `[build-hmi-objects] ${Object.keys(files).length - 1} objects, ${(bytes / 1048576).toFixed(1)} MB in ${seconds} s`,
+      `[build-hmi-objects] ${Object.keys(files).filter((name) => name.endsWith('.obj')).length} objects, ${(bytes / 1048576).toFixed(1)} MB in ${seconds} s`,
     )
   } finally {
     await runner.end()

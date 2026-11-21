@@ -171,7 +171,10 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import { getDesktopWasmCompileService } from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
+import {
+  getDesktopShippedObjects,
+  getDesktopWasmCompileService,
+} from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
   interpretPluginCommandResponse,
@@ -1040,6 +1043,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('wasm-toolchain:hold', this.handleWasmToolchainHold)
     this.registerHandle('hmi-preview:read-sources', this.handleHmiPreviewReadSources)
     this.registerHandle('hmi-preview:read-runtime-headers', this.handleHmiPreviewReadRuntimeHeaders)
+    this.registerHandle('hmi-preview:read-shipped', this.handleHmiPreviewReadShipped)
 
     // ===================== DEBUGGER =====================
     this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
@@ -2453,6 +2457,11 @@ class MainProcessBridge implements MainIpcModule {
 
   handleHmiPreviewReadRuntimeHeaders = (): Promise<Record<string, string>> =>
     readFolderText(this.compilerModule.strucppRuntimeDir)
+
+  handleHmiPreviewReadShipped = (_event: IpcMainInvokeEvent, name: unknown): Promise<Uint8Array | null> =>
+    typeof name === 'string'
+      ? getDesktopShippedObjects().read(name)
+      : Promise.reject(new Error('hmi-preview:read-shipped takes a file name'))
 
   handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
     this.hardwareModule.getBoardImagePreview(image, packagePath)

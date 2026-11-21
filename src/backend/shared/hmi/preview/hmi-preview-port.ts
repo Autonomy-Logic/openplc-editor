@@ -13,6 +13,7 @@ import type {
   HmiThumbnailResult,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { selectProjectLibraryArchives } from '../../../../middleware/shared/utils/library/project-libraries'
+import { WASM_TOOLCHAIN_IDENTITY } from '../../wasm-toolchain/toolchain-identity'
 import { loadHmiWidgetLibraries } from '../lib/widget-libraries'
 import {
   buildHmiWidgetCatalog,
@@ -20,7 +21,13 @@ import {
   hmiScreenMembers,
   type HmiWidgetLibrary,
 } from '../unit/generate-hmi-unit'
-import { buildHmiPreview, type HmiPreviewResources, isHmiPreviewSource } from './build-hmi-preview'
+import {
+  buildHmiPreview,
+  hmiPreviewFixedFiles,
+  type HmiPreviewResources,
+  isHmiPreviewSource,
+} from './build-hmi-preview'
+import { HMI_PRELUDE_FILE, HMI_PRELUDE_INDEX, loadHmiPrelude } from './hmi-prelude'
 import { renderHmiThumbnails } from './hmi-thumbnails'
 import { createHmiPreviewSession, type HmiPreviewSessionOptions } from './preview-session'
 
@@ -100,10 +107,20 @@ export function createHmiPreviewPort(
     if (catalogCache?.key !== key) catalogCache = { key, result: buildHmiWidgetCatalog(widgets, selected) }
     return catalogCache.result
   }
+  /** A shipped file, or null when it cannot be read: the prelude is optional. */
+  const readShipped = (name: string): Promise<Uint8Array | null> => mechanisms.readShippedFile(name).catch(() => null)
   const loadResources = (): Promise<Omit<HmiPreviewResources, 'projectLibraries'>> => {
-    resources ??= Promise.all([mechanisms.readHmiSources(), mechanisms.readStrucppRuntimeHeaders()]).then(
-      ([hmiFiles, runtimeHeaders]) => hmiPreviewResources(hmiFiles, runtimeHeaders),
-    )
+    resources ??= Promise.all([
+      mechanisms.readHmiSources(),
+      mechanisms.readStrucppRuntimeHeaders(),
+      readShipped(HMI_PRELUDE_INDEX),
+      readShipped(HMI_PRELUDE_FILE),
+    ]).then(async ([hmiFiles, runtimeHeaders, preludeIndex, preludePch]) => {
+      const files = hmiPreviewResources(hmiFiles, runtimeHeaders)
+      const fixed = hmiPreviewFixedFiles(files)
+      const prelude = await loadHmiPrelude(preludeIndex, preludePch, WASM_TOOLCHAIN_IDENTITY, fixed).catch(() => null)
+      return { ...files, prelude }
+    })
     resources.catch(() => {
       resources = null
     })

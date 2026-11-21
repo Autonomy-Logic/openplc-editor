@@ -29,6 +29,13 @@ import {
   type HmiPreview,
   WIDGET_PREVIEW_SCREEN,
 } from '../unit/generate-hmi-unit'
+import {
+  HMI_PRELUDE_PCH,
+  HMI_PRELUDE_SOURCE,
+  HMI_UNIT_LIBRARIES_HEADER,
+  type HmiPrelude,
+  hmiPreludeFits,
+} from './hmi-prelude'
 import { splitScreenHeaders } from './split-screen-headers'
 
 /** What the preview build reads besides the project: the files every preview compiles in. */
@@ -41,6 +48,8 @@ export interface HmiPreviewResources {
   readFont: (file: string) => Promise<Uint8Array>
   /** The archives of the libraries the project uses (bundled and listed), verbatim; the preview compiles against them. */
   projectLibraries: readonly unknown[]
+  /** The shipped precompiled prelude, when there is one for these files and this toolchain. */
+  prelude?: HmiPrelude | null
 }
 
 /** Compiles a request; the platform's WebAssembly toolchain. */
@@ -53,7 +62,7 @@ const RUNTIME_DIR = 'strucpp_runtime/include'
 const GROUP_DIR = 'groups'
 const FONT_TABLE = `${UNIT_DIR}/hmi_preview_fonts.c`
 /** The unit's libraries header, which declares every library the unit links. */
-const LIBRARIES_HEADER = 'hmi_unit_libraries.hpp'
+const LIBRARIES_HEADER = HMI_UNIT_LIBRARIES_HEADER
 const HOST = `${HMI_DIR}/preview/hmi_preview_host.cpp`
 /** The live elements' code, compiled against the widget library that provides the screen base. */
 const LIVE_SOURCE = `${HMI_DIR}/preview/hmi_preview_live.cpp`
@@ -117,23 +126,39 @@ const PREVIEW_SOURCE = /^(core|unit|preview)\/.*\.(c|h|cpp|hpp)$/
 /** Whether a path under the HMI sources folder is one of the sources every preview request carries. */
 export const isHmiPreviewSource = (path: string): boolean => PREVIEW_SOURCE.test(path)
 
+/** The files every preview request carries by request path: the runtime headers and the HMI sources. */
+export function hmiPreviewFixedFiles(
+  resources: Pick<HmiPreviewResources, 'runtimeHeaders' | 'hmiSources'>,
+): Record<string, string> {
+  const files: Record<string, string> = {}
+  for (const [name, text] of Object.entries(resources.runtimeHeaders)) files[`${RUNTIME_DIR}/${name}`] = text
+  for (const [path, text] of Object.entries(resources.hmiSources)) files[`${HMI_DIR}/${path}`] = text
+  return files
+}
+
 /**
  * The compile request of a generated unit: its files and setters under `unit/`, one wrapper per group of files that
- * change together, the HMI sources under `hmi/`, the runtime headers and the font table.
+ * change together, the HMI sources under `hmi/`, the runtime headers and the font table. With a prelude that fits the
+ * unit, every group but the factory starts from its precompiled header.
  */
 export function buildHmiPreviewRequest(
   unitFiles: Readonly<Record<string, string>>,
   groups: HmiPreview['units'],
   fontTable: string,
-  resources: Pick<HmiPreviewResources, 'runtimeHeaders' | 'hmiSources'>,
+  resources: Pick<HmiPreviewResources, 'runtimeHeaders' | 'hmiSources' | 'prelude'>,
   libraries: readonly HmiLibraryUnit[] = [],
 ): WasmCompileRequest {
   const files: WasmCompileRequest['files'] = {}
   for (const library of libraries) Object.assign(files, library.files)
-  for (const [name, text] of Object.entries(resources.runtimeHeaders)) files[`${RUNTIME_DIR}/${name}`] = text
-  for (const [path, text] of Object.entries(resources.hmiSources)) files[`${HMI_DIR}/${path}`] = text
+  Object.assign(files, hmiPreviewFixedFiles(resources))
   for (const [name, text] of Object.entries(unitFiles)) files[`${UNIT_DIR}/${name}`] = text
   files[FONT_TABLE] = fontTable
+  const shipped = resources.prelude
+  const prelude = hmiPreludeFits(shipped, unitFiles) ? shipped : null
+  if (prelude) {
+    files[HMI_PRELUDE_SOURCE] = prelude.header
+    files[HMI_PRELUDE_PCH] = prelude.pch
+  }
   const wrappers = groupUnits(groups)
   Object.assign(files, wrappers)
   const base = libraries.find((library) => library.screenBase !== null)?.screenBase
@@ -141,7 +166,12 @@ export function buildHmiPreviewRequest(
   const units: WasmCompileUnit[] = [
     ...CORE_SOURCES.map((name): WasmCompileUnit => ({ source: `${HMI_DIR}/core/${name}`, language: 'c' })),
     { source: FONT_TABLE, language: 'c' },
-    ...Object.keys(wrappers).map((source): WasmCompileUnit => ({ source, language: 'c++' })),
+    ...Object.keys(wrappers).map(
+      (source): WasmCompileUnit =>
+        prelude && source !== FACTORY_GROUP
+          ? { source, language: 'c++', flags: ['-include-pch', HMI_PRELUDE_PCH] }
+          : { source, language: 'c++' },
+    ),
     { source: HOST, language: 'c++' },
     base
       ? {

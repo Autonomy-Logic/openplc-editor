@@ -5,6 +5,7 @@
  */
 import type { WasmShippedObjectSource } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 
+import { HMI_PRELUDE_FILE, HMI_PRELUDE_INDEX } from '../hmi/preview/hmi-prelude'
 import { sha256Hex } from './content-digest'
 import { decodeObjectRecord, encodeObjectRecord, type StoredWasmObject } from './persistent-object-cache'
 
@@ -19,8 +20,12 @@ export interface ShippedObjectsIndex {
   records: Array<{ name: string; sha256: string }>
 }
 
-/** Whether `name` is a file a shipped object source may be asked for: the index or a record named by its digest. */
-export const isShippedObjectName = (name: string): boolean => name === SHIPPED_OBJECTS_INDEX || RECORD_NAME.test(name)
+/**
+ * Whether `name` is a file a shipped object source may be asked for: the index, a record named by its digest, or one
+ * of the HMI preview's precompiled prelude files.
+ */
+export const isShippedObjectName = (name: string): boolean =>
+  name === SHIPPED_OBJECTS_INDEX || RECORD_NAME.test(name) || name === HMI_PRELUDE_INDEX || name === HMI_PRELUDE_FILE
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

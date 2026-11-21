@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { HmiPreviewMechanisms } from '../../../../../middleware/shared/ports/hmi-preview-mechanisms'
+import { sha256Hex } from '../../../wasm-toolchain/content-digest'
+import { WASM_TOOLCHAIN_IDENTITY } from '../../../wasm-toolchain/toolchain-identity'
 import type { WasmCompileRequest, WasmCompileResult } from '../../../../../middleware/shared/ports/wasm-toolchain-types'
 import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
 import { installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
@@ -14,6 +16,7 @@ import {
   HMI_PREVIEW_LINK_FLAGS,
   type HmiPreviewResources,
 } from '../build-hmi-preview'
+import { encodeHmiPrelude, HMI_PRELUDE_PCH, HMI_PRELUDE_SOURCE, type HmiPrelude, hmiPreludeText } from '../hmi-prelude'
 import { createHmiPreviewPort, HMI_TOOLCHAIN_HOLDER, hmiPreviewResources } from '../hmi-preview-port'
 import { testWorker } from './fixtures/support'
 
@@ -110,6 +113,49 @@ describe('buildHmiPreviewRequest', () => {
     expect(request.cxxFlags).toBe(HMI_PREVIEW_CXX_FLAGS)
     expect(request.linkFlags).toBe(HMI_PREVIEW_LINK_FLAGS)
     expect(HMI_PREVIEW_LINK_FLAGS).toContain('-mexec-model=reactor')
+  })
+})
+
+describe('buildHmiPreviewRequest with the shipped prelude', () => {
+  const opening = '#pragma once\n#include "iec_types.hpp"\n#include "hmi_unit_libraries.hpp"\n'
+  const libraries = '#pragma once\nnamespace hmi {}\n'
+  const prelude: HmiPrelude = { header: opening, libraries, pch: new Uint8Array([7]) }
+  const groups = {
+    library: [],
+    widgets: [],
+    screens: { Main: ['pou_MAIN.cpp'] },
+    glue: ['configuration.cpp'],
+    factory: ['hmi_preview_factory.cpp'],
+  }
+  const unitFiles = {
+    'hmi_unit.hpp': `${opening}namespace hmi { class MAIN; }\n`,
+    'hmi_unit_libraries.hpp': libraries,
+    'pou_MAIN.cpp': '// main',
+    'configuration.cpp': '// config',
+    'hmi_preview_factory.cpp': '// factory',
+  }
+  const flagsOf = (request: WasmCompileRequest) =>
+    Object.fromEntries(request.units.map((u) => [u.source, u.flags ?? null]))
+
+  it('starts every group but the factory from the precompiled header when the unit fits it', () => {
+    const request = buildHmiPreviewRequest(unitFiles, groups, '// fonts', { ...resources, prelude })
+    expect(request.files[HMI_PRELUDE_SOURCE]).toBe(opening)
+    expect(request.files[HMI_PRELUDE_PCH]).toBe(prelude.pch)
+    expect(flagsOf(request)).toMatchObject({
+      'groups/screen_Main.cpp': ['-include-pch', HMI_PRELUDE_PCH],
+      'groups/glue.cpp': ['-include-pch', HMI_PRELUDE_PCH],
+      'groups/factory.cpp': null,
+      'hmi/preview/hmi_preview_host.cpp': null,
+      'hmi/core/hmi_core.c': null,
+    })
+  })
+
+  it('compiles as without one when the unit does not fit it', () => {
+    const other = { ...unitFiles, 'hmi_unit_libraries.hpp': `${libraries}namespace hmi { class X; }\n` }
+    const request = buildHmiPreviewRequest(other, groups, '// fonts', { ...resources, prelude })
+    expect(request.files).not.toHaveProperty([HMI_PRELUDE_PCH])
+    expect(request.files).not.toHaveProperty([HMI_PRELUDE_SOURCE])
+    expect(request.units.filter((u) => u.flags !== undefined)).toEqual([])
   })
 })
 
@@ -250,6 +296,7 @@ describe('createHmiPreviewPort', () => {
         return Promise.resolve({ root: '', files: { 'core/hmi_core.c': '// c', ...fonts } })
       },
       readStrucppRuntimeHeaders: () => Promise.resolve({}),
+      readShippedFile: () => Promise.resolve(null),
       compileToWasm: compile,
       startWorker: () => {
         workers++
@@ -281,5 +328,59 @@ describe('createHmiPreviewPort', () => {
       [HMI_TOOLCHAIN_HOLDER, true],
       [HMI_TOOLCHAIN_HOLDER, false],
     ])
+  })
+})
+
+describe('the preview port and the shipped prelude', () => {
+  const sources = { 'core/hmi_core.c': '// c', 'core/hmi_core.h': '// h' }
+
+  async function portWith(readShippedFile: HmiPreviewMechanisms['readShippedFile']) {
+    const fonts: Record<string, Uint8Array> = {}
+    for (const file of ['OpenPLCSans-Regular.ttf', 'OpenPLCSans-Bold.ttf'])
+      fonts[`fonts/${file}`] = new Uint8Array(readFileSync(join(FONTS, file)))
+    const { requests, compile } = capture()
+    const port = createHmiPreviewPort({
+      readHmiSources: () => Promise.resolve({ root: '', files: { ...sources, ...fonts } }),
+      readStrucppRuntimeHeaders: () => Promise.resolve({ 'include/iec_types.hpp': '// t' }),
+      readShippedFile,
+      compileToWasm: compile,
+      startWorker: () => testWorker(),
+      holdToolchain: () => Promise.resolve(),
+      loadLibraries: () => Promise.resolve(installedWidgetArchives()),
+      onLibrariesChanged: () => () => undefined,
+    })
+    expect((await port.build(sampleProject())).ok).toBe(true)
+    return requests[0]
+  }
+
+  /** The shipped files of a prelude of the sample project's unit header, built from `inputs`. */
+  async function shippedPrelude(inputs: Record<string, string>): Promise<Record<string, Uint8Array>> {
+    const plain = await portWith(() => Promise.resolve(null))
+    const header = hmiPreludeText(String(plain.files['unit/hmi_unit.hpp']))
+    if (header === null) throw new Error('the sample unit header has no prelude')
+    const libraries = String(plain.files['unit/hmi_unit_libraries.hpp'])
+    const digests = await Promise.all(
+      Object.entries(inputs).map(async ([path, text]): Promise<[string, string]> => [path, await sha256Hex(text)]),
+    )
+    return encodeHmiPrelude(WASM_TOOLCHAIN_IDENTITY, { header, libraries, pch: new Uint8Array([9, 9]) }, digests)
+  }
+
+  it('compiles the groups from the shipped prelude when it was built from the same files', async () => {
+    const files = await shippedPrelude({
+      'hmi/core/hmi_core.h': '// h',
+      'strucpp_runtime/include/iec_types.hpp': '// t',
+    })
+    const request = await portWith((name) => Promise.resolve(files[name] ?? null))
+    expect(request.files[HMI_PRELUDE_PCH]).toEqual(new Uint8Array([9, 9]))
+    expect(request.units.find((u) => u.source === 'groups/glue.cpp')?.flags).toEqual(['-include-pch', HMI_PRELUDE_PCH])
+  })
+
+  it('compiles without it when it was built from another file, or cannot be read', async () => {
+    const files = await shippedPrelude({ 'hmi/core/hmi_core.h': '// older h' })
+    const stale = await portWith((name) => Promise.resolve(files[name] ?? null))
+    expect(stale.files).not.toHaveProperty([HMI_PRELUDE_PCH])
+    const unreadable = await portWith(() => Promise.reject(new Error('offline')))
+    expect(unreadable.files).not.toHaveProperty([HMI_PRELUDE_PCH])
+    expect(unreadable.units.filter((u) => u.flags?.includes('-include-pch'))).toEqual([])
   })
 })
