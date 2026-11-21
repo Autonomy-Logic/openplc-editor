@@ -34,13 +34,15 @@ afterEach(() => {
 })
 
 describe('createRuntimeLicenseMechanisms', () => {
-  it('passes runtime GETs and POSTs through the authenticated client, the reply untouched', async () => {
+  it('passes runtime GETs, POSTs and DELETEs through the authenticated client, the reply untouched', async () => {
     runtimeApiExchange.mockResolvedValue({ status: 400, body: '{"error":"x"}' })
     await expect(mechanisms().runtimeGet('/api/hardware-id')).resolves.toEqual({ status: 400, body: '{"error":"x"}' })
     await mechanisms().runtimePost('/api/runtime-license', { order_id: 'o1', sig: 's' })
+    await mechanisms().runtimeDelete('/api/runtime-license')
     expect(runtimeApiExchange.mock.calls).toEqual([
       ['GET', '10.0.0.5', '/api/hardware-id'],
       ['POST', '10.0.0.5', '/api/runtime-license', '{"order_id":"o1","sig":"s"}'],
+      ['DELETE', '10.0.0.5', '/api/runtime-license'],
     ])
   })
 

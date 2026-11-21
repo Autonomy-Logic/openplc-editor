@@ -8,7 +8,7 @@ import { compareParsedVersions, parseVersion } from '../../../../frontend/utils/
 import type { DeviceLicenseState } from '../../ports/device-port'
 import type { RuntimeLicenseMode } from '../../ports/types'
 import { frameConsoleNotice } from './console-notice'
-import type { RuntimeCommercialLicense } from './runtime-commercial-license'
+import type { RuntimeCommercialLicense, RuntimeHardwareElement } from './runtime-commercial-license'
 
 /** Approved wording, shown verbatim wherever the target is unlicensed. */
 export const COMMERCIAL_LICENSE_DISCLAIMER =
@@ -74,15 +74,27 @@ export function commercialLicenseConsoleLines(): string[] {
 
 const HARDWARE_ID_RE = /^hw2:[0-9a-f]{64}$/
 
+/** base64url (no padding) of the JSON `[{kind,hash}]` list, as the purchase page reads `elements`. */
+export function encodeRuntimeHardwareElements(elements: readonly RuntimeHardwareElement[]): string {
+  const json = JSON.stringify(elements.map(({ kind, hash }) => ({ kind, hash })))
+  return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 /**
- * `/buy?hardwareId=…` on the Edge web app, or null for an ID the page would refuse.
- * In a vPLC the ID is the host's, so the purchase adds seats to that host.
+ * `/buy?hardwareId=…[&elements=…]` on the Edge web app, or null for an ID the page would refuse.
+ * `elements`, when known, lets the page tell a vPLC from a device and find its host.
  */
-export function buildRuntimeLicenseBuyUrl(baseUrl: string, hardwareId: string | null | undefined): string | null {
+export function buildRuntimeLicenseBuyUrl(
+  baseUrl: string,
+  hardwareId: string | null | undefined,
+  elements?: readonly RuntimeHardwareElement[] | null,
+): string | null {
   const id = hardwareId?.trim()
   if (!id || !HARDWARE_ID_RE.test(id)) return null
 
-  const query = new URLSearchParams({ hardwareId: id }).toString()
+  const params = new URLSearchParams({ hardwareId: id })
+  if (elements && elements.length > 0) params.set('elements', encodeRuntimeHardwareElements(elements))
+  const query = params.toString()
   const path = `${baseUrl.replace(/\/+$/, '')}/buy`
   try {
     const url = new URL(path)

@@ -133,6 +133,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
 
   runtimeCommercialLicense: {
     hardwareId: null,
+    hardwareElements: [],
     boardDeviceId: null,
     boardLicense: null,
     status: null,
@@ -614,6 +615,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ runtimeCommercialLicense }: DeviceSlice) => {
           runtimeCommercialLicense.hardwareId = hardwareId
+        }),
+      )
+    },
+    setRuntimeHardwareElements: (elements): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          runtimeCommercialLicense.hardwareElements = elements
         }),
       )
     },

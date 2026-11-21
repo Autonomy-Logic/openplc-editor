@@ -280,7 +280,7 @@ export class RuntimeApiClient {
    * Throws on a transport failure.
    */
   async runtimeApiExchange(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     ipAddress: string,
     endpoint: string,
     body?: string,
@@ -298,7 +298,7 @@ export class RuntimeApiClient {
    * Returns the raw status code, response body, and headers for the caller to interpret.
    */
   private httpRequest(options: {
-    method: 'GET' | 'POST'
+    method: 'GET' | 'POST' | 'DELETE'
     url: string
     body?: string
     headers?: Record<string, string>

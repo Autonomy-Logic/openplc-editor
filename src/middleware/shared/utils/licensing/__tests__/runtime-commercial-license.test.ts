@@ -1,4 +1,8 @@
-import { isRuntimeHardwareId, parseRuntimeHardwareId } from '../runtime-commercial-license'
+import {
+  isRuntimeHardwareId,
+  parseRuntimeHardwareElements,
+  parseRuntimeHardwareId,
+} from '../runtime-commercial-license'
 
 const ID = `hw2:${'ab'.repeat(32)}`
 
@@ -55,5 +59,22 @@ describe('parseRuntimeHardwareId', () => {
     expect(parseRuntimeHardwareId({ hardwareId: 7 })).toBeNull()
     expect(parseRuntimeHardwareId('hw2')).toBeNull()
     expect(parseRuntimeHardwareId(null)).toBeNull()
+  })
+})
+
+describe('parseRuntimeHardwareElements', () => {
+  it('keeps well-formed elements once and drops the rest', () => {
+    const good = { kind: 'instance', hash: 'ab'.repeat(32) }
+    expect(
+      parseRuntimeHardwareElements({
+        hardwareId: ID,
+        elements: [good, good, { kind: 'Bad', hash: 'ab'.repeat(32) }, { kind: 'mac', hash: 'AB'.repeat(32) }, null],
+      }),
+    ).toEqual([good])
+  })
+
+  it('answers none for a body without elements', () => {
+    expect(parseRuntimeHardwareElements({ hardwareId: ID })).toEqual([])
+    expect(parseRuntimeHardwareElements(null)).toEqual([])
   })
 })

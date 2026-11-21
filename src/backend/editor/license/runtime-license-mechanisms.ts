@@ -15,6 +15,7 @@ export function createRuntimeLicenseMechanisms(
   return {
     runtimeGet: (path) => runtimeApi.runtimeApiExchange('GET', ipAddress, path),
     runtimePost: (path, json) => runtimeApi.runtimeApiExchange('POST', ipAddress, path, JSON.stringify(json)),
+    runtimeDelete: (path) => runtimeApi.runtimeApiExchange('DELETE', ipAddress, path),
     edgePost: (path, json) => edgeRequest(path, { method: 'POST', json }),
   }
 }

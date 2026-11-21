@@ -16,6 +16,8 @@ export interface RuntimeLicenseMechanisms {
   runtimeGet(path: string): Promise<RawHttpReply>
   /** Authenticated POST of a JSON value to the connected runtime's REST API. Throws on a transport failure. */
   runtimePost(path: string, json: Record<string, unknown>): Promise<RawHttpReply>
+  /** Authenticated DELETE of a path on the connected runtime's REST API. Throws on a transport failure. */
+  runtimeDelete(path: string): Promise<RawHttpReply>
   /** POST of a JSON value to a path on the Edge API. Throws on a transport failure. */
   edgePost(path: string, json: Record<string, unknown>): Promise<RawHttpReply>
 }

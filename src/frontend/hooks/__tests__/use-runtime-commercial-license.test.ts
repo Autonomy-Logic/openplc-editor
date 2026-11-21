@@ -512,3 +512,115 @@ describe('built-in boards', () => {
     expect(boardRuntimeLicense({ state: 'check-failed', error: 'x' })).toBeNull()
   })
 })
+
+describe('licence confirmed against Edge on connect', () => {
+  const INSTANCE = { kind: 'instance', hash: '22'.repeat(32) }
+  const MACHINE = { kind: 'machine_id', hash: '11'.repeat(32) }
+  const logs = () => store.getState().logs.map(({ level, message }) => ({ level, message }))
+  const decodedElements = (url: string | null) => {
+    const encoded = new URL(url ?? '').searchParams.get('elements')
+    return encoded === null ? null : (JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as unknown)
+  }
+
+  it('shows GPLv3 and warns when a revoked licence was removed from the runtime', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({
+      ...synced('gpl'),
+      elements: [MACHINE],
+      revoked: { orderId: 'order_1', removed: true },
+    })
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.status).toBe('unlicensed')
+    expect(store.getState().runtimeConnection.license).toBe('gpl')
+    expect(logs()).toContainEqual({
+      level: 'warning',
+      message: 'Runtime license order_1 was revoked and removed from the target.',
+    })
+  })
+
+  it('warns with the reason when the runtime refused to remove a revoked licence', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({
+      ...synced('gpl'),
+      elements: [],
+      revoked: { orderId: 'order_1', removed: false, error: 'HTTP 405' },
+    })
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.status).toBe('unlicensed')
+    expect(logs()).toContainEqual({
+      level: 'warning',
+      message: 'Runtime license order_1 was revoked; removing it failed: HTTP 405',
+    })
+  })
+
+  it('logs no revocation for an active licence', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({ ...synced('commercial'), elements: [MACHINE] })
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.status).toBe('licensed')
+    expect(logs().some(({ level }) => level === 'warning')).toBe(false)
+  })
+
+  it('reports the licence installed on connect', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({
+      ...synced('commercial', [{ orderId: 'order_9', stored: true }]),
+      elements: [],
+    })
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.status).toBe('licensed')
+    expect(logs()).toContainEqual({
+      level: 'info',
+      message: 'Commercial runtime license order_9 installed on the target.',
+    })
+  })
+
+  it('puts the vPLC elements, with its instance element, in the purchase link', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({ ...synced('gpl'), elements: [MACHINE, INSTANCE] })
+    const { result } = renderOwner()
+    await flush()
+    expect(store.getState().runtimeCommercialLicense.hardwareElements).toEqual([MACHINE, INSTANCE])
+    expect(new URL(result.current.buyUrl ?? '').searchParams.get('hardwareId')).toBe(ID)
+    expect(decodedElements(result.current.buyUrl)).toEqual([MACHINE, INSTANCE])
+  })
+
+  it('puts a native runtime elements, without an instance element, in the purchase link', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({ ...synced('gpl'), elements: [MACHINE] })
+    const { result } = renderOwner()
+    await flush()
+    expect(decodedElements(result.current.buyUrl)).toEqual([MACHINE])
+  })
+
+  it('leaves elements out of the purchase link when the runtime reports none', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({ ...synced('gpl'), elements: [] })
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.buyUrl).toBe(`https://edge.example.com/buy?hardwareId=${encodeURIComponent(ID)}`)
+  })
+
+  it('takes the elements from the hardware ID read on a platform without the licence check', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue(undefined)
+    runtimeMock.getHardwareId.mockResolvedValue({ success: true, hardwareId: ID, source: null, elements: [INSTANCE] })
+    const { result } = renderOwner()
+    await flush()
+    expect(decodedElements(result.current.buyUrl)).toEqual([INSTANCE])
+  })
+
+  it('clears the elements on disconnect', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({ ...synced('gpl'), elements: [INSTANCE] })
+    renderOwner()
+    await flush()
+    act(() => store.getState().deviceActions.setRuntimeConnectionStatus('disconnected'))
+    await flush()
+    expect(store.getState().runtimeCommercialLicense.hardwareElements).toEqual([])
+  })
+})
