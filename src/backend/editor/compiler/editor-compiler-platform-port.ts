@@ -265,7 +265,7 @@ export function createEditorCompilerPlatformPort(
   return {
     /**
      * Node's `crypto.createHash('md5')` produces the canonical MD5
-     * hex digest that defines.h embeds as `PROGRAM_MD5`.  Web's
+     * hex digest that program_md5.h embeds as `PROGRAM_MD5`.  Web's
      * adapter computes the same hash via `spark-md5`; both outputs
      * are byte-identical.
      */

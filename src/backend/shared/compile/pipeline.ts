@@ -80,7 +80,7 @@ import {
   IMAGE_AREAS_RUNTIME_V4,
 } from './steps/compute-io-image'
 import { generateRuntimeConfs } from './steps/generate-confs'
-import { generateDefinesContent } from './steps/generate-defines'
+import { generateDefinesContent, generateProgramMd5Header } from './steps/generate-defines'
 import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
@@ -328,7 +328,7 @@ export interface RunCompilePipelineResult {
    *  before compile. */
   binary?: Uint8Array
   /** MD5 of the strucpp-compiled `program.st`.  Echoed back so
-   *  callers can use it as a cache key (defines.h PROGRAM_MD5
+   *  callers can use it as a cache key (program_md5.h PROGRAM_MD5
    *  refers to it). */
   md5?: string
   /** `true` when an upload step ran successfully (runtime v4 upload,
@@ -1089,7 +1089,6 @@ async function runCompilePipelineInner(
   const definesH = generateDefinesContent({
     boardEntry,
     devicePinMapping,
-    buildMD5Hash: md5,
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
     ...(modbusServer !== undefined ? { modbusServer } : {}),
@@ -1262,6 +1261,7 @@ async function runCompilePipelineInner(
     strucppFiles: strucppFilesMap,
     cBlocks,
     definesH: definesH + hmiDefines,
+    programMd5H: generateProgramMd5Header(md5),
     vppConfigH,
     opcuaConfigH,
     s7commConfigH,

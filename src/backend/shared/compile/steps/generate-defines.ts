@@ -5,8 +5,7 @@
  * the editor's `compiler-module.ts` `handleGenerateDefinitionsFile`
  * used to emit directly to disk.  Lifted into shared so both repos'
  * build pipelines author the same `defines.h` from the same inputs:
- * the OpenPLC runtime keys off `PROGRAM_MD5` to detect stale programs,
- * and the per-board `USE_*_BLOCK` defines gate which Arduino libraries
+ * the per-board `USE_*_BLOCK` defines gate which Arduino libraries
  * the firmware links against.  Drift here would manifest as either
  * the runtime refusing the program (MD5 mismatch) or undefined-symbol
  * link errors for blocks the program references.
@@ -142,12 +141,6 @@ export interface GenerateDefinesInput {
    *  category (`DIN` / `AIN` / `DOUT` / `AOUT`) plus matching
    *  count defines (`NUM_DISCRETE_INPUT` etc.). */
   devicePinMapping: DevicePin[]
-  /** MD5 hash of `program.st` bytes — embedded as `PROGRAM_MD5` so
-   *  the runtime can detect a stale upload (a v4 runtime reports
-   *  this back on `FC 0x45` and the debugger uses it to confirm
-   *  the layout it's reading matches the program it last
-   *  uploaded). */
-  buildMD5Hash: string
   /** Runtime identifier from `hals.json` (`'simulator'` /
    *  `'arduino-cli'` / `'openplc-compiler'`).  Only `'simulator'`
    *  changes the output here — it adds the SIMULATOR_MODE +
@@ -200,16 +193,23 @@ export interface GenerateDefinesInput {
 }
 
 /**
+ * The contents of `program_md5.h`: the program's MD5 as `PROGRAM_MD5`, which the firmware reports to the debugger and
+ * keys its retained values by. Only the units that include this header depend on the program's MD5.
+ */
+export function generateProgramMd5Header(md5: string): string {
+  return `#pragma once\n#define PROGRAM_MD5 "${md5}"\n`
+}
+
+/**
  * Build the contents of `defines.h`.
  *
  * Output sections, in order:
  *   1. `// Board defines` — `boardEntry.define`; omitted entirely when
  *      the board declares none.
- *   2. `#define PROGRAM_MD5 "<md5>"` — always.
- *   3. `// Comms Configuration` (simulator-only) — fixed Modbus RTU
+ *   2. `// Comms Configuration` (simulator-only) — fixed Modbus RTU
  *      on `Serial`, the simulator's serial line the debugger
  *      talks over.
- *   4. `// IO Config` — PINMASK_{DIN,AIN,DOUT,AOUT} + NUM_* derived
+ *   3. `// IO Config` — PINMASK_{DIN,AIN,DOUT,AOUT} + NUM_* derived
  *      from `devicePinMapping`.
  *
  * The output is plain C preprocessor text terminated with newlines
@@ -220,7 +220,6 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   const {
     boardEntry,
     devicePinMapping,
-    buildMD5Hash,
     boardRuntime,
     vppModbusState,
     modbusServer,
@@ -262,18 +261,10 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   }
 
   // 2. Trailing blank-line pair after the board-defines section
-  //    (or at the top of the file when board defines were absent —
-  //    intentional so the PROGRAM_MD5 block always lands two blank
-  //    lines below whatever preceded it, matching editor).
+  //    (or at the top of the file when board defines were absent).
   DEFINES_CONTENT += '\n\n'
 
-  // 3. Program MD5 — load-bearing for the runtime's stale-program
-  //    detection.  Always emitted.
-  DEFINES_CONTENT += '//Program MD5\n'
-  DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
-  DEFINES_CONTENT += `\n\n`
-
-  // 4. Comms Configuration.  Two sources, mutually exclusive:
+  // 3. Comms Configuration.  Two sources, mutually exclusive:
   //      - Simulator: fixed RTU macros on the simulator's serial
   //        line, which the debugger talks over.  Always emitted on
   //        simulator targets regardless of vppModbusState.
@@ -330,7 +321,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += `\n\n`
   }
 
-  // 5. IO Config — derived from devicePinMapping.  Pin order is
+  // 4. IO Config — derived from devicePinMapping.  Pin order is
   //    the iteration order of the input array; callers are
   //    expected to have sorted by address.
   DEFINES_CONTENT += '//IO Config\n'
@@ -355,7 +346,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   DEFINES_CONTENT += `#define NUM_ANALOG_OUTPUT ${analogOutputPins.length}\n`
   DEFINES_CONTENT += `\n\n`
 
-  // 6. Retain blob size.  Emitted only when the program retains something,
+  // 5. Retain blob size.  Emitted only when the program retains something,
   //    so boards that never touch retain see no change at all.  The firmware
   //    static_asserts this against RETAIN_BUFFER_MAX: a program that outgrows
   //    the buffer must fail the build rather than silently start behaving as
@@ -365,7 +356,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += `#define OPLC_RETAIN_BLOB_SIZE ${retainBlobSize}\n`
   }
 
-  // 7. Process image.  Last and conditional for the same reason as the retain
+  // 6. Process image.  Last and conditional for the same reason as the retain
   //    block above: a target we do not size sees no change at all, so its
   //    defines.h stays byte-for-byte what it was.
   const imageBlock = generateProcessImageDefines(imageSizes)

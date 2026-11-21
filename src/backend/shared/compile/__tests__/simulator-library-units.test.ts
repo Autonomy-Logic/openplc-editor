@@ -93,6 +93,7 @@ async function simulatorRequest(source: string, libraries = bundled()): Promise<
     strucppFiles: strucppFiles(source, true, libraries),
     cBlocks: buildCBlocksFromPous([]),
     definesH: '#define SIMULATOR_MODE\n',
+    programMd5H: '#pragma once\n#define PROGRAM_MD5 ""\n',
     firmwareSkeleton: skeleton(),
   })
   const split = await simulatorLibraryUnits(firmware, libraries, SIMULATOR_CXX_FLAGS)
@@ -238,6 +239,7 @@ END_FUNCTION_BLOCK
       strucppFiles: strucppFiles(program(''), true),
       cBlocks: buildCBlocksFromPous([]),
       definesH: '',
+      programMd5H: '',
       firmwareSkeleton: skeleton(),
     })
     const split = await simulatorLibraryUnits(firmware, [], SIMULATOR_CXX_FLAGS)

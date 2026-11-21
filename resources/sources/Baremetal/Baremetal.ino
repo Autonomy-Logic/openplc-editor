@@ -30,6 +30,7 @@
 
 #include "openplc.h"
 #include "defines.h"
+#include "program_md5.h"
 #include "arduino_runtime_glue.h"
 #include "license_gate.h"
 #include "license_store.h"   // license_store_read + LIC_BLOB_SIZE (via license_blob.h)
@@ -173,8 +174,8 @@ void setup()
     // follow runtime_bind_located_vars(), because a retained variable may also
     // be located and its storage has to be bound before anything writes to it.
     //
-    // PROGRAM_MD5 is passed from here because the sketch is on defines.h's one
-    // legitimate include path and the glue is not.
+    // PROGRAM_MD5 comes from program_md5.h, which the sketch includes and the
+    // glue does not.
     runtime_retain_init(PROGRAM_MD5);
     runtime_retain_load();
 

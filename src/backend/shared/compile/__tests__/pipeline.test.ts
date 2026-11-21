@@ -249,7 +249,8 @@ describe('runCompilePipeline — simulator path', () => {
     const [request] = jest.mocked(port.compileToWasm).mock.calls[0]
     expect(request.files['examples/Baremetal/Baremetal.ino']).toBeUndefined()
     expect(request.files['examples/Baremetal/Baremetal.cpp']).toContain('void setup() {}')
-    expect(request.files['src/defines.h']).toContain('PROGRAM_MD5')
+    expect(request.files['src/program_md5.h']).toContain('#define PROGRAM_MD5 "')
+    expect(request.files['src/defines.h']).not.toContain('PROGRAM_MD5')
     expect(request.units.map((unit) => unit.source)).toContain('examples/Baremetal/Baremetal.cpp')
     expect(request.output).toBe('simulator.wasm')
   })

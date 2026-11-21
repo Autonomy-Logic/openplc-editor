@@ -16,6 +16,7 @@ modbus_debug.cpp - OpenPLC always-on debugger function codes (0x41-0x4B)
 // reporting in debugGetStatus() and plcSetState().
 #include "openplc.h"
 #include "openplc_version.h"
+#include "program_md5.h"
 
 // The identity behind DEBUG_GET_DEVICE_ID (0x48) comes from the closed
 // license-core, not from a library compiled into this open firmware.
