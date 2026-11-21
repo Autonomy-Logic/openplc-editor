@@ -20,6 +20,7 @@ import {
   launchHmiApp,
   leaf,
   pickLayer,
+  previewBuilds,
   propertyField,
   save,
   screenOnDisk,
@@ -88,7 +89,7 @@ test.describe('HMI designer', () => {
       await waitFor(page, 'the preview', async () => (await status(page)).startsWith('ready'), 60000)
       await page.screenshot({ path: join(SHOTS, '01-opened.png') })
       expect(overviewOnDisk()).toBe(OVERVIEW)
-      const builtMs = await status(page)
+      const builds = await previewBuilds(page)
       const fitZoom = await page.getByTestId('hmi-zoom').innerText()
 
       await waitFor(
@@ -106,7 +107,7 @@ test.describe('HMI designer', () => {
       await text.fill('Plant overview')
       await text.press('Enter')
       await page.waitForTimeout(400)
-      expect(await status(page)).toBe(builtMs)
+      expect(await previewBuilds(page)).toBe(builds)
 
       const canvas = page.getByTestId('hmi-canvas-overlay')
       await pickLayer(page, 'Col')

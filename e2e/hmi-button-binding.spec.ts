@@ -18,6 +18,7 @@ import {
   launchHmiApp,
   leaf,
   pickLayer,
+  previewBuilds,
   save,
   screenOnDisk,
   status,
@@ -54,11 +55,9 @@ async function colorAt(page: Page, at: { x: number; y: number }): Promise<string
   }, at)
 }
 
-/** Whether a build that began after `before` was read has finished. */
-const rebuilt = async (page: Page, before: string): Promise<boolean> => {
-  const now = await status(page)
-  return now !== before && now.startsWith('ready')
-}
+/** Whether a preview build finished after `before` builds and the preview is ready. */
+const rebuilt = async (page: Page, before: number): Promise<boolean> =>
+  (await previewBuilds(page)) > before && (await status(page)).startsWith('ready')
 
 /** Picks an option of one of the designer's selects. */
 async function choose(page: Page, testId: string, option: string): Promise<void> {
@@ -98,7 +97,7 @@ test.describe('HMI button binding', () => {
       await page.mouse.click(jog.x, jog.y)
       await expect(page.getByTestId('hmi-selected-Jog')).toBeVisible()
       await page.getByTestId('hmi-prop-tab-data').click()
-      let before = await status(page)
+      let before = await previewBuilds(page)
       await page.getByTestId('hmi-main-binding').click()
       await expect(page.getByRole('option', { name: 'instance0.Main.Run : BOOL', exact: true })).toBeVisible()
       await expect(page.getByRole('option', { name: 'instance0.Main.Level : REAL', exact: true })).toHaveCount(0)
@@ -107,7 +106,7 @@ test.describe('HMI button binding', () => {
       await page.screenshot({ path: join(F.shots, 'binding.png') })
       await waitFor(page, 'the rebuilt preview', async () => rebuilt(page, before), 60000)
 
-      before = await status(page)
+      before = await previewBuilds(page)
       await page.getByTestId('hmi-preview-mode').click()
       await waitFor(page, 'the preview in preview mode', async () => rebuilt(page, before), 60000)
       const screen = page.getByTestId('hmi-canvas')
@@ -123,7 +122,7 @@ test.describe('HMI button binding', () => {
 
       await pickLayer(page, 'Jog')
       await page.getByTestId('hmi-prop-tab-data').click()
-      before = await status(page)
+      before = await previewBuilds(page)
       await choose(page, 'hmi-main-press', 'Set to FALSE while pressed')
       await waitFor(page, 'the rebuilt preview', async () => rebuilt(page, before), 60000)
       await save(app)
@@ -132,7 +131,7 @@ test.describe('HMI button binding', () => {
         /IF Jog\.Changed THEN\s+instance0\.Main\.Run := NOT Jog\.Pressed;\s+END_IF;/,
       )
 
-      before = await status(page)
+      before = await previewBuilds(page)
       await page.getByTestId('hmi-preview-mode').click()
       await waitFor(page, 'the preview in preview mode', async () => rebuilt(page, before), 60000)
       await page.mouse.move(jog.x, jog.y)

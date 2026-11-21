@@ -19,6 +19,7 @@ import {
   launchHmiApp,
   leaf,
   pickLayer,
+  previewBuilds,
   status,
   waitFor as waitForIn,
   writeHmiFixture,
@@ -87,7 +88,7 @@ async function dropAt(page: Page, widget: string, at: { x: number; y: number }, 
 /** Adds a palette widget into a container picked in the Layers tab, then waits for the rebuilt preview. */
 async function addInto(page: Page, parent: string, widget: string, added: string): Promise<void> {
   await pickLayer(page, parent)
-  const built = await status(page)
+  const built = await previewBuilds(page)
   await page.getByTestId('hmi-palette-tab-widgets').click()
   await page.getByTestId(`hmi-palette-${widget}`).dblclick()
   await expect(page.getByTestId(`hmi-selected-${added}`)).toBeVisible({ timeout: 10000 })
@@ -95,8 +96,7 @@ async function addInto(page: Page, parent: string, widget: string, added: string
     page,
     `the preview with ${added}`,
     async () => {
-      const now = await status(page)
-      return now.startsWith('ready') && now !== built
+      return (await previewBuilds(page)) > built && (await status(page)).startsWith('ready')
     },
     60000,
   )
@@ -251,7 +251,7 @@ test.describe('HMI layout containers', () => {
       await refusedAt(page, 'HmiLamp', 3, 3, '04-refused-outside.png')
 
       await pickLayer(page, 'HorizontalStack1')
-      const built = await status(page)
+      const built = await previewBuilds(page)
       await page.getByTestId('hmi-canvas-overlay').focus()
       await page.keyboard.press('Delete')
       await waitFor(page, 'the empty screen', async () => (await layers(page)).length === 0)
@@ -259,8 +259,7 @@ test.describe('HMI layout containers', () => {
         page,
         'the empty screen built',
         async () => {
-          const now = await status(page)
-          return now.startsWith('ready') && now !== built
+          return (await previewBuilds(page)) > built && (await status(page)).startsWith('ready')
         },
         60000,
       )
