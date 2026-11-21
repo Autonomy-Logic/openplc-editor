@@ -230,6 +230,69 @@ describe('compileToWasm', () => {
     ])
   })
 
+  describe('with a precompiled prelude', () => {
+    const prelude = (nested: string, pch = 'pch-v1'): WasmCompileRequest =>
+      request({
+        files: {
+          ...request().files,
+          'pre.h': '#include "b.hpp"',
+          'pre.pch': pch,
+          'rt/b.hpp': '#include "c.hpp"',
+          'rt/c.hpp': nested,
+        },
+        units: [
+          { source: 'core/core.c', language: 'c' },
+          { source: 'app/main.cpp', language: 'c++', flags: ['-include-pch', 'pre.pch'] },
+        ],
+      })
+    const throughPch = { ...includes, 'app/main.cpp': ['/pre.h', '/rt/b.hpp', '/rt/c.hpp'] }
+    const pchRunner = () => new FakeRunner(2, undefined, null, throughPch)
+
+    it('records the headers clang lists as absolute paths through the prelude, and the prelude itself', async () => {
+      const cache = new RecordingCache()
+      await compileToWasm(prelude('int c();'), { runner: pchRunner(), cache })
+      const deps = [...cache.values()].map((e) => e.dependencies.map(([path]) => path).sort())
+      expect(deps).toContainEqual(['app/main.cpp', 'pre.h', 'pre.pch', 'rt/b.hpp', 'rt/c.hpp'])
+      expect(deps).toContainEqual(['core/core.c', 'core/core.h'])
+    })
+
+    it('does not reuse an object when a header nested inside the prelude changes', async () => {
+      const cache = new RecordingCache()
+      await compileToWasm(prelude('int c();'), { runner: pchRunner(), cache })
+      const runner = pchRunner()
+      const result = await compileToWasm(prelude('int c(); int d();'), { runner, cache })
+      expect(result.stats.cached).toBe(1)
+      expect(compiledSources(runner)).toEqual(['app/main.cpp'])
+    })
+
+    it('does not reuse an object when only the precompiled prelude changes', async () => {
+      const cache = new RecordingCache()
+      await compileToWasm(prelude('int c();'), { runner: pchRunner(), cache })
+      const runner = pchRunner()
+      const result = await compileToWasm(prelude('int c();', 'pch-v2'), { runner, cache })
+      expect(result.stats.cached).toBe(1)
+      expect(compiledSources(runner)).toEqual(['app/main.cpp'])
+    })
+
+    it('reuses the object while neither the prelude nor its headers change', async () => {
+      const cache = new RecordingCache()
+      await compileToWasm(prelude('int c();'), { runner: pchRunner(), cache })
+      const again = prelude('int c();')
+      again.linkFlags = ['-mexec-model=command']
+      const runner = pchRunner()
+      expect((await compileToWasm(again, { runner, cache })).stats.cached).toBe(2)
+      expect(compiledSources(runner)).toEqual([])
+    })
+  })
+
+  it('records an object built without a prelude from the same files and names as before', async () => {
+    const cache = new RecordingCache()
+    await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
+    const core = [...cache.values()].find((e) => e.dependencies.some(([p]) => p === 'core/core.c'))
+    expect(core?.dependencies.map(([p]) => p)).toEqual(['core/core.c', 'core/core.h'])
+    expect(core?.includeNames).toEqual(['core.c', 'core.h', 'stdio.h'])
+  })
+
   it.each(['missing', 'garbage'] as const)('does not cache an object whose dependency file is %s', async (kind) => {
     const cache = new RecordingCache()
     const runner = new FakeRunner(2, (argv) =>

@@ -203,10 +203,17 @@ async function runLimited<T>(items: T[], limit: number, work: (item: T) => Promi
   await Promise.all(lanes)
 }
 
+/** The precompiled headers a compile job's argv names with `-include-pch <path>`. */
+function precompiledHeadersOf(argv: readonly string[]): string[] {
+  return argv.flatMap((arg, index) => (arg === '-include-pch' && index + 1 < argv.length ? [argv[index + 1]] : []))
+}
+
 /**
  * The request files an object was built from, with their digests, and the file names of every dependency; `null`
- * when clang's list cannot be read or names a relative path that is not a request file. Absolute paths are toolchain
- * headers: they have no digest, but a request file of the same name could hide them.
+ * when clang's list cannot be read or names a relative path that is not a request file. An absolute path naming a
+ * request file once its leading `/` is dropped, as clang lists headers read through a precompiled header, is that
+ * request file; other absolute paths are toolchain headers with no digest, but a request file of the same name could
+ * hide them. Each `-include-pch` file is a dependency too, since clang does not list it.
  */
 function dependenciesOf(
   result: WasmClangJobResult,
@@ -217,16 +224,19 @@ function dependenciesOf(
   if (raw === undefined) return null
   const paths = parseDependencyFile(typeof raw === 'string' ? raw : new TextDecoder().decode(raw))
   if (paths === null || !paths.includes(plan.unit.source)) return null
-  const dependencies: Array<[string, string]> = []
+  const dependencies = new Map<string, string>()
   const includeNames = new Set<string>()
-  for (const path of new Set(paths)) {
+  for (const path of new Set([...paths, ...precompiledHeadersOf(plan.argv)])) {
     includeNames.add(baseName(path))
-    if (path.startsWith('/')) continue
-    const digest = digestOf(path)
-    if (digest === undefined) return null
-    dependencies.push([path, digest])
+    const requestPath = path.startsWith('/') ? path.slice(1) : path
+    const digest = digestOf(requestPath)
+    if (digest === undefined) {
+      if (path.startsWith('/')) continue
+      return null
+    }
+    dependencies.set(requestPath, digest)
   }
-  return { dependencies, includeNames: [...includeNames].sort() }
+  return { dependencies: [...dependencies], includeNames: [...includeNames].sort() }
 }
 
 interface CompileContext {
