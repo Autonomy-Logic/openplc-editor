@@ -2,7 +2,6 @@ import { enableMapSet } from 'immer'
 import { subscribeWithSelector } from 'zustand/middleware'
 import { createStore } from 'zustand/vanilla'
 
-// Enable Immer's MapSet plugin for Map/Set support in store state
 enableMapSet()
 
 import type { AIFeatureConfig } from '../../middleware/shared/ports/types'
@@ -34,6 +33,8 @@ import type { ProjectSlice } from './slices/project'
 import { createProjectSlice } from './slices/project'
 import type { ReadmeSlice } from './slices/readme'
 import { createReadmeSlice } from './slices/readme'
+import type { RuntimeProvisioningSlice } from './slices/runtime-provisioning'
+import { createRuntimeProvisioningSlice } from './slices/runtime-provisioning'
 import type { SearchSlice } from './slices/search'
 import { createSearchSlice } from './slices/search'
 import type { SharedSlice } from './slices/shared'
@@ -61,6 +62,7 @@ export type RootState = AISlice &
   PrintSlice &
   ProjectSlice &
   ReadmeSlice &
+  RuntimeProvisioningSlice &
   SearchSlice &
   SharedSlice &
   TabsSlice &
@@ -94,6 +96,7 @@ export function createOpenPLCStore(config: StoreConfig = {}) {
       ...createPrintSlice(...a),
       ...createProjectSlice(...a),
       ...createReadmeSlice(...a),
+      ...createRuntimeProvisioningSlice(...a),
       ...createSearchSlice(...a),
       ...createSharedSlice(...a),
       ...createTabsSlice(...a),
