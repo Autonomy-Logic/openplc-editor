@@ -37,6 +37,10 @@
       "to": "./yowasp-clang/licenses"
     },
     {
+      "from": "./release/hmi-objects",
+      "to": "./hmi-objects"
+    },
+    {
       "from": "./node_modules/@wasmer/sdk",
       "to": "./wasmer-sdk",
       "filter": ["package.json", "LICENSE*", "README.md", "dist/**/*.js", "pkg/**"]

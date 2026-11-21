@@ -62,10 +62,8 @@ void runtime_plc_cycle();
 // anything, and does its blob fit the buffer this firmware allocated. Call from
 // setup() BEFORE runtime_retain_load().
 //
-// `program_md5` is PROGRAM_MD5 from the generated defines.h — 32 hex characters
-// identifying the program. It is passed in rather than read here because
-// defines.h has no include guard and must reach a translation unit through
-// exactly one path (modbus_config.h), which the glue is not on. The driver uses
+// `program_md5` is PROGRAM_MD5 from the generated program_md5.h — 32 hex
+// characters identifying the program, passed in by the sketch. The driver uses
 // it to tell whether the values it holds belong to the program now running; see
 // Baremetal/openplc_retain.h.
 void runtime_retain_init(const char *program_md5);

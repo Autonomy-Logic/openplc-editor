@@ -1,25 +1,25 @@
 import type { PlatformLog } from '@root/middleware/shared/ports/compiler-platform-port'
-import type { WasmClangRunner, WasmObjectStore } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
+import type {
+  WasmClangRunner,
+  WasmLibraryObjectStore,
+  WasmObjectStore,
+  WasmShippedObjectSource,
+} from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
 import { compileToWasm, type WasmObjectCache } from './compile-to-wasm'
-import { ContentHash } from './content-hash'
+import { keepLibraryObjects, offerLibraryObjects } from './library-objects'
 import { parseWasmCompileRequest } from './parse-wasm-compile-request'
-import { PersistentWasmObjectCache } from './persistent-object-cache'
+import { PersistentWasmObjectCache, type StoredWasmObject } from './persistent-object-cache'
 import { prepareWasmToolchain, type WasmToolchainReadiness } from './prepare-toolchain'
+import { readShippedObjects } from './shipped-objects'
+import { WASM_TOOLCHAIN_IDENTITY } from './toolchain-identity'
 import { BoundedWasmObjectCache } from './wasm-object-cache'
 
 /** Compiled objects kept for the session, across every caller of the service. */
 export const WASM_OBJECT_CACHE_BYTES = 256 * 1024 * 1024
 /** Compiled objects kept across sessions in the platform's store. */
 export const WASM_STORED_OBJECT_BYTES = 192 * 1024 * 1024
-
-/** Identity of the toolchain a runner loaded: a digest of what `clang --version` prints. */
-async function toolchainIdentity(runner: WasmClangRunner): Promise<string> {
-  const probe = await runner.run({ argv: ['clang', '--version'], tree: {} })
-  if (probe.exitCode !== 0) throw new Error(`clang --version exited with code ${probe.exitCode}`)
-  return new ContentHash().update(probe.stdout).digest()
-}
 
 export interface WasmCompileService {
   /**
@@ -47,17 +47,29 @@ const rejected = (error: string): WasmCompileResult => ({
   diagnostics: [{ message: error, level: 'error' }],
 })
 
+export interface WasmCompileServiceOptions {
+  /** Where compiled objects outlive the session. */
+  store?: WasmObjectStore
+  /** Compiled objects shipped with the application. */
+  shipped?: WasmShippedObjectSource
+  /** Where each library's compiled objects are kept next to it. */
+  libraryObjects?: WasmLibraryObjectStore
+  log?: PlatformLog
+  /** Identity of the toolchain the runner loads; the pinned one unless a test says otherwise. */
+  identity?: string
+}
+
 /**
  * The toolchain a platform exposes: one runner, one session cache that outlives its workers, one readiness. Builds in
  * flight share the runner's workers; when the last one ends, whatever its outcome, and nobody holds the toolchain, the
- * runner is released. With a store, objects also outlive the session: the first build fills the cache from the store
- * before it compiles.
+ * runner is released. The cache is filled with the shipped objects and, with a store, the objects of earlier sessions
+ * when the toolchain is prepared or a build starts, whichever comes first, and builds wait for it.
  */
 export function createWasmCompileService(
   runner: WasmClangRunner,
-  store?: WasmObjectStore,
-  log?: PlatformLog,
+  options: WasmCompileServiceOptions = {},
 ): WasmCompileService {
+  const { store, shipped, libraryObjects, log, identity = WASM_TOOLCHAIN_IDENTITY } = options
   const memory = new BoundedWasmObjectCache(WASM_OBJECT_CACHE_BYTES)
   const persistent = store
     ? new PersistentWasmObjectCache(memory, store, WASM_STORED_OBJECT_BYTES, (message) =>
@@ -72,16 +84,25 @@ export function createWasmCompileService(
   const holderKey = (holder: string, owner: string | undefined): string =>
     owner === undefined ? `\u0001${holder}` : `${owner}\u0000${holder}`
 
+  const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+  const seed = async (): Promise<void> => {
+    if (!shipped) return
+    try {
+      for (const { key, entry } of await readShippedObjects(shipped, identity)) memory.set(key, entry)
+    } catch (error) {
+      log?.(`Compiled objects shipped with the application could not be read: ${reason(error)}`, 'warning')
+    }
+  }
+  const load = async (): Promise<void> => {
+    if (!persistent) return
+    try {
+      await persistent.load(identity)
+    } catch (error) {
+      log?.(`Compiled objects of earlier sessions could not be read: ${reason(error)}`, 'warning')
+    }
+  }
   const restore = (): Promise<void> => {
-    if (!persistent) return Promise.resolve()
-    restored ??= toolchainIdentity(runner)
-      .then((identity) => persistent.load(identity))
-      .catch((error: unknown) =>
-        log?.(
-          `Compiled objects of earlier sessions could not be read: ${error instanceof Error ? error.message : String(error)}`,
-          'warning',
-        ),
-      )
+    restored ??= seed().then(load)
     return restored
   }
 
@@ -99,7 +120,32 @@ export function createWasmCompileService(
     }
   }
 
+  /**
+   * Compiles with the objects kept next to the request's libraries offered to the session cache, then keeps next to
+   * each library the object its unit was built with when that is not the one already there.
+   */
+  const compileWith = async (request: WasmCompileRequest, compileLog?: PlatformLog): Promise<WasmCompileResult> => {
+    if (!libraryObjects || !request.units.some((unit) => unit.library !== undefined))
+      return compileToWasm(request, { runner, cache, log: compileLog })
+    const offered = await offerLibraryObjects(request.units, libraryObjects, identity, ({ key, entry }) =>
+      memory.set(key, entry),
+    )
+    const used = new Map<string, StoredWasmObject>()
+    const result = await compileToWasm(request, {
+      runner,
+      cache,
+      log: compileLog,
+      onObject: (unit, key, entry) => {
+        if (unit.library) used.set(unit.source, { key, entry })
+      },
+    })
+    if (result.ok)
+      await keepLibraryObjects(offered, used, libraryObjects, identity, (message) => log?.(message, 'warning'))
+    return result
+  }
+
   const prepare = (): Promise<WasmToolchainReadiness> => {
+    void restore()
     readiness ??= prepareWasmToolchain(runner).then((result) => {
       if (!result.ok) readiness = null
       return result
@@ -129,13 +175,11 @@ export function createWasmCompileService(
     prepare,
     setHeld,
     releaseOwner,
-    compile: (request, compileLog) => build(() => compileToWasm(request, { runner, cache, log: compileLog })),
+    compile: (request, compileLog) => build(() => compileWith(request, compileLog)),
     compileRequest: (value, compileLog) =>
       build(() => {
         const parsed = parseWasmCompileRequest(value)
-        return parsed.ok
-          ? compileToWasm(parsed.request, { runner, cache, log: compileLog })
-          : Promise.resolve(rejected(parsed.error))
+        return parsed.ok ? compileWith(parsed.request, compileLog) : Promise.resolve(rejected(parsed.error))
       }),
   }
 }

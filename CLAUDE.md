@@ -448,18 +448,40 @@ as diagnostics too, never as a rejection. The logic is shared and byte-identical
 `src/backend/shared/wasm-toolchain/`: compile and link, the clang worker's runner, the worker host, and the check of requests
 that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its runtime headers.
 
-- **Object cache:** per unit, for the session (256 MB, least recently used first). Each object is kept with the
-  request files clang says it read (`-MD`) and the names of all its dependencies, toolchain headers included. It is
-  reused while those files are unchanged and no file carrying one of those names was added or removed; other added
-  or removed files leave it valid.
-- **Objects across sessions:** the first build fills the cache from a store (desktop:
-  `userData/User/WasmObjects/`, web: IndexedDB `openplc-wasm-objects`) and every new object is written through, at
-  most 192 MB, oldest first. Records of another toolchain (a different `clang --version`) or damaged ones are
-  removed. That build waits for the store to load; a store that cannot be read only costs the reuse.
-- **Precompiled headers:** a request may list `precompiledHeaders`, built first and cached like units; a unit names
-  one with `pch`, and a digest of what the header was built from (its cache key and its files' digests, not its bytes)
-  is part of that unit's cache key. A clang worker's reply leaves out the binary inputs it gets back unchanged, such as
-  the precompiled header; text inputs come back from YoWASP as bytes and are still sent.
+- **Object cache:** per unit, for the session (256 MB, least recently used first), up to four objects per unit key
+  (compiler, flags, source path), one per content: the gallery, the preview and a widget preview
+  build the same paths from different headers and no longer evict each other. Each object is kept with the SHA-256 of
+  every request file clang says it read (`-MD`) and the names of all its dependencies, toolchain headers included. It
+  is reused while those files are unchanged and no file carrying one of those names was added or removed; other added
+  or removed files leave it valid. A request equal to one already linked (every file, unit, flag and the output)
+  returns the kept module with no compile and no link.
+- **Objects across sessions:** when the toolchain is prepared (editor start, page load), or at the first build if that
+  comes first, the cache is filled from a store (desktop: `userData/User/WasmObjects/`, web: IndexedDB
+  `openplc-wasm-objects`; one record per object, named by its content digest) and every new object or linked module
+  is written through, at most 192 MB, oldest first. Records of another toolchain or damaged ones are removed. The
+  toolchain's identity is the pinned version (`toolchain-identity.ts`), not a `clang --version` run. Builds wait for
+  the store to load; a store that cannot be read only costs the reuse.
+- **Shipped objects:** `npm run build:hmi-objects` (`scripts/build-hmi-objects.ts`, part of `npm run build`) compiles
+  the objects no project changes (HMI core, font tables, hosts, the widget library units and their factory tables, built
+  from the pinned `vendor/hmi-widgets/` archives, and the OpenPLC Simulator units of the bundled PLC libraries;
+  `hmi/lib-object/fixed-objects.ts`, 23 objects, about 2.7 MB) from reference builds into `release/hmi-objects/` (not committed);
+  packaging ships it as the extra resource `hmi-objects` and refuses to run without it (`before-pack-debug-seam.js`).
+  The compile service reads them into the session cache at toolchain start, only from the installation (or the
+  repository's folder in development; `desktop-shipped-objects.ts` refuses links and paths out of it), never from a
+  project and never into the user's store; each is used, like any cached object, only while every file it was built
+  from is unchanged.
+- **Objects next to a library:** a library's own unit (HMI widget library, its factory table, a simulator library
+  unit) carries a tag (`WasmCompileUnit.library`: name, kind, key). The key (`wasm-toolchain/library-objects.ts`) is a
+  digest of the archive, its dependencies' archives, the kind, the unit's flags and the provided header versions (the
+  HMI core API). Before compiling, the service reads the library's file of that kind (`WasmLibraryObjectStore`) and
+  offers its object to the session cache when the key and toolchain match; the cache still uses it only while every
+  file it was built from is unchanged. After a build, the object each tagged unit used is written back when it is not
+  the one already there. Desktop: `<userData>/libraries/<name>/<name>.<kind>.wasm-object` next to a user-installed
+  library's `.stlib` (`LibraryManagerModule.readLibraryObject`), removed with the library; bundled libraries keep
+  nothing there and use the shipped objects. A read or write that fails only costs the reuse.
+- **No precompiled headers:** every unit includes its headers directly. A clang worker's reply leaves out the binary
+  inputs it gets back unchanged, such as the objects of a link; text inputs come back from YoWASP as bytes and are
+  still sent.
 - **Clang worker:** one (`ClangWorkerPool`), running one job at a time, started by a build and ended once no build is
   running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds that overlap
   share it. While an HMI tab is open (screen, widget block or HMI Settings), the workspace holds the toolchain
@@ -519,9 +541,17 @@ ArduinoCore-API (LGPL-2.1, commit `0f4e57ea`, licence in `wasm-sim/core/`). The 
 none and `resources/sources/hal/simulator.cpp` does no I/O. No Arduino core is installed for it.
 The desktop writes the module to `<build>/OpenPLC Simulator/simulator.wasm`. The editor builds the simulator only
 from Play; `e2e/wasm-simulator-build.spec.ts` builds through `openplc-cli compile`.
+Only this branch asks STruC++ for separate library files (`runProgramBuildPipeline({ separateLibraryFiles })`, giving
+`lib_<library>.cpp` and `generated_libraries.hpp`); every other target keeps its output. `steps/simulator-library-units.ts`
+takes those `lib_*.cpp` out and compiles each reached library, and the libraries it depends on, from a whole unit
+generated from its archive alone (`library/library-unit.ts`, under `simlib/<library>/`, dependencies passed to STruC++
+first), so a library's object is the same in every project and a program edit compiles no library unit. A rebuild
+after a body edit still compiles the program's units and every runtime unit that includes `defines.h`, which carries
+the program's MD5.
 
 **Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
-lockfiles, `pnpm-lock.yaml` included on the web), then run `yowasp-loader-patch.test.ts`
+lockfiles, `pnpm-lock.yaml` included on the web) and `WASM_TOOLCHAIN_VERSION` in
+`src/backend/shared/wasm-toolchain/toolchain-identity.ts` (its test compares them), then run `yowasp-loader-patch.test.ts`
 (`src/backend/shared/wasm-toolchain/__tests__/`) in both repos, which fails when the new `bundle.js` drops or moves the
 patched line (re-check the patch then, in both repos), and `e2e/wasm-toolchain.spec.ts` in both repos, including the
 packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
@@ -635,7 +665,17 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
   live edit shows none and waits 1.5 s for the next edit. `tests/hmi-preview/run.ts` (`npm run test:hmi-preview`, same
   CI job) does it with the real toolchain, checks rebuild times and that every live step, undone and redone, has the
   rebuilt module's frame and bounds, and prints each build's breakdown. The port also draws the palette's thumbnails from a generated gallery screen
-  (`hmi-thumbnails.ts`).
+  (`hmi-thumbnails.ts`). Units include their headers directly; there is no precompiled header.
+- **Widget library units:** the preview and the Runtime v4 build compile each widget library from its archive alone
+  (`hmi/lib-object/library-unit.ts`: STruC++ on the archive and its dependencies, whole, in namespace `hmi`, with
+  `HMI_LIBRARY_CXX_FLAGS` in both builds) and take STruC++'s `lib_<name>.cpp` out of the generated unit, whose
+  libraries header would make it depend on the project's PLC libraries and widget blocks. One library is one object
+  in every project, preview or `hmi.wasm`. For the preview each library also gets its own factory table
+  (`hmilib/<library>/<library>_factory.cpp`, `unit/preview-factory.ts`), generated from the library alone; the
+  unit's `hmi_preview_factory.cpp` holds only a table of the project's widget blocks and the dispatcher that numbers
+  the tables one after another. The live elements' code (`hmi_preview_live.cpp`) compiles on its own against the
+  library that declares `HmiScreen` (`hmilib/<library>/hmi_preview_widgets.hpp`), so it is shipped too; without such a
+  library it falls back to the unit's libraries header.
 - **HMI on Runtime v4:** the browser runs the screens. `src/backend/shared/hmi/artefact/` builds the upload's `hmi/`:
   `client/hmi.wasm` (unit, core, fonts and `resources/sources/hmi/client/hmi_browser_host.cpp`) and, for the device,
   only the data manifest `src/hmi_access.c` (`resources/sources/hmi/unit/hmi_access.h`): each screen's read and write

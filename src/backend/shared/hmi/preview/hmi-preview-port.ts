@@ -13,6 +13,7 @@ import type {
   HmiThumbnailResult,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { selectProjectLibraryArchives } from '../../../../middleware/shared/utils/library/project-libraries'
+import { WASM_TOOLCHAIN_IDENTITY } from '../../wasm-toolchain/toolchain-identity'
 import { loadHmiWidgetLibraries } from '../lib/widget-libraries'
 import {
   buildHmiWidgetCatalog,
@@ -20,18 +21,24 @@ import {
   hmiScreenMembers,
   type HmiWidgetLibrary,
 } from '../unit/generate-hmi-unit'
-import { buildHmiPreview, type HmiPreviewResources } from './build-hmi-preview'
+import {
+  buildHmiPreview,
+  HMI_PREVIEW_PRELUDE_FLAGS,
+  hmiPreviewFixedFiles,
+  type HmiPreviewResources,
+  isHmiPreviewSource,
+} from './build-hmi-preview'
+import { HMI_PRELUDE_FILE, HMI_PRELUDE_INDEX, loadHmiPrelude } from './hmi-prelude'
 import { renderHmiThumbnails } from './hmi-thumbnails'
 import { createHmiPreviewSession, type HmiPreviewSessionOptions } from './preview-session'
 
-const SOURCE = /\.(c|h|cpp|hpp)$/
 const FONTS = 'fonts/'
 
 const fileName = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
 /**
- * The compiled-in sources as text and the font files as bytes, out of the HMI sources folder's files, and the runtime
- * headers by file name.
+ * The compiled-in sources as text (`isHmiPreviewSource`) and the font files as bytes, out of the HMI sources folder's
+ * files, and the runtime headers by file name.
  */
 export function hmiPreviewResources(
   stored: HmiPreviewStoredFiles,
@@ -46,7 +53,7 @@ export function hmiPreviewResources(
   const hmiSources: Record<string, string> = {}
   const decoder = new TextDecoder()
   for (const [path, content] of Object.entries(hmiFiles)) {
-    if (path.startsWith(FONTS) || !SOURCE.test(path)) continue
+    if (!isHmiPreviewSource(path)) continue
     hmiSources[path] = typeof content === 'string' ? content : decoder.decode(content)
   }
   return {
@@ -101,10 +108,26 @@ export function createHmiPreviewPort(
     if (catalogCache?.key !== key) catalogCache = { key, result: buildHmiWidgetCatalog(widgets, selected) }
     return catalogCache.result
   }
+  /** A shipped file, or null when it cannot be read: the prelude is optional. */
+  const readShipped = (name: string): Promise<Uint8Array | null> => mechanisms.readShippedFile(name).catch(() => null)
   const loadResources = (): Promise<Omit<HmiPreviewResources, 'projectLibraries'>> => {
-    resources ??= Promise.all([mechanisms.readHmiSources(), mechanisms.readStrucppRuntimeHeaders()]).then(
-      ([hmiFiles, runtimeHeaders]) => hmiPreviewResources(hmiFiles, runtimeHeaders),
-    )
+    resources ??= Promise.all([
+      mechanisms.readHmiSources(),
+      mechanisms.readStrucppRuntimeHeaders(),
+      readShipped(HMI_PRELUDE_INDEX),
+      readShipped(HMI_PRELUDE_FILE),
+    ]).then(async ([hmiFiles, runtimeHeaders, preludeIndex, preludePch]) => {
+      const files = hmiPreviewResources(hmiFiles, runtimeHeaders)
+      const fixed = hmiPreviewFixedFiles(files)
+      const prelude = await loadHmiPrelude(
+        preludeIndex,
+        preludePch,
+        WASM_TOOLCHAIN_IDENTITY,
+        HMI_PREVIEW_PRELUDE_FLAGS,
+        fixed,
+      ).catch(() => null)
+      return { ...files, prelude }
+    })
     resources.catch(() => {
       resources = null
     })

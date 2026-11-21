@@ -63,6 +63,8 @@ export interface ComposeFirmwareBundleInput {
    *  it opaque so a future re-shaping of `defines.h` content
    *  doesn't ripple through. */
   definesH: string
+  /** `program_md5.h` content (`generateProgramMd5Header`). */
+  programMd5H: string
   /** Pre-authored `vpp_config.h` content for arduino-cli targets
    *  whose VPP package declares `vppIo: true` (Arduino Opta, P1AM,
    *  future arduino-toolchain VPPs).  Caller invokes
@@ -147,6 +149,7 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  *  - `src/openplc_retain.h`                          — mirrored from `examples/Baremetal/` (vendor-facing contract)
  *  - `src/c_blocks.h`                                — written verbatim from `cBlocks.header`
  *  - `src/defines.h`                                 — written verbatim from `definesH`
+ *  - `src/program_md5.h`                             — written verbatim from `programMd5H`
  *  - `src/<strucpp-emitted-file>`                    — every key from `strucppFiles`
  *  - `src/<strucpp-runtime-header>.hpp`              — from skeleton (strucpp runtime headers)
  *  - other skeleton entries                          — passed through verbatim
@@ -159,7 +162,17 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, s7commConfigH, firmwareSkeleton, hmiFiles } = input
+  const {
+    strucppFiles,
+    cBlocks,
+    definesH,
+    programMd5H,
+    vppConfigH,
+    opcuaConfigH,
+    s7commConfigH,
+    firmwareSkeleton,
+    hmiFiles,
+  } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -202,9 +215,10 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // defines.h is the authored output of the shared
   // `generateDefinesContent` helper.  Always overwrites — the
   // skeleton ships a stub but this replaces it with the
-  // project-specific content (board defines, PROGRAM_MD5, IO Config,
+  // project-specific content (board defines, IO Config,
   // library toggles).
   files['src/defines.h'] = definesH
+  files['src/program_md5.h'] = programMd5H
 
   // vpp_config.h carries the user's configuration-screen data for
   // arduino-cli VPP boards (currently Arduino Opta; P1AM next).

@@ -106,6 +106,12 @@ test.describe('HMI Settings', () => {
 
       await leaf(page, 'Overview').click()
       await expect(page.getByTestId('hmi-designer')).toBeVisible()
+      await waitFor(
+        page,
+        'the preview with the new theme listed',
+        async () => (await status(page)).startsWith('ready'),
+        60000,
+      )
       const before = await status(page)
       await choose(page, 'hmi-theme', 'Theme: Brand')
       await waitFor(

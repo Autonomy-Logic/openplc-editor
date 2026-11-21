@@ -27,12 +27,15 @@ describe('previewProgress', () => {
 describe('PreviewLoading', () => {
   afterEach(() => jest.useRealTimers())
 
-  it('stands in for the screen at once on its first build, with how far the build is', () => {
+  it('stands in for the screen at once on its first build, with its step and an indeterminate bar', () => {
     render(<PreviewLoading step='generate' />)
     const loading = screen.getByTestId('hmi-preview-loading')
     expect(loading.dataset.dimmed).toBe('false')
     expect(loading.dataset.step).toBe('generate')
     expect(screen.getByText('Generating the screens')).toBeTruthy()
+    const bar = screen.getByTestId('hmi-preview-loading-bar')
+    expect(bar.className).toContain('animate-indeterminate-bar')
+    expect(bar.getAttribute('style')).toBeNull()
   })
 
   it('dims the last frame only once an edit has waited, so builds that end quickly never flash it', () => {

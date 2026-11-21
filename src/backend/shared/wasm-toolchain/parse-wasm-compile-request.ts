@@ -1,8 +1,9 @@
-import type {
-  WasmCompileRequest,
-  WasmCompileUnit,
-  WasmPrecompiledHeader,
-  WasmToolchainFiles,
+import {
+  WASM_LIBRARY_OBJECT_KINDS,
+  type WasmCompileRequest,
+  type WasmCompileUnit,
+  type WasmLibraryObjectTag,
+  type WasmToolchainFiles,
 } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
 import { toolchainPathProblem } from './file-tree'
@@ -36,6 +37,17 @@ function parseFiles(value: unknown): WasmToolchainFiles | string {
   return files
 }
 
+const isKind = (value: unknown): value is WasmLibraryObjectTag['kind'] =>
+  WASM_LIBRARY_OBJECT_KINDS.some((kind) => kind === value)
+
+/** A unit's library tag, undefined when it has none, or the problem with it. */
+function parseLibraryTag(value: unknown, source: string): WasmLibraryObjectTag | undefined | string {
+  if (value === undefined) return undefined
+  if (!isRecord(value) || typeof value.name !== 'string' || typeof value.key !== 'string' || !isKind(value.kind))
+    return `Unit '${source}' has an invalid 'library'.`
+  return { name: value.name, kind: value.kind, key: value.key }
+}
+
 function parseUnits(value: unknown): WasmCompileUnit[] | string {
   if (!Array.isArray(value)) return "'units' must be a list."
   const units: WasmCompileUnit[] = []
@@ -44,29 +56,19 @@ function parseUnits(value: unknown): WasmCompileUnit[] | string {
     if (unit.language !== 'c' && unit.language !== 'c++') return `Unit '${unit.source}' has no valid language.`
     const flags = optionalFlags(unit.flags, `${unit.source}.flags`)
     if (typeof flags === 'string') return flags
-    if (unit.pch !== undefined && typeof unit.pch !== 'string') return `Unit '${unit.source}' has an invalid 'pch'.`
+    if (unit.ownFlags !== undefined && typeof unit.ownFlags !== 'boolean')
+      return `Unit '${unit.source}' has an invalid 'ownFlags'.`
+    const library = parseLibraryTag(unit.library, unit.source)
+    if (typeof library === 'string') return library
     units.push({
       source: unit.source,
       language: unit.language,
       ...(flags ? { flags } : {}),
-      ...(typeof unit.pch === 'string' ? { pch: unit.pch } : {}),
+      ...(unit.ownFlags === true ? { ownFlags: true } : {}),
+      ...(library ? { library } : {}),
     })
   }
   return units
-}
-
-function parseHeaders(value: unknown): WasmPrecompiledHeader[] | string {
-  if (!Array.isArray(value)) return "'precompiledHeaders' must be a list."
-  const headers: WasmPrecompiledHeader[] = []
-  for (const header of value) {
-    if (!isRecord(header) || typeof header.header !== 'string') return 'Every precompiled header needs a path.'
-    if (header.language !== 'c' && header.language !== 'c++')
-      return `Precompiled header '${header.header}' has no valid language.`
-    const flags = optionalFlags(header.flags, `${header.header}.flags`)
-    if (typeof flags === 'string') return flags
-    headers.push({ header: header.header, language: header.language, ...(flags ? { flags } : {}) })
-  }
-  return headers
 }
 
 /** Checks a compile request that crossed a process or worker boundary. */
@@ -77,11 +79,6 @@ export function parseWasmCompileRequest(value: unknown): ParsedWasmCompileReques
   const units = parseUnits(value.units)
   if (typeof units === 'string') return { ok: false, error: units }
   const request: WasmCompileRequest = { files, units }
-  if (value.precompiledHeaders !== undefined) {
-    const headers = parseHeaders(value.precompiledHeaders)
-    if (typeof headers === 'string') return { ok: false, error: headers }
-    request.precompiledHeaders = headers
-  }
   for (const field of ['cFlags', 'cxxFlags', 'linkFlags'] as const) {
     const flags = optionalFlags(value[field], field)
     if (typeof flags === 'string') return { ok: false, error: flags }

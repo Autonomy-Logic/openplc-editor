@@ -118,6 +118,9 @@ describe('HMI unit generator', () => {
     expect(glue).toContain('{1u, 0u, 16, 12, "CONFIG0.RES0.INSTANCE0.MAIN.TAG"},')
     expect(glue).toContain('void *external_variable(uint32_t id) { return tag_variable(id); }')
     expect(glue).toContain('constexpr size_t kTagBufferSize = 13;')
+    expect(glue).toContain('size_t n = s.length() < 12 ? s.length() : 12;')
+    expect(glue).not.toContain('<algorithm>')
+    expect(sample.files['hmi_unit_slot.hpp']).not.toContain('<algorithm>')
     expect(glue).toContain(
       '    if (g_access->read(g_access->ctx, static_cast<int>(id), buf)) hmi_tag_write(static_cast<int>(id), g_read[id], buf);',
     )
@@ -500,7 +503,8 @@ describe('HMI unit generator', () => {
     expect(main).toContain(`    Rt.AddPage(${firstOf('Overview')});\n    Rt.AddPage(${firstOf('Details')});`)
     expect(main).not.toMatch(/Scr\d+ :/)
     const slot = sample.files['hmi_unit_slot.hpp']
-    expect(slot).toContain('std::max<std::size_t>({1, sizeof(hmi::OVERVIEW), sizeof(hmi::DETAILS)})')
+    expect(slot).toContain('kHmiSlotSize = hmi_slot_max({1, sizeof(hmi::OVERVIEW), sizeof(hmi::DETAILS)})')
+    expect(slot).toContain('constexpr std::size_t hmi_slot_max(std::initializer_list<std::size_t> sizes) {')
     expect(slot).toMatch(
       /struct HmiUnit \{\s+hmi::Program_HMIMAIN program;\s+alignas\(kHmiSlotAlign\) unsigned char slot\[kHmiSlotSize\];/,
     )

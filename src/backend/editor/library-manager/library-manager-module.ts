@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { basename, extname, join } from 'path'
+import { basename, dirname, extname, join } from 'path'
 
 import type { CatalogTransportPort } from '../../../middleware/shared/ports/catalog-transport-port'
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
@@ -16,6 +16,7 @@ import { downloadPublicLibrary } from '../../shared/library/public-catalog-clien
 import { selectBuildLibraryArchives } from '../../shared/library/select-library-archives'
 import { stlibArchiveFromText } from '../../shared/library/stlib-archive-json'
 import { validatePathId } from '../../shared/utils/path-safety'
+import { libraryObjectFileName } from '../../shared/wasm-toolchain/library-objects'
 import { assertPathContained } from '../utils/path-containment'
 import { createDesktopCatalogTransport } from './desktop-catalog-transport'
 import type { LibraryRegistry } from './types'
@@ -403,6 +404,42 @@ export class LibraryManagerModule {
     } catch (err) {
       return { success: false, error: `Uninstall failed: ${err instanceof Error ? err.message : String(err)}` }
     }
+  }
+
+  /**
+   * The file next to a user-installed library's archive that holds its compiled object of `kind`, named by
+   * `libraryObjectFileName`; null for a library this machine keeps no files next to (bundled, unknown, or a name or
+   * kind that is not a plain file name part).
+   */
+  private libraryObjectPath(name: string, kind: string): string | null {
+    try {
+      validatePathId(name, 'name')
+    } catch {
+      return null
+    }
+    const entry = this.readRegistry().libraries[name]
+    if (!entry) return null
+    try {
+      assertPathContained(this.librariesDir, entry.stlibPath, `library[${name}].stlibPath`)
+    } catch {
+      return null
+    }
+    const fileName = libraryObjectFileName(basename(entry.stlibPath), kind)
+    return fileName === null ? null : join(dirname(entry.stlibPath), fileName)
+  }
+
+  /** The bytes of a library's compiled object of `kind`, as stored next to its archive; null when there are none. */
+  readLibraryObject(name: string, kind: string): Uint8Array | null {
+    const path = this.libraryObjectPath(name, kind)
+    if (path === null || !existsSync(path)) return null
+    return new Uint8Array(readFileSync(path))
+  }
+
+  /** Stores a library's compiled object of `kind` next to its archive; does nothing for a library with no folder. */
+  writeLibraryObject(name: string, kind: string, bytes: Uint8Array): void {
+    const path = this.libraryObjectPath(name, kind)
+    if (path === null || !existsSync(dirname(path))) return
+    writeFileSync(path, bytes)
   }
 
   // -------------------------------------------------------------------------

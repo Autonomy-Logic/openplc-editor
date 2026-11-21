@@ -14,6 +14,8 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { threadRunner } from '../../scripts/clang-thread-runner'
+import { buildHmiShippedObjects } from '../../src/backend/shared/hmi/lib-object/fixed-objects'
 import { buildHmiPreview, type HmiPreviewResources } from '../../src/backend/shared/hmi/preview/build-hmi-preview'
 import { createHmiPreviewPort } from '../../src/backend/shared/hmi/preview/hmi-preview-port'
 import { serveHmiPreview } from '../../src/backend/shared/hmi/preview/preview-worker'
@@ -21,8 +23,8 @@ import { HmiPreviewInstance } from '../../src/backend/shared/hmi/preview/preview
 import { buildHmiWidgetCatalog, WIDGET_PREVIEW_SCREEN } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
 import { installedWidgetArchives } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/widget-libraries'
-import { isYowaspClang, runClangJob } from '../../src/backend/shared/wasm-toolchain/clang-worker-host'
-import { type CachedWasmObject, compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
+import { compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
+import { BoundedWasmObjectCache } from '../../src/backend/shared/wasm-toolchain/wasm-object-cache'
 import { createWasmCompileService } from '../../src/backend/shared/wasm-toolchain/wasm-compile-service'
 import type {
   HmiPreviewWorkerHandle,
@@ -104,16 +106,8 @@ function resources(): HmiPreviewResources {
   }
 }
 
-async function runner(): Promise<WasmClangRunner> {
-  const clang: unknown = await import('@yowasp/clang')
-  if (!isYowaspClang(clang)) throw new Error('@yowasp/clang is not the expected module')
-  return {
-    concurrency: 1,
-    prepare: () => Promise.resolve(),
-    run: (job) => runClangJob(clang, job.argv, job.tree),
-    release: () => Promise.resolve(),
-  }
-}
+/** Four clang threads, as the editor runs while an HMI tab holds the toolchain on a machine with the memory for it. */
+const runner = (): Promise<WasmClangRunner & { end(): Promise<void> }> => Promise.resolve(threadRunner(4))
 
 const elapsed = (start: number): number => Math.round(performance.now() - start)
 
@@ -502,7 +496,7 @@ async function liveElementChecks(files: HmiPreviewResources, compile: Compile): 
 
 async function main(): Promise<void> {
   const clang = await runner()
-  const cache = new Map<string, CachedWasmObject>()
+  const cache = new BoundedWasmObjectCache(512 * 1024 * 1024)
   const compile = (request: WasmCompileRequest) => compileToWasm(request, { runner: clang, cache })
   const files = resources()
 
@@ -696,11 +690,11 @@ async function main(): Promise<void> {
     write: (key, record) => Promise.resolve(void records.set(key, record)),
     remove: (key) => Promise.resolve(void records.delete(key)),
   }
-  const earlier = createWasmCompileService(clang, store)
+  const earlier = createWasmCompileService(clang, { store })
   await earlier.prepare()
   await buildHmiPreview(sampleProject(), files, (request) => earlier.compile(request))
   await new Promise((resolve) => setTimeout(resolve, 50))
-  const restarted = createWasmCompileService(clang, store)
+  const restarted = createWasmCompileService(clang, { store })
   await restarted.prepare()
   start = performance.now()
   const afterRestart = await buildHmiPreview(sampleProject(), files, (request) => restarted.compile(request))
@@ -714,6 +708,27 @@ async function main(): Promise<void> {
   )
   check(restartMs <= REBUILD_MS, `first build after a restart within ${REBUILD_MS} ms`)
 
+  const shipped = await buildHmiShippedObjects(clang, {
+    preview: files,
+    hmiSources: readAll(HMI),
+    runtimeHeaders: Object.fromEntries(
+      Object.entries(files.runtimeHeaders).map(([name, text]) => [`strucpp_runtime/include/${name}`, text]),
+    ),
+  })
+  const installed = createWasmCompileService(clang, {
+    shipped: { read: (name) => Promise.resolve(shipped[name] ?? null) },
+  })
+  await installed.prepare()
+  start = performance.now()
+  const firstEver = await buildHmiPreview(sampleProject(), files, (request) => installed.compile(request))
+  const compiledNow = firstEver.ok ? (firstEver.stats?.jobs ?? []).filter((j) => !j.cached).map((j) => j.source) : []
+  console.log(`first build ever with the shipped objects: ${elapsed(start)} ms, compiled ${compiledNow.join(', ')}`)
+  check(
+    firstEver.ok && compiledNow.length > 0 && compiledNow.every((source) => source.startsWith('groups/')),
+    "a first build with the shipped objects compiles only the project's own units",
+  )
+
+  await clang.end()
   if (failures.length > 0) {
     console.error(`${failures.length} check(s) failed`)
     process.exit(1)

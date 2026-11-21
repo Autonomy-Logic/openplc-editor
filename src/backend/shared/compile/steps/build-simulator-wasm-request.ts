@@ -57,9 +57,13 @@ const isCppUnit = (path: string): boolean =>
 /**
  * Lays the composed firmware files out as one WebAssembly compile request: the sketch becomes a C++ unit with
  * `Arduino.h` included and its prototypes generated, the runtime and the project's units are compiled, the
- * network parts are left out, and the simulator's host shim and Arduino core are linked in.
+ * network parts are left out, and the simulator's host shim and Arduino core are linked in, with `libraryUnits`, the
+ * libraries' own units (`simulatorLibraryUnits`), whose files are among `firmwareFiles`.
  */
-export function buildSimulatorWasmRequest(firmwareFiles: Record<string, string>): SimulatorWasmRequestResult {
+export function buildSimulatorWasmRequest(
+  firmwareFiles: Record<string, string>,
+  libraryUnits: readonly WasmCompileUnit[] = [],
+): SimulatorWasmRequestResult {
   const sketch = firmwareFiles[SIMULATOR_SKETCH]
   if (sketch === undefined) return { ok: false, error: `The firmware files have no '${SIMULATOR_SKETCH}'.` }
   const missing = SUPPORT_UNITS.find((path) => firmwareFiles[path] === undefined)
@@ -78,10 +82,12 @@ export function buildSimulatorWasmRequest(firmwareFiles: Record<string, string>)
     addInoPrototypes(sketch, SIMULATOR_SKETCH),
   ].join('\n')
 
-  const units: WasmCompileUnit[] = [...Object.keys(files).filter(isCppUnit).sort(), ...SUPPORT_UNITS].map((source) => ({
-    source,
-    language: 'c++',
-  }))
+  const units: WasmCompileUnit[] = [
+    ...[...Object.keys(files).filter(isCppUnit).sort(), ...SUPPORT_UNITS].map(
+      (source): WasmCompileUnit => ({ source, language: 'c++' }),
+    ),
+    ...libraryUnits,
+  ]
 
   return {
     ok: true,

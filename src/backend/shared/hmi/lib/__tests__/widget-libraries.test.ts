@@ -202,6 +202,7 @@ describe('installed libraries in HMI builds', () => {
     const mechanisms: HmiPreviewMechanisms = {
       readHmiSources: () => Promise.resolve({ root: '', files: {} }),
       readStrucppRuntimeHeaders: () => Promise.resolve({}),
+      readShippedFile: () => Promise.resolve(null),
       compileToWasm: () => Promise.reject(new Error('not compiled here')),
       holdToolchain: () => Promise.resolve(),
       startWorker: () => {

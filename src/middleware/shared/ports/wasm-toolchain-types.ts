@@ -7,30 +7,35 @@ export type WasmToolchainFiles = Record<string, string | Uint8Array>
 
 export type WasmUnitLanguage = 'c' | 'c++'
 
+/** Kinds of build a library's compiled object is kept next to the library for; each kind is its own file. */
+export const WASM_LIBRARY_OBJECT_KINDS = ['hmi', 'hmi-factory', 'simulator'] as const
+export type WasmLibraryObjectKind = (typeof WASM_LIBRARY_OBJECT_KINDS)[number]
+
+/** A unit that is a library's own code: its object is also kept next to the library, under `key`. */
+export interface WasmLibraryObjectTag {
+  /** The library's name, as its manifest gives it. */
+  name: string
+  kind: WasmLibraryObjectKind
+  /** Digest of what the object is built from besides its sources (`libraryObjectKey`). */
+  key: string
+}
+
 /** One translation unit: a file in `files` compiled to one object. */
 export interface WasmCompileUnit {
   source: string
   language: WasmUnitLanguage
   /** Flags for this unit only, after the language flags. */
   flags?: string[]
-  /** Header of one of the request's `precompiledHeaders` that this unit includes precompiled, ahead of its source. */
-  pch?: string
-}
-
-/** A header compiled once into a precompiled header; units name it with `pch`. Its flags must match theirs. */
-export interface WasmPrecompiledHeader {
-  header: string
-  language: WasmUnitLanguage
-  /** Flags for this header only, after the language flags. */
-  flags?: string[]
+  /** When true, `flags` replace the request's language flags, so the unit compiles alike in every request. */
+  ownFlags?: boolean
+  /** Set when the unit is a library's own code, whose object is kept next to the library. */
+  library?: WasmLibraryObjectTag
 }
 
 export interface WasmCompileRequest {
   /** Sources, headers and any other input, keyed by relative path. */
   files: WasmToolchainFiles
   units: WasmCompileUnit[]
-  /** Headers compiled before the units, for units that name them with `pch`. */
-  precompiledHeaders?: WasmPrecompiledHeader[]
   /** Flags for every C unit. */
   cFlags?: string[]
   /** Flags for every C++ unit. */
@@ -41,7 +46,7 @@ export interface WasmCompileRequest {
   output?: string
 }
 
-/** One precompiled header or unit of a build: how long it took and whether its object came from the cache. */
+/** One unit of a build: how long it took and whether its object came from the cache. */
 export interface WasmCompileJobTiming {
   source: string
   ms: number
@@ -53,7 +58,7 @@ export interface WasmCompileStats {
   cached: number
   compileMs: number
   linkMs: number
-  /** Every precompiled header, then every unit, in request order. */
+  /** Every unit, in request order. */
   jobs?: WasmCompileJobTiming[]
 }
 

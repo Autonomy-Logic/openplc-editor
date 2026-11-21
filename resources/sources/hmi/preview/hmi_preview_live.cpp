@@ -2,11 +2,13 @@
  * @file hmi_preview_live.cpp
  * @brief Live elements of the editor's preview (hmi_unit_live_* in hmi_preview.h): elements created from the factory
  *        table and placed in the shown screen exactly where its next build attaches them, so a new element is drawn
- *        before that build ends. Built with the generated unit; product hosts never link it.
+ *        before that build ends. Built with the declarations of the widget library that provides the screen base
+ *        (hmi_preview_widgets.hpp, written by the build), so it is the same object in every project; product hosts
+ *        never link it.
  */
 #include "hmi_preview.h"
 #include "hmi_preview_factory.h"
-#include "hmi_unit_libraries.hpp"
+#include "hmi_preview_widgets.hpp"
 
 /** The screen built in the instance's slot, or null, and its page (-1: none); generated with the unit. */
 hmi::HMISCREEN *hmi_preview_mounted_screen(void *unit);

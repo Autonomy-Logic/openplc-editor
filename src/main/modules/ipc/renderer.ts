@@ -599,6 +599,8 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('hmi-preview:read-sources'),
   hmiPreviewReadRuntimeHeaders: (): Promise<Record<string, string>> =>
     ipcRenderer.invoke('hmi-preview:read-runtime-headers'),
+  hmiPreviewReadShipped: (name: string): Promise<Uint8Array | null> =>
+    ipcRenderer.invoke('hmi-preview:read-shipped', name),
 
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>

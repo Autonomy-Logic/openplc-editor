@@ -30,6 +30,8 @@ export interface HmiPreviewMechanisms {
   readHmiSources(): Promise<HmiPreviewStoredFiles>
   /** The STruC++ runtime headers (`iec_*.hpp`, ...), keyed by any path; only the file name counts. */
   readStrucppRuntimeHeaders(): Promise<Record<string, string>>
+  /** One file shipped with the compiled objects, by name and verbatim, or null when there is no such file. */
+  readShippedFile(name: string): Promise<Uint8Array | null>
   compileToWasm(request: WasmCompileRequest): Promise<WasmCompileResult>
   /** Holds the platform's WebAssembly toolchain for `holder`, or lets it go (`WasmCompileService.setHeld`). */
   holdToolchain(holder: string, held: boolean): Promise<void>
