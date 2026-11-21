@@ -45,7 +45,6 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HMI_PtrReleased',
   'HMI_PtrX',
   'HMI_PtrY',
-  'HMI_Scaled',
   'HMI_ScreenH',
   'HMI_ScreenW',
   'HMI_SeverityColor',
