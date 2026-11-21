@@ -76,7 +76,11 @@ export function severityOfGroup(vulns, groups = []) {
 
 // Package names compare case-insensitively, PyPI-style separators folded; the
 // ecosystem compares on its base name (`Debian:12` -> `debian`).
-const normPkg = (n) => String(n ?? '').toLowerCase().replace(/[-_.]+/g, '-');
+// PyPI treats '-', '_' and '.' as the same (PEP 503); other ecosystems do not.
+const normPkg = (n, eco) => {
+  const s = String(n ?? '').toLowerCase();
+  return normEco(eco) === 'pypi' ? s.replace(/[-_.]+/g, '-') : s;
+};
 const normEco = (e) => String(e ?? '').split(':')[0].toLowerCase();
 
 // Fix versions of an OSV record. With `pkg`, only from the affected[] entries of
@@ -84,7 +88,7 @@ const normEco = (e) => String(e ?? '').split(':')[0].toLowerCase();
 // several packages. If no entry names the package, every entry is used.
 export function fixedOf(v, pkg, ecosystem) {
   const all = v?.affected || [];
-  const mine = pkg === undefined ? all : all.filter((a) => normPkg(a.package?.name) === normPkg(pkg)
+  const mine = pkg === undefined ? all : all.filter((a) => normPkg(a.package?.name, a.package?.ecosystem || ecosystem) === normPkg(pkg, ecosystem || a.package?.ecosystem)
     && (!ecosystem || !a.package?.ecosystem || normEco(a.package.ecosystem) === normEco(ecosystem)));
   return [...new Set((mine.length ? mine : all).flatMap((a) => (a.ranges || [])
     .flatMap((r) => (r.events || []).filter((e) => e.fixed).map((e) => e.fixed))))];
