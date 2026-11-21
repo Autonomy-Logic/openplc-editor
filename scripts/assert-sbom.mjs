@@ -5,7 +5,7 @@
 // Why this exists: every other stage in the pipeline validates only the SHAPE of
 // its input. Feed the chain a `{"components":[]}` BOM and cdx-to-csv, cdx-to-spdx,
 // scan-vulns, build-report and pr-gate-diff all succeed — the result being a
-// document classified Confidential and aligned to EO 14028 / NTIA / CISA VEX that
+// document classified Confidential, prepared with reference to EO 14028 / CISA VEX, that
 // attests a clean security posture over zero inventoried components. A generator
 // that silently produced nothing must fail the run, not pass it.
 //
@@ -17,6 +17,11 @@ import { collectComponents } from './lib/cdx.mjs';
 const [src, minArg] = process.argv.slice(2);
 const MIN = Number(minArg ?? process.env.MIN_COMPONENTS ?? 50);
 if (!src) { console.error('usage: assert-sbom.mjs <cdx.json> [minComponents]'); process.exit(1); }
+// An empty or non-numeric floor would make the check pass everything: refuse it.
+if (!Number.isInteger(MIN) || MIN < 1) {
+  console.error(`ASSERT-SBOM ERROR: minComponents "${minArg ?? process.env.MIN_COMPONENTS}" is not a positive integer.`);
+  process.exit(1);
+}
 
 const fail = (msg) => { console.error(`::error::SBOM validation failed: ${msg}`); process.exit(1); };
 

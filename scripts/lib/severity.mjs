@@ -1,35 +1,28 @@
-// severity.mjs — the ONE severity verdict and the ONE advisory index.
-//
-// Why this exists: build-report and pr-gate-diff used to disagree. For an
-// advisory with no qualitative severity, the report bucketed it MODERATE while
-// the gate conservatively called it HIGH and blocked the merge — so the person
-// reading the report and the person trying to merge got contradictory
-// information about the same advisory. They also deduped differently (report by
-// `id`, gate by `id|pkg`), so one CVE hitting three packages counted as 1 in the
-// report and 3 in the gate. Both now import from here: the conservative HIGH is
-// the verdict everywhere, and `id|pkg` (one row per affected package, matching
-// vulnerabilities.csv and osv-scanner's own output) is the unit everywhere.
+// Severity verdict and advisory index shared by pr-gate-diff, build-report and
+// scan-vulns. Repository-agnostic: copied byte-identical across repositories.
+
+// Unit: one OSV alias group per package name. Severity is the highest parsable
+// severity of any member or of the group's max_severity, else UNKNOWN.
 
 export const ORDER = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
+export const UNKNOWN = 'UNKNOWN';
+// Display order, most severe first; UNKNOWN last.
+export const SEVERITIES = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW', UNKNOWN];
+// -1 for UNKNOWN, so it never reaches any threshold.
+export const rank = (sev) => ORDER.indexOf(sev);
 
-// OSV/NVD say MEDIUM; our reports say MODERATE.
+// OSV/NVD say MEDIUM; the reports say MODERATE.
 export const normWord = (w) => (w === 'MEDIUM' ? 'MODERATE' : w);
 
-// --- CVSS v3.1 base score (FIRST.org spec §7.1 "Base equations") -------------
-// The magic numbers are the spec's metric weights and the Impact /
-// Exploitability coefficients — verify against
-// https://www.first.org/cvss/v3.1/specification-document (§7.1).
-
-// CVSS v3.1 Roundup, Appendix A. Deliberately NOT `Math.ceil(x*10)/10`: that is
-// the v3.0 formulation and its float error rounds 8.6 up to 8.7, which can flip
-// a merge decision at the 7.0 / 9.0 bucket boundaries. The spec defines Roundup
-// over integers scaled by 100000 precisely to avoid this.
+// CVSS v3.1 Roundup (spec Appendix A), over integers scaled by 100000 so float
+// error cannot push a score across the 7.0 / 9.0 boundaries.
 export function roundup(input) {
   const i = Math.round(input * 100000);
   if (i % 10000 === 0) return i / 100000;
   return (Math.floor(i / 10000) + 1) / 10;
 }
 
+// CVSS v3.x base score (FIRST.org v3.1 spec, section 7.1). null if unparsable.
 export function cvss3Base(vector) {
   const m = {};
   for (const kv of String(vector).split('/')) { const [k, v] = kv.split(':'); if (k && v) m[k] = v; }
@@ -50,65 +43,130 @@ export function cvss3Base(vector) {
 
 export const bucketFromScore = (s) => (s >= 9 ? 'CRITICAL' : s >= 7 ? 'HIGH' : s >= 4 ? 'MODERATE' : 'LOW');
 
-// Returns { sev, approx }. approx=true means we could not compute an exact score
-// and fell back to a conservative HIGH, surfaced explicitly so it is never a
-// *silent* default — in the gate's comment and in the report's untriaged table.
+const maxSev = (list) => list.reduce((best, s) => (rank(s) > rank(best) ? s : best), UNKNOWN);
+
+// Severity of ONE OSV record: its qualitative word, else the highest CVSS v3.x
+// vector it carries. CVSS 4.0 vectors are not scored here. UNKNOWN if neither.
 export function severityOf(v) {
-  // 1) explicit qualitative severity (present on most GHSA advisories)
-  const word = normWord((v.database_specific?.severity || '').toUpperCase());
-  if (ORDER.includes(word)) return { sev: word, approx: false };
-  // 2) CVSS v3.x vector → exact base score
-  let sawV4 = false;
-  for (const s of (v.severity || [])) {
+  const word = normWord(String(v?.database_specific?.severity || '').toUpperCase());
+  if (ORDER.includes(word)) return word;
+  const scored = [];
+  for (const s of (v?.severity || [])) {
     const score = String(s.score || '');
     if (s.type === 'CVSS_V3' || score.startsWith('CVSS:3')) {
       const sc = cvss3Base(score);
-      if (sc != null) return { sev: bucketFromScore(sc), approx: false };
+      if (sc != null) scored.push(bucketFromScore(sc));
     }
-    if (s.type === 'CVSS_V4' || score.startsWith('CVSS:4')) sawV4 = true;
   }
-  // 3) CVSS 4.0-only: we deliberately do NOT hand-roll the v4 macrovector table
-  //    (error-prone in a merge-deciding script). 4) no severity at all.
-  //    Either way: conservative HIGH, flagged — never a silent pass, never a
-  //    silent bucket.
-  void sawV4;
-  return { sev: 'HIGH', approx: true };
+  return maxSev(scored);
+}
+
+// osv-scanner's group max_severity is a numeric score as a string; '' or 0 means none.
+function groupScoreSeverity(group) {
+  const raw = group?.max_severity;
+  const sc = raw === undefined || raw === null || raw === '' ? NaN : Number(raw);
+  return Number.isFinite(sc) && sc > 0 ? bucketFromScore(sc) : UNKNOWN;
+}
+
+// Severity of an alias group: the highest of every member's own severity and of
+// each osv-scanner group max_severity covering it.
+export function severityOfGroup(vulns, groups = []) {
+  return maxSev([...vulns.map(severityOf), ...groups.map(groupScoreSeverity)]);
 }
 
 export function fixedOf(v) {
-  return [...new Set((v.affected || []).flatMap((a) => (a.ranges || [])
-    .flatMap((r) => (r.events || []).filter((e) => e.fixed).map((e) => e.fixed))))].join(', ');
+  return [...new Set((v?.affected || []).flatMap((a) => (a.ranges || [])
+    .flatMap((r) => (r.events || []).filter((e) => e.fixed).map((e) => e.fixed))))];
 }
 
-// Index an osv-scanner JSON result set, keyed `advisoryId|package`.
-//
-// Keying by id AND package is what makes the gate correct: the same CVE landing
-// on a *different* package in head must count as introduced, while a version
-// bump of an already-vulnerable package (same id+package) must not. It is also
-// one row per affected package — the same unit as vulnerabilities.csv — so the
-// report's advisory counts and the gate's counts are the same quantity.
+const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+
+// One entry per (alias group, package name) across all scanned sources. Records
+// join a group when they share an id or alias, or an osv-scanner `groups` entry.
+// Key `${id}|${pkg}`; id is the first GHSA id, else the first id.
+
+// Entry fields: ids = OSV record ids in the group, aliases = every name the group
+// is known by, versions / fixedVersions = installed / fixed versions. Compare scans with
+// introducedAdvisories(), which matches on any alias.
 export function indexAdvisories(data) {
-  const m = new Map();
-  for (const r of (data?.results || [])) for (const p of (r.packages || [])) for (const v of (p.vulnerabilities || [])) {
-    if (!v.id) continue;
+  const perPkg = new Map();
+  for (const r of (data?.results || [])) for (const p of (r.packages || [])) {
     const pkg = p.package?.name || '?';
-    const key = `${v.id}|${pkg}`;
-    if (m.has(key)) continue;
-    const { sev, approx } = severityOf(v);
-    m.set(key, {
-      id: v.id, sev, approx, pkg,
-      ver: p.package?.version || '',
-      fixed: fixedOf(v),
-      summary: (v.summary || '').slice(0, 140),
-    });
+    if (!perPkg.has(pkg)) perPkg.set(pkg, { occ: [], groups: [] });
+    const slot = perPkg.get(pkg);
+    for (const v of (p.vulnerabilities || [])) if (v?.id) slot.occ.push({ v, ver: p.package?.version || '' });
+    for (const g of (p.groups || [])) slot.groups.push(g);
+  }
+
+  const m = new Map();
+  for (const [pkg, { occ, groups }] of perPkg) {
+    const parent = new Map();
+    const find = (x) => {
+      if (!parent.has(x)) parent.set(x, x);
+      while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); }
+      return x;
+    };
+    const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+    for (const { v } of occ) { find(v.id); for (const a of (v.aliases || [])) if (a) union(v.id, a); }
+    for (const g of groups) {
+      const names = [...(g.ids || []), ...(g.aliases || [])].filter(Boolean);
+      for (const n of names.slice(1)) union(names[0], n);
+    }
+
+    const comps = new Map();
+    for (const o of occ) {
+      const root = find(o.v.id);
+      if (!comps.has(root)) comps.set(root, []);
+      comps.get(root).push(o);
+    }
+    const namesOf = new Map();
+    for (const n of parent.keys()) {
+      const root = find(n);
+      if (!namesOf.has(root)) namesOf.set(root, new Set());
+      namesOf.get(root).add(n);
+    }
+
+    for (const [root, members] of comps) {
+      const byId = new Map();
+      for (const { v } of members) if (!byId.has(v.id)) byId.set(v.id, v);
+      const ids = [...byId.keys()].sort();
+      const id = ids.find((x) => /^GHSA-/i.test(x)) || ids[0];
+      const aliases = [...namesOf.get(root)].sort();
+      const vulns = [...byId.values()];
+      const myGroups = groups.filter((g) => [...(g.ids || []), ...(g.aliases || [])].some((n) => namesOf.get(root).has(n)));
+      const rep = byId.get(id);
+      const fixedVersions = [...new Set([rep, ...vulns].flatMap(fixedOf))];
+      const versions = [...new Set(members.map((o) => o.ver).filter(Boolean))].sort();
+      m.set(`${id}|${pkg}`, {
+        key: `${id}|${pkg}`, id, ids, aliases, pkg,
+        sev: severityOfGroup(vulns, myGroups),
+        versions, ver: versions.join(' | '),
+        fixedVersions, fixed: fixedVersions.join(', '),
+        summary: oneLine(rep.summary || vulns.find((v) => v.summary)?.summary || '').slice(0, 140),
+      });
+    }
   }
   return m;
 }
 
+// Entries of headIdx with no alias in common with any baseIdx entry of the same
+// package: the advisories a change introduces.
+export function introducedAdvisories(baseIdx, headIdx) {
+  const known = new Set();
+  for (const a of baseIdx.values()) for (const n of a.aliases) known.add(`${n.toUpperCase()}|${a.pkg}`);
+  return [...headIdx.values()].filter((a) => !a.aliases.some((n) => known.has(`${n.toUpperCase()}|${a.pkg}`)));
+}
+
+// True when any name of the entry is in the claimed set (upper-cased ids).
+export const isClaimed = (entry, claimed) => entry.aliases.some((n) => claimed.has(n.toUpperCase()));
+
+export const bySeverity = (a, b) => rank(b.sev) - rank(a.sev) || a.pkg.localeCompare(b.pkg) || a.id.localeCompare(b.id);
+
 export function tallyBySeverity(index) {
-  const bySev = { CRITICAL: 0, HIGH: 0, MODERATE: 0, LOW: 0 };
+  const bySev = Object.fromEntries(SEVERITIES.map((s) => [s, 0]));
   for (const a of index.values()) bySev[a.sev]++;
   return { total: index.size, bySev };
 }
 
-export const sevStr = (b) => `${b.CRITICAL} critical · ${b.HIGH} high · ${b.MODERATE} moderate · ${b.LOW} low`;
+export const sevStr = (b) => `${b.CRITICAL} critical · ${b.HIGH} high · ${b.MODERATE} moderate · ${b.LOW} low`
+  + (b.UNKNOWN ? ` · ${b.UNKNOWN} unknown` : '');

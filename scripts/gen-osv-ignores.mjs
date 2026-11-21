@@ -60,9 +60,11 @@ export function offsetMonthsFor(reason, severity = '') {
 
 export function expiryFrom(reviewDate, reason, severity) {
   const [y, m, d] = reviewDate.split('-').map(Number);
-  // Day 1 of (month + offset). The baseline dates are month-firsts; UTC
-  // arithmetic keeps this independent of the runner's timezone.
-  const dt = new Date(Date.UTC(y, m - 1 + offsetMonthsFor(reason, severity), d));
+  // Same day of (month + offset), clamped to that month's last day so the expiry
+  // never rolls into the next month. UTC keeps it independent of the runner's timezone.
+  const mo = m - 1 + offsetMonthsFor(reason, severity);
+  const last = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+  const dt = new Date(Date.UTC(y, mo, Math.min(d, last)));
   return `${dt.toISOString().slice(0, 10)}T00:00:00Z`;
 }
 
@@ -86,7 +88,8 @@ if (verdictCol < 0) {
 
 // Only these explicit statuses are suppressed. "affected"/"requires action" rows
 // (and anything ambiguous) are kept VISIBLE so they keep alerting.
-const isNotAffected = (v) => /\bnot[_ ]?affected\b|\bmitigat|\bnot[_ ]?applicable\b/i.test(v || '');
+const SUPPRESSIBLE = new Set(['not_affected', 'mitigated', 'not_applicable']);
+const isNotAffected = (v) => SUPPRESSIBLE.has(String(v || '').trim().toLowerCase().replace(/[\s-]+/g, '_'));
 // An advisory triaged `affected` ANYWHERE must never be suppressed, even if
 // another row (another package, or a duplicate) marks the same id not-affected.
 // The unsafe direction is suppressing something actionable, so `affected` wins.

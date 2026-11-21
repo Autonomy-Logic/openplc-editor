@@ -6,7 +6,9 @@ import { spawnSync } from 'node:child_process';
 import { writeFileSync, mkdtempSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parseCsv } from '../lib/csv.mjs';
+import { indexAdvisories as indexAdv, tallyBySeverity as tally } from '../lib/severity.mjs';
 
 const SCRIPTS = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dir = mkdtempSync(join(tmpdir(), 'sec-test-'));
@@ -41,6 +43,35 @@ test('gate: fails CLOSED (exit 2) on missing or shapeless scan input', () => {
   assert.equal(gate(join(dir, 'nope.json'), w('h.json', { results: [] })).status, 2, 'missing base');
   assert.equal(gate(w('bad.json', { garbage: true }), w('h.json', { results: [] })).status, 2, 'no results array');
 });
+test('gate: the comment states the threshold actually applied (HIGH and CRITICAL)', () => {
+  const head = w('h-crit.json', scan(['c', [adv('GHSA-CRIT', 'CRITICAL')]]));
+  const base = w('b-empty.json', { results: [] });
+  assert.equal(gate(base, head, 'HIGH').status, 1);
+  const high = readFileSync(join(dir, 'c.md'), 'utf8');
+  assert.match(high, /Only CRITICAL and HIGH advisories introduced by this PR block the merge; MODERATE, LOW and UNKNOWN are shown for awareness\./);
+  assert.equal(gate(base, head, 'CRITICAL').status, 1);
+  const crit = readFileSync(join(dir, 'c.md'), 'utf8');
+  assert.match(crit, /Only CRITICAL advisories introduced by this PR block the merge; HIGH, MODERATE, LOW and UNKNOWN are shown for awareness\./);
+  assert.doesNotMatch(crit, /High\/Critical/);
+  const headHigh = w('h-high.json', scan(['h', [adv('GHSA-HIGH', 'HIGH')]]));
+  assert.equal(gate(base, headHigh, 'CRITICAL').status, 0, 'a new HIGH does not block at CRITICAL');
+  assert.match(readFileSync(join(dir, 'c.md'), 'utf8'), /Only CRITICAL advisories/);
+});
+test('gate: an UNKNOWN-severity advisory never blocks, even at LOW, and is listed', () => {
+  const r = gate(w('b.json', { results: [] }), w('h-unk.json', scan(['u', [adv('GHSA-UNK', null)]])), 'LOW');
+  assert.equal(r.status, 0, r.stderr);
+  const c = readFileSync(join(dir, 'c.md'), 'utf8');
+  assert.match(c, /\| UNKNOWN \| `u` \|/);
+  assert.match(c, /UNKNOWN: neither the advisory nor any alias/);
+});
+test('gate: an unknown threshold fails closed', () => {
+  assert.equal(gate(w('b.json', { results: [] }), w('h.json', { results: [] }), 'SEVERE').status, 2);
+});
+test('gate: a new alias record of an advisory already in base is not introduced', () => {
+  const base = w('b-alias.json', scan(['p', [adv('GHSA-1', 'HIGH', { aliases: ['CVE-1'] })]]));
+  const head = w('h-alias.json', scan(['p', [adv('GHSA-1', 'HIGH', { aliases: ['CVE-1'] }), adv('PYSEC-1', null, { aliases: ['CVE-1'] })]]));
+  assert.equal(gate(base, head).status, 0);
+});
 test('gate: CVSS 3.1 vector (9.8) scored as blocking', () => {
   const head = w('h.json', scan(['c', [adv('CVE-CVSS', null, { severity: [{ type: 'CVSS_V3', score: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' }] })]]));
   assert.equal(gate(w('b.json', { results: [] }), head).status, 1);
@@ -48,7 +79,7 @@ test('gate: CVSS 3.1 vector (9.8) scored as blocking', () => {
 
 // ===================== severity (shared by gate and report) =====================
 
-const { cvss3Base, roundup, severityOf, indexAdvisories, tallyBySeverity } = await import(join(SCRIPTS, 'lib/severity.mjs'));
+const { cvss3Base, roundup, severityOf, indexAdvisories, tallyBySeverity, sevStr } = await import(pathToFileURL(join(SCRIPTS, 'lib/severity.mjs')).href);
 
 test('severity: CVSS 3.1 Roundup is the integer form, not ceil(x*10)/10', () => {
   // The counter-example from the v3.1 spec's Appendix A rationale: the naive form
@@ -71,17 +102,41 @@ test('severity: known CVSS 3.1 vectors score correctly', () => {
   assert.equal(cvss3Base('CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:H/A:H'), 8.3, 'scope-changed branch');
   assert.equal(cvss3Base('nonsense'), null, 'an unparseable vector must not yield a score');
 });
-test('severity: an advisory with no severity and no vector is conservatively HIGH and flagged', () => {
-  const { sev, approx } = severityOf({ id: 'X' });
-  assert.equal(sev, 'HIGH');
-  assert.equal(approx, true, 'must be flagged, never a silent bucket');
-});
-test('severity: report and gate agree — no-severity advisory is HIGH in the tally too', () => {
-  // This is the regression the shared module exists for: the report used to
-  // bucket this MODERATE while the gate blocked it as HIGH.
+test('severity: an advisory with no parsable severity anywhere is UNKNOWN, never a guessed bucket', () => {
+  assert.equal(severityOf({ id: 'X' }), 'UNKNOWN');
+  assert.equal(severityOf({ id: 'X', severity: [{ type: 'CVSS_V4', score: 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N' }] }), 'UNKNOWN');
   const t = tallyBySeverity(indexAdvisories(scan(['p', [adv('GHSA-NOSEV', null)]])));
-  assert.equal(t.bySev.HIGH, 1);
-  assert.equal(t.bySev.MODERATE, 0);
+  assert.equal(t.bySev.UNKNOWN, 1);
+  assert.equal(t.bySev.HIGH, 0);
+  assert.equal(sevStr(t.bySev), '0 critical · 0 high · 0 moderate · 0 low · 1 unknown');
+});
+test('severity: alias group (GHSA + PYSEC, max_severity 5.3, vector on the GHSA only) is ONE MODERATE advisory', () => {
+  // Earlier variants returned MODERATE+HIGH*/2, MODERATE+MODERATE/2 and MODERATE/1 for this fixture.
+  const data = { results: [{ packages: [{
+    package: { name: 'requests', version: '2.0.0', ecosystem: 'PyPI' },
+    groups: [{ ids: ['GHSA-aaaa-bbbb-cccc', 'PYSEC-2026-1'], aliases: ['CVE-2026-1', 'GHSA-aaaa-bbbb-cccc', 'PYSEC-2026-1'], max_severity: '5.3' }],
+    vulnerabilities: [
+      { id: 'GHSA-aaaa-bbbb-cccc', aliases: ['CVE-2026-1'], severity: [{ type: 'CVSS_V3', score: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N' }] },
+      { id: 'PYSEC-2026-1', aliases: ['CVE-2026-1'] },
+    ],
+  }] }] };
+  const idx = indexAdvisories(data);
+  assert.equal(idx.size, 1);
+  const [a] = idx.values();
+  assert.equal(a.id, 'GHSA-aaaa-bbbb-cccc');
+  assert.equal(a.sev, 'MODERATE');
+  assert.deepEqual(a.ids, ['GHSA-aaaa-bbbb-cccc', 'PYSEC-2026-1']);
+  assert.ok(a.aliases.includes('CVE-2026-1'));
+  assert.deepEqual(tallyBySeverity(idx).bySev, { CRITICAL: 0, HIGH: 0, MODERATE: 1, LOW: 0, UNKNOWN: 0 });
+});
+test('severity: without osv groups, records sharing an alias still form one group and take the highest member severity', () => {
+  const idx = indexAdvisories(scan(['p', [adv('PYSEC-1', null, { aliases: ['CVE-1'] }), adv('GHSA-1', 'HIGH', { aliases: ['CVE-1'] })]]));
+  assert.equal(idx.size, 1);
+  assert.equal([...idx.values()][0].sev, 'HIGH');
+});
+test('severity: group max_severity scores an advisory whose records carry no severity', () => {
+  const data = { results: [{ packages: [{ package: { name: 'p', version: '1' }, groups: [{ ids: ['PYSEC-9'], aliases: ['PYSEC-9'], max_severity: '9.1' }], vulnerabilities: [{ id: 'PYSEC-9' }] }] }] };
+  assert.equal([...indexAdvisories(data).values()][0].sev, 'CRITICAL');
 });
 test('severity: index counts one row per (advisory, package) in both directions', () => {
   const idx = indexAdvisories(scan(['a', [adv('CVE-SAME', 'HIGH')]], ['b', [adv('CVE-SAME', 'HIGH')]]));
@@ -104,6 +159,22 @@ test('cdx-to-spdx: no duplicate SPDXID when a component appears twice', () => {
   });
   const ids = doc.packages.map((p) => p.SPDXID);
   assert.equal(new Set(ids).size, ids.length, 'SPDXIDs must be unique');
+});
+test('cdx-to-spdx: supplier comes from supplier, manufacturer, publisher or authors, else NOASSERTION', () => {
+  const doc = spdx({ components: [
+    { 'bom-ref': 's@1', name: 's', version: '1', supplier: { name: 'Supplier Org' }, publisher: 'ignored' },
+    { 'bom-ref': 'str@1', name: 'str', version: '1', supplier: 'Vendored Upstream' },
+    { 'bom-ref': 'm@1', name: 'm', version: '1', manufacturer: { name: 'Maker' } },
+    { 'bom-ref': 'p@1', name: 'p', version: '1', publisher: 'Publisher Co' },
+    { 'bom-ref': 'a@1', name: 'a', version: '1', authors: [{ name: 'Jane Doe <jane@example.com>' }] },
+    { 'bom-ref': 'n@1', name: 'n', version: '1' },
+  ] });
+  const sup = Object.fromEntries(doc.packages.map((p) => [p.name, p.supplier]));
+  assert.deepEqual(sup, {
+    s: 'Organization: Supplier Org', str: 'Organization: Vendored Upstream', m: 'Organization: Maker',
+    p: 'Organization: Publisher Co', a: 'Person: Jane Doe (jane@example.com)', n: 'NOASSERTION',
+  });
+  assert.doesNotMatch(readFileSync(join(SCRIPTS, 'cdx-to-spdx.mjs'), 'utf8'), /NTIA/, 'no conformance claim in the converter');
 });
 test('cdx-to-spdx: multiple licenses join with OR (dual-licensed), not AND', () => {
   const doc = spdx({ components: [{ 'bom-ref': 'x@1', name: 'x', version: '1', licenses: [{ license: { id: 'MIT' } }, { license: { id: 'GPL-3.0-only' } }] }] });
@@ -160,6 +231,14 @@ test('assert-sbom: rejects an empty BOM, accepts a populated one', () => {
 test('assert-sbom: rejects a BOM with no root component', () => {
   const headless = w('headless.cdx.json', { components: Array.from({ length: 60 }, (_, i) => ({ name: `c${i}` })) });
   assert.equal(run('assert-sbom.mjs', [headless, '50']).status, 1);
+});
+test('assert-sbom: an empty or non-numeric floor is refused, not treated as 0 or NaN', () => {
+  const one = w('one.cdx.json', { metadata: { component: { 'bom-ref': 'r', name: 'p' } }, components: [{ 'bom-ref': 'c', name: 'c' }] });
+  for (const floor of ['', 'fifty', '0', '-3', '2.5']) {
+    const r = run('assert-sbom.mjs', [one, floor]);
+    assert.equal(r.status, 1, `floor "${floor}" must fail closed`);
+    assert.match(r.stderr, /not a positive integer/);
+  }
 });
 
 // ===================== scan-vulns =====================
@@ -243,6 +322,20 @@ test('gen-osv-ignores: expiries are staggered, and a suppressed CRITICAL expires
 test('gen-osv-ignores: rejects a malformed review date', () => {
   assert.equal(ignores(CSV_HEADER + 'HIGH,a,1,GHSA-aaaa-aaaa-aaaa,2,not_affected,x\n', 'october').status, 1);
 });
+test('gen-osv-ignores: only exact suppressible verdicts suppress ("not mitigated" stays visible)', () => {
+  const r = ignores(CSV_HEADER
+    + 'HIGH,a,1,GHSA-aaaa-aaaa-aaaa,2.0,not mitigated,no control in place\n'
+    + 'HIGH,b,1,GHSA-bbbb-bbbb-bbbb,2.0,mitigation pending,ticket open\n'
+    + 'HIGH,c,1,GHSA-cccc-cccc-cccc,2.0,Not Affected,component_not_present\n'
+    + 'HIGH,d,1,GHSA-dddd-dddd-dddd,2.0,not-applicable,component_not_present\n');
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(parseIgnores(r.stdout).map((g) => g.id).sort(), ['GHSA-cccc-cccc-cccc', 'GHSA-dddd-dddd-dddd']);
+});
+test('gen-osv-ignores: an end-of-month review date is clamped, never rolled into the next month', () => {
+  const r = ignores(CSV_HEADER + 'LOW,a,1,GHSA-aaaa-aaaa-aaaa,2.0,not_affected,component_not_present\n', '2026-11-30');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(parseIgnores(r.stdout)[0].until.slice(0, 10), '2027-02-28', '3 months after Nov 30 is Feb 28, not Mar 2');
+});
 
 // ===================== build-report =====================
 
@@ -305,8 +398,11 @@ test('build-report: an advisory no triage entry claims is reported as untriaged'
   assert.match(md, /4a\. Untriaged in This Scan/);
   assert.match(md, /GHSA-NEW/);
   assert.match(md, /Assessment incomplete/, 'the executive summary must say the assessment is incomplete');
-  assert.match(md, /Headline posture \(as assessed 2026-08\)/, 'the stale posture must be dated, not presented as current');
+  assert.match(md, /Posture at the last full assessment \(2026-08\); it does not cover the 1 unassessed advisory\(ies\) above/);
+  assert.doesNotMatch(md, /Headline posture/, 'an incomplete assessment must not be headlined as the posture');
+  assert.doesNotMatch(html, /callout good"><strong>Posture/);
   assert.match(html, /callout warn/);
+  assert.doesNotMatch(html, /\*\*/, 'markdown emphasis must not leak into the HTML');
   assert.match(md, /covers assessed advisories only/, 'criticalNote must be qualified when a critical is unassessed');
 });
 test('build-report: a claimed advisory is NOT reported as untriaged', () => {
@@ -317,6 +413,57 @@ test('build-report: a claimed advisory is NOT reported as untriaged', () => {
   }), ['--osv-raw', raw, '--osv-delta', delta]);
   assert.doesNotMatch(md, /Untriaged in This Scan/);
   assert.doesNotMatch(md, /Assessment incomplete/);
+});
+test('build-report: a config whose groups cover the whole scan yields no incomplete callout and a consistent headline', () => {
+  const data = scan(['a', [adv('GHSA-A1', 'HIGH')]], ['b', [adv('GHSA-B1', 'MODERATE'), adv('PYSEC-B2', null, { aliases: ['CVE-B'] })]], ['c', [adv('GHSA-C1', 'LOW')]]);
+  data.results[0].packages[1].vulnerabilities[0].aliases = ['CVE-B'];
+  const raw = w('raw-cover.json', data);
+  const { md, html } = report(minimalConfig({
+    affected: [{ priority: 'P1', component: 'a', installed: '1', fixedIn: '2', severity: 'High', ids: ['GHSA-A1'], rationale: 'r' }],
+    mitigated: [{ component: 'b', advisories: '1', ids: ['CVE-B'], control: 'claimed through an alias' }],
+    notAffected: [{ justification: 'component_not_present', count: '1', components: 'c', basis: 'b', ids: ['GHSA-C1'] }],
+  }), ['--osv-raw', raw, '--osv-delta', raw]);
+  assert.doesNotMatch(md, /Assessment incomplete|Untriaged in This Scan|does not cover/);
+  assert.match(md, /Headline posture \(as assessed 2026-08\)/);
+  assert.match(md, /Surfacing advisories not yet assessed \| 0 \|/);
+  assert.doesNotMatch(html, /callout warn/);
+  assert.match(html, /callout good"><strong>Headline posture/);
+});
+test('build-report: the register row count equals the vulnerabilities.csv rows for a duplicated advisory', () => {
+  // The same tar advisory reported under two scanned sources.
+  const tar = () => ({ package: { name: 'tar', version: '6.2.0', ecosystem: 'npm' }, vulnerabilities: [adv('GHSA-dup-tar', 'HIGH')] });
+  const dup = w('dup.json', { results: [{ source: { path: 'a/package-lock.json' }, packages: [tar()] }, { source: { path: 'b/package-lock.json' }, packages: [tar()] }] });
+  const csv = join(dir, 'dup.csv');
+  assert.equal(run('scan-vulns.mjs', [dup, csv]).status, 0);
+  const csvRows = readFileSync(csv, 'utf8').trim().split('\n').length - 1;
+  assert.equal(csvRows, 1);
+  assert.equal(tally(indexAdv(JSON.parse(readFileSync(dup, 'utf8')))).total, csvRows);
+  const { md } = report(minimalConfig({ affected: [{ priority: 'P1', component: 'tar', installed: '6.2.0', fixedIn: '7', severity: 'High', ids: ['GHSA-dup-tar'], rationale: 'r' }] }), ['--osv-raw', dup, '--osv-delta', dup]);
+  assert.match(md, new RegExp(`advisory register \\(${csvRows} rows\\)`));
+});
+test('scan-vulns: an alias group is one row, listing every record id and the other aliases', () => {
+  const src = w('alias-csv.json', scan(['p', [adv('PYSEC-1', null, { aliases: ['CVE-1'] }), adv('GHSA-1', 'HIGH', { aliases: ['CVE-1'] })]]));
+  const out = join(dir, 'alias.csv');
+  assert.equal(run('scan-vulns.mjs', [src, out]).status, 0);
+  const rows = parseCsv(readFileSync(out, 'utf8'));
+  assert.equal(rows.length, 2);
+  const r = Object.fromEntries(rows[0].map((h, i) => [h, rows[1][i]]));
+  assert.equal(r.severity, 'HIGH');
+  assert.equal(r.advisory, 'GHSA-1 | PYSEC-1');
+  assert.equal(r.aliases, 'CVE-1');
+});
+test('build-report: esc() escapes quotes, so an id cannot break out of the href attribute', () => {
+  const evil = 'GHSA-x" onmouseover="alert(1)';
+  const raw = w('raw-quote.json', scan(['q', [adv(evil, 'HIGH', { summary: "it's" })]]));
+  const { html } = report(minimalConfig(), ['--osv-raw', raw, '--osv-delta', raw]);
+  assert.ok(!html.includes('" onmouseover="'), 'a quote must not terminate the attribute');
+  assert.match(html, /href="https:\/\/osv\.dev\/GHSA-x&quot; onmouseover=&quot;alert\(1\)"/);
+  assert.match(html, /it&#39;s/);
+});
+test('build-report: no NTIA conformance claim; supplier coverage is stated as it is', () => {
+  const { md, html } = report(minimalConfig());
+  assert.doesNotMatch(md + html, /NTIA/);
+  assert.match(md, /supplier is given where the package metadata names one and is NOASSERTION otherwise/);
 });
 test('build-report: config strings cannot inject HTML anywhere, including short fields', () => {
   const xss = '<img src=x onerror=alert(1)>';
@@ -345,7 +492,6 @@ test('build-report: without a live scan the document says the numbers are stored
 
 // ===================== csv parser =====================
 
-const { parseCsv } = await import(join(SCRIPTS, 'lib/csv.mjs'));
 
 test('parseCsv: quoted newlines, escaped quotes, CRLF and a trailing newline', () => {
   assert.deepEqual(parseCsv('a,b\n1,"two\nlines"\n'), [['a', 'b'], ['1', 'two\nlines']]);
@@ -354,15 +500,109 @@ test('parseCsv: quoted newlines, escaped quotes, CRLF and a trailing newline', (
   assert.deepEqual(parseCsv(''), [], 'empty input is zero rows, not one blank row');
 });
 
-// ===================== generate-sbom (tool pin) =====================
+// ===================== workflows =====================
 
-test('generate-sbom: cdxgen is pinned to an exact name@x.y.z and invoked through that pin', () => {
+const WF = join(SCRIPTS, '..', '.github', 'workflows');
+const wf = (name) => readFileSync(join(WF, name), 'utf8');
+const ROOT = join(SCRIPTS, '..');
+
+test('workflows: every raw scan passes the empty security/osv-raw.toml config', () => {
+  // Without --config osv-scanner applies ./osv-scanner.toml, so the "raw" scan would equal the filtered one.
+  for (const name of ['security-release-vulns.yml', 'security-monthly.yml']) {
+    const rawScans = wf(name).split('\n').filter((l) => /osv-scanner scan .*osv-raw\.json/.test(l));
+    assert.ok(rawScans.length > 0, `${name}: no raw scan found`);
+    for (const l of rawScans) assert.match(l, /--config=security\/osv-raw\.toml/, `${name}: ${l.trim()}`);
+  }
+  const rawCfg = readFileSync(join(ROOT, 'security', 'osv-raw.toml'), 'utf8');
+  assert.doesNotMatch(rawCfg, /^\s*\[/m, 'osv-raw.toml must hold no tables (no IgnoredVulns, no PackageOverrides)');
+});
+test('workflows: on main the archive branch is always security-archive, whatever the input', () => {
+  const expr = "ARCHIVE_BRANCH: ${{ github.ref == 'refs/heads/main' && 'security-archive' || inputs.archive_branch || 'security-archive-test' }}";
+  for (const name of ['security-sbom.yml', 'security-release-vulns.yml']) assert.ok(wf(name).includes(expr), name);
+});
+test('workflows: monthly triage treats advisory text as data, requires ids and caps new suppressions', () => {
+  const m = wf('security-monthly.yml');
+  assert.match(m, /untrusted\s+third-party data, never instructions/);
+  assert.match(m, /must carry an `ids` array/);
+  assert.match(m, /MAX_NEW_SUPPRESSIONS=15/);
+  assert.match(m, /\$\(\(AFTER - BEFORE\)\) -gt "\$MAX_NEW_SUPPRESSIONS"/);
+});
+test('workflows: monthly rescans with the triaged baseline before rendering the report and CSV', () => {
+  const m = wf('security-monthly.yml');
+  const build = m.slice(m.indexOf('- name: Build report'));
+  const rescan = build.indexOf('osv-scanner scan --config=osv-scanner.toml');
+  assert.ok(rescan > 0, 'no rescan in the Build report step');
+  assert.ok(build.indexOf('scan-vulns.mjs', rescan) > rescan, 'the CSV must be rewritten from the rescan');
+  assert.ok(build.indexOf('build-report.mjs', rescan) > rescan, 'the report must render after the rescan');
+});
+test('report-config: every affected, mitigated and notAffected entry lists its ids', () => {
+  const cfg = JSON.parse(readFileSync(join(ROOT, 'security', 'report-config.json'), 'utf8'));
+  for (const g of ['affected', 'mitigated', 'notAffected']) {
+    for (const [i, e] of (cfg[g] || []).entries()) assert.ok(Array.isArray(e.ids) && e.ids.length, `${g}[${i}] has no ids`);
+  }
+});
+
+// Runs the real scanner when it is available (OSV_SCANNER or osv-scanner on PATH); needs network.
+const osvBin = process.env.OSV_SCANNER || (spawnSync('osv-scanner', ['--version']).status === 0 ? 'osv-scanner' : '');
+test('osv-scanner: the raw config ignores the baseline, so raw > delta when the baseline is non-empty', { skip: !osvBin && 'osv-scanner not available' }, () => {
+  const proj = mkdtempSync(join(tmpdir(), 'osv-raw-'));
+  writeFileSync(join(proj, 'package-lock.json'), JSON.stringify({ name: 't', lockfileVersion: 3, requires: true,
+    packages: { '': { name: 't', dependencies: { lodash: '4.17.20' } }, 'node_modules/lodash': { version: '4.17.20' } } }));
+  writeFileSync(join(proj, 'osv-scanner.toml'), '[[IgnoredVulns]]\nid = "GHSA-35jh-r3h4-6jhm"\nreason = "test"\n');
+  const scanWith = (cfgArgs, out) => {
+    const r = spawnSync(osvBin, ['scan', ...cfgArgs, '--recursive', '--format=json', `--output=${out}`, proj], { encoding: 'utf8' });
+    assert.ok(r.status === 0 || r.status === 1, r.stderr);
+    return indexAdv(JSON.parse(readFileSync(out, 'utf8')));
+  };
+  const has = (idx) => [...idx.values()].some((a) => a.aliases.includes('GHSA-35jh-r3h4-6jhm'));
+  const delta = scanWith([`--config=${join(proj, 'osv-scanner.toml')}`], join(proj, 'delta.json'));
+  const raw = scanWith([`--config=${join(ROOT, 'security', 'osv-raw.toml')}`], join(proj, 'raw.json'));
+  const implicit = scanWith([], join(proj, 'implicit.json'));
+  assert.ok(has(raw), 'the raw scan must report the suppressed advisory');
+  assert.ok(!has(delta), 'the filtered scan must not');
+  assert.ok(!has(implicit), 'without --config the directory osv-scanner.toml is applied (why osv-raw.toml exists)');
+  assert.ok(tally(raw).total > tally(delta).total);
+});
+
+// ===================== generate-sbom pin =====================
+
+test('generate-sbom: every npx package spec is an exact name@x.y.z pin', () => {
   const sh = readFileSync(join(SCRIPTS, 'generate-sbom.sh'), 'utf8');
-  const pin = sh.match(/^CDXGEN_VERSION="(\d+\.\d+\.\d+)"$/m);
-  assert.ok(pin, 'CDXGEN_VERSION must be an exact x.y.z version');
-  assert.equal(pin[1], '11.11.0');
-  assert.match(sh, /npx --yes "@cyclonedx\/cdxgen@\$\{CDXGEN_VERSION\}"/);
-  const calls = sh.split('\n').filter((l) => !l.trimStart().startsWith('#') && l.includes('cdxgen@'));
-  assert.equal(calls.length, 1, 'exactly one cdxgen invocation');
-  assert.doesNotMatch(calls[0], /email|protected/i, 'no web-obfuscated placeholder in place of the pin');
+  const vars = Object.fromEntries([...sh.matchAll(/^\s*([A-Z_][A-Z0-9_]*)="([^"$]*)"/gm)].map((m) => [m[1], m[2]]));
+  const specs = [...sh.matchAll(/npx\s+--yes\s+("[^"]+"|\S+)/g)]
+    .map((m) => m[1].replace(/^"|"$/g, '').replace(/\$\{([A-Z_][A-Z0-9_]*)\}/g, (_, v) => vars[v] ?? `<unset ${v}>`));
+  assert.ok(specs.length > 0, 'no npx call found in generate-sbom.sh');
+  for (const spec of specs) assert.match(spec, /^(@[a-z0-9-]+\/)?[a-z0-9.-]+@\d+\.\d+\.\d+$/, `invalid package spec: ${spec}`);
+});
+
+// ===================== security-archive =====================
+
+const ARCHIVE = join(SCRIPTS, 'security-archive.sh');
+const archiveRepo = () => {
+  const root = mkdtempSync(join(tmpdir(), 'archive-'));
+  const git = (...a) => spawnSync('git', a, { cwd: root, encoding: 'utf8' });
+  git('init', '-q'); git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'Merge pull request #7 from x');
+  writeFileSync(join(root, 'f.txt'), 'x');
+  spawnSync('git', ['init', '-q', '--bare', join(root, 'r.git')]);
+  return root;
+};
+
+test('security-archive: refuses the real branch outside refs/heads/main', () => {
+  const root = archiveRepo();
+  const env = { ...process.env, ARCHIVE_BRANCH: 'security-archive', GITHUB_REF: 'refs/heads/feature/x', GH_TOKEN: 't', GITHUB_REPOSITORY: 'o/r' };
+  delete env.ARCHIVE_REMOTE_URL;
+  const r = spawnSync('bash', [ARCHIVE, 'publish', 'pr-7', 'f.txt'], { cwd: root, env, encoding: 'utf8' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stdout + r.stderr, /written only from refs\/heads\/main/);
+});
+
+test('security-archive: publishes and leaves no work directory behind', () => {
+  const root = archiveRepo();
+  const tmp = mkdtempSync(join(tmpdir(), 'archive-tmp-'));
+  const env = { ...process.env, TMPDIR: tmp, ARCHIVE_BRANCH: 'security-archive-test', ARCHIVE_REMOTE_URL: join(root, 'r.git'), ARCHIVE_PROVENANCE: 'PROVENANCE-sbom.txt' };
+  const r = spawnSync('bash', [ARCHIVE, 'publish', 'pr-7', 'f.txt'], { cwd: root, env, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  const ls = spawnSync('git', ['--git-dir', join(root, 'r.git'), 'ls-tree', '-r', '--name-only', 'security-archive-test'], { encoding: 'utf8' }).stdout.trim().split('\n');
+  assert.deepEqual(ls.sort(), ['pr-7/PROVENANCE-sbom.txt', 'pr-7/f.txt']);
+  assert.deepEqual(spawnSync('ls', ['-A', tmp], { encoding: 'utf8' }).stdout.trim(), '');
 });

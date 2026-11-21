@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Convert a CycloneDX 1.6 BOM (produced by cdxgen) into a valid SPDX 2.3 JSON document.
-// Keeps NTIA minimum elements: supplier, name, version, unique id (purl), relationships, author, timestamp.
+// Convert a CycloneDX 1.6 BOM into an SPDX 2.3 JSON document: name, version, purl,
+// relationships, creators and timestamp. Supplier is filled when the component
+// metadata names one, else NOASSERTION.
 import { readFileSync, writeFileSync } from 'node:fs';
 // Shared with cdx-to-csv and build-report so all three artifacts count the same
 // set of components. See scripts/lib/cdx.mjs.
@@ -20,10 +21,7 @@ const toolCreators = toolComps
   .filter((t) => t && t.name)
   .map((t) => `Tool: ${t.name}${t.version ? '-' + t.version : ''}`);
 
-// Flatten root + nested workspace components into the package list, DEDUPED by
-// ref: a component can appear both under metadata.component.components and in
-// cdx.components — without deduping we'd emit two SPDX packages sharing one
-// SPDXID (the memoized id below), which makes the document invalid.
+// Root + nested components, deduped by ref so no two packages share an SPDXID.
 const comps = collectComponents(cdx);
 
 // Stable SPDXID per bom-ref/purl.
@@ -44,16 +42,26 @@ const licenseExpr = (c) => {
     .map((l) => l.license?.id || l.expression || null)
     .filter(Boolean);
   if (!parts.length) return 'NOASSERTION';
-  // Multiple license entries in CycloneDX mean the component is offered under
-  // ANY of them (dual-licensed) → SPDX "OR", not "AND". Using AND would invert
-  // the legal obligation in a procurement artifact. Parenthesize compound
-  // expressions before OR-joining to keep operator precedence unambiguous.
+  // Several CycloneDX licence entries mean any of them applies: SPDX OR, with
+  // compound expressions parenthesized.
   const expr = parts.length === 1 ? parts[0]
     : parts.map((p) => (/\s/.test(p) ? `(${p})` : p)).join(' OR ');
   // Non-SPDX placeholders -> NOASSERTION
   if (/SEE LICENSE|UNLICENSED|UNKNOWN/i.test(expr)) return 'NOASSERTION';
   return expr;
 };
+
+// SPDX supplier from CycloneDX supplier, manufacturer, publisher or author(s),
+// in that order. A string supplier (hand-maintained component lists) is accepted.
+const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+const nameOf = (x) => oneLine(typeof x === 'string' ? x : x?.name);
+const personOf = (s) => s.replace(/\s*<([^>]*)>\s*$/, ' ($1)');
+function supplierOf(c) {
+  const org = [c.supplier, c.manufacturer, c.manufacture, c.publisher].map(nameOf).find(Boolean);
+  if (org) return `Organization: ${org}`;
+  const person = [...(c.authors || []), c.author].map(nameOf).find(Boolean);
+  return person ? `Person: ${personOf(person)}` : 'NOASSERTION';
+}
 
 const packages = comps.map((c) => {
   const ref = refOf(c);
@@ -66,7 +74,7 @@ const packages = comps.map((c) => {
     licenseConcluded: 'NOASSERTION',
     licenseDeclared: licenseExpr(c),
     copyrightText: 'NOASSERTION',
-    supplier: c.publisher ? `Organization: ${c.publisher}` : 'NOASSERTION',
+    supplier: supplierOf(c),
   };
   if (c.purl) {
     pkg.externalRefs = [

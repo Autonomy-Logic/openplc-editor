@@ -45,9 +45,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
 
-      - name: Unit tests (security scripts)
-        run: node --test scripts/__tests__/*.test.mjs
-
       - name: Install osv-scanner
         run: |
           OSV_VER=v2.4.0   # pinned; verified against the release SHA256SUMS
@@ -55,6 +52,10 @@ jobs:
           curl -sSfL "https://github.com/google/osv-scanner/releases/download/${OSV_VER}/osv-scanner_SHA256SUMS" -o /tmp/osv_SHA256SUMS
           ( cd /tmp && grep " osv-scanner_linux_amd64$" osv_SHA256SUMS | sha256sum -c - )
           install -m 0755 /tmp/osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
+
+      # After the install so the osv-scanner raw-config test runs against the real binary.
+      - name: Unit tests (security scripts)
+        run: node --test scripts/__tests__/*.test.mjs
 
       # Both scans use the HEAD osv-scanner.toml so a justified suppression added
       # in the PR is honored on both sides.

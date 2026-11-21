@@ -1,31 +1,15 @@
 #!/usr/bin/env node
-// build-report.mjs — render the Security Report (Markdown + HTML) deterministically
-// from structured data, so the monthly output is IDENTICAL in shape every run and
-// never drifts from the SBOM.
-//
-//   node scripts/build-report.mjs \
-//     --config security/report-config.json \
-//     --cdx sbom/<name>.cdx.json \
-//     --osv-raw /tmp/osv-raw.json --osv-delta /tmp/osv.json \
-//     --out security/<YYYY-MM> \
-//     --date 2026-08
-//
-// Component count, license distribution and every advisory NUMBER are computed
-// live — from the CycloneDX SBOM and from this run's scans. The narrative (VEX
-// rationale, remediation plan, posture statement) comes from the config, which is
-// what triage updates when a new advisory appears.
-//
-// The config's narrative can go stale between assessments, and a stale narrative
-// in a document classified Confidential is the failure mode that matters here. So
-// the renderer cross-checks it: any advisory in this run's post-suppression delta
-// whose id is not claimed by an entry in affected[] / mitigated[] / notAffected[]
-// is reported in its own "Untriaged in this scan" section, and the posture
-// statement is explicitly dated rather than presented as current. The document can
-// be incomplete; it must not be quietly contradictory.
+// Render the security report (Markdown + HTML).
+//   node scripts/build-report.mjs --config <report-config.json> [--cdx <bom.cdx.json>]
+//     --osv-raw <raw.json> --osv-delta <delta.json> --out <dir> --date <YYYY-MM[-DD]>
+
+// Numbers come from the SBOM and the scans; narrative from the config. Delta
+// advisories no config entry claims (by id or alias) are listed as untriaged, and
+// the headline then says it does not cover them.
 
 import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { collectComponents, licenseIdsOf } from './lib/cdx.mjs';
-import { ORDER, indexAdvisories, tallyBySeverity, sevStr } from './lib/severity.mjs';
+import { UNKNOWN, indexAdvisories, tallyBySeverity, sevStr, isClaimed, bySeverity } from './lib/severity.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, arr) => {
   if (v.startsWith('--')) a.push([v.slice(2), arr[i + 1]]);
@@ -39,10 +23,7 @@ const date = args.date || 'unknown';
 const outDir = args.out || '.';
 mkdirSync(outDir, { recursive: true });
 
-// --- live metrics from the SBOM ---
-// collectComponents() is shared with cdx-to-spdx and cdx-to-csv so this number,
-// the SPDX package count and the CSV row count are the same quantity. An auditor
-// comparing the three artifacts in this folder will find them consistent.
+// collectComponents() is shared with cdx-to-spdx and cdx-to-csv: same count.
 const comps = hasSbom ? collectComponents(cdx) : [];
 const componentCount = comps.length;
 const licAgg = {};
@@ -52,15 +33,12 @@ for (const c of comps) {
 }
 const topLicenses = Object.entries(licAgg).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
-// The product version belongs to the code, not to this config: rendering a
-// hardcoded "v0.1.0" forever is worse than rendering nothing. Prefer the version
-// cdxgen read from package.json, fall back to the config, omit if neither knows.
+// Version from the SBOM root component, else the config, else omitted.
 const productVersion = cdx.metadata?.component?.version || cfg.version || '';
 
-// --- live advisory metrics from the actual scan(s), when provided -----------
-// --osv-raw = unfiltered scan; --osv-delta = scan WITH the osv-scanner.toml VEX
-// baseline applied. Falls back to the config numbers if no scan is passed (an
-// ad-hoc local render), in which case the document says so.
+// --osv-raw: scan with security/osv-raw.toml (no suppressions); --osv-delta: scan
+// with osv-scanner.toml. Without both, the stored config numbers are shown and the
+// document says so.
 const loadScan = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 const rawScan = args['osv-raw'] ? loadScan(args['osv-raw']) : null;
 const deltaScan = args['osv-delta'] ? loadScan(args['osv-delta']) : null;
@@ -87,35 +65,33 @@ if (live) {
     { label: 'NOT AFFECTED', value: `${cfg.counts.notAffected.n} (${cfg.counts.notAffected.pct})`, badge: 'b-green' },
   ];
 }
-// The advisory register on disk (vulnerabilities.csv) is written from the delta
-// scan, so its row count is the delta's — never the config's static total, which
-// would print a second, contradictory number for the same quantity.
+// vulnerabilities.csv is written by scan-vulns.mjs from the same delta index.
 const registerRows = live ? delta.total : cfg.advisories.total;
 
-// --- has the narrative kept up with the scan? -------------------------------
-// Every triage entry declares the advisory ids it accounts for. Anything in the
-// delta that no entry claims has not been assessed, and the sections below are
-// silent about it — so we say so, with the ids, rather than let the posture
-// statement imply otherwise. (Advisories suppressed in osv-scanner.toml are
-// already absent from the delta by construction: they were triaged.)
+// Triage entries claim advisories through their `ids`; a delta advisory claimed
+// under none of its aliases has not been assessed.
 const claimedIds = new Set();
 for (const group of [cfg.affected, cfg.mitigated, cfg.notAffected]) {
   for (const e of (group || [])) for (const id of (e.ids || [])) claimedIds.add(id.toUpperCase());
 }
-const untriaged = [...deltaIdx.values()]
-  .filter((a) => !claimedIds.has(a.id.toUpperCase()))
-  .sort((a, b) => ORDER.indexOf(b.sev) - ORDER.indexOf(a.sev) || a.pkg.localeCompare(b.pkg));
+const untriaged = [...deltaIdx.values()].filter((a) => !isClaimed(a, claimedIds)).sort(bySeverity);
 const untriagedCritical = untriaged.filter((a) => a.sev === 'CRITICAL' || a.sev === 'HIGH');
 const assessedAt = cfg.assessedAt || null;
+const hasUnknown = untriaged.some((a) => a.sev === UNKNOWN);
+const unknownNote = 'UNKNOWN: neither the advisory nor any alias carries a parsable severity (e.g. CVSS 4.0 only); it needs manual scoring.';
+// The headline only claims to be the current posture when nothing is unassessed.
+const headlineLabel = untriaged.length
+  ? `Posture at the last full assessment${assessedAt ? ` (${assessedAt})` : ''}; it does not cover the ${untriaged.length} unassessed advisory(ies) above`
+  : `Headline posture${assessedAt ? ` (as assessed ${assessedAt})` : ''}`;
+const conformance = hasSbom
+  ? 'It is prepared with reference to U.S. Executive Order 14028 and the CISA Vulnerability Exploitability eXchange (VEX) guidance. The SBOM records name, version, unique identifier (purl), dependency relationships, author and timestamp; the supplier is given where the package metadata names one and is NOASSERTION otherwise.'
+  : 'It is prepared with reference to the CISA Vulnerability Exploitability eXchange (VEX) guidance.';
 
-const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-// report-config.json is written by the AI triage step, so its strings are
-// UNTRUSTED. Escape everything, then re-enable only a small set of attribute-less
-// formatting tags. This blocks <script>, <img onerror=…>, <b onmouseover=…>, etc.
-// from reaching the headless Chrome that renders the PDF (which also runs with
-// JavaScript disabled — see the workflow). EVERY interpolation of config data
-// below goes through esc() or rich(); there are no exceptions, including short
-// fields like counts and severity words.
+// Config and advisory strings are untrusted: every interpolation goes through
+// esc() or rich(), which re-enables only attribute-less formatting tags. Quotes are
+// escaped so esc() is also safe inside attribute values.
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const RICH_TAGS = /&lt;(\/?(?:b|strong|code|em|i|br))&gt;/gi;
 const rich = (s) => esc(s).replace(RICH_TAGS, '<$1>');
 const stripTags = (s) => String(s ?? '').replace(/<[^>]+>/g, '');
@@ -141,9 +117,9 @@ md.push(`| **Classification** | Confidential |`);
 md.push(`| **Security contact** | ${cfg.securityContact} |`);
 md.push('\n---\n');
 md.push('## Executive Summary\n');
-md.push(`This report documents the third-party software composition and known-vulnerability posture of **${cfg.title}**. It is aligned with U.S. Executive Order 14028, the NTIA *Minimum Elements for an SBOM*, and the CISA Vulnerability Exploitability eXchange (VEX) guidance.\n`);
+md.push(`This report documents the third-party software composition and known-vulnerability posture of **${cfg.title}**. ${conformance}\n`);
 if (untriagedNote) md.push(`> ⚠️ **Assessment incomplete.** ${stripTags(untriagedNote)}\n`);
-md.push(`> **Headline posture${assessedAt ? ` (as assessed ${assessedAt})` : ''}.** ${stripTags(cfg.headline)}\n`);
+md.push(`> **${headlineLabel}.** ${stripTags(cfg.headline)}\n`);
 if (!live) md.push('> **Note.** Rendered without a live scan; the advisory counts below come from the stored assessment, not from a scan performed for this report.\n');
 md.push('### Key metrics\n');
 md.push('| Metric | Value |');
@@ -174,8 +150,8 @@ if (untriaged.length) {
   md.push('These advisories surfaced after the VEX baseline was applied and are not accounted for by any entry in sections 4, 5 or 6. **No reachability determination has been made.** They must be triaged — upgraded, or documented as not-affected in `osv-scanner.toml` — before this report can be treated as a complete assessment.\n');
   md.push('| Severity | Component | Installed | Advisory | Fixed in | Summary |');
   md.push('|---|---|---|---|---|---|');
-  for (const a of untriaged) md.push(`| ${a.sev}${a.approx ? ' *' : ''} | \`${a.pkg}\` | ${a.ver} | [${a.id}](https://osv.dev/${a.id}) | ${a.fixed || '—'} | ${stripTags(a.summary)} |`);
-  if (untriaged.some((a) => a.approx)) md.push('\n_\\* the advisory carries no qualitative severity and no CVSS v3.x vector; treated conservatively as HIGH pending manual scoring._\n');
+  for (const a of untriaged) md.push(`| ${a.sev} | \`${a.pkg}\` | ${a.ver} | [${a.id}](https://osv.dev/${a.id}) | ${a.fixed || '—'} | ${stripTags(a.summary)} |`);
+  if (hasUnknown) md.push(`\n_${unknownNote}_\n`);
 }
 md.push('\n## 5. Not Affected — VEX Justifications\n');
 md.push('| VEX justification (CISA) | Count | Representative components | Basis |');
@@ -241,9 +217,9 @@ ${row(['Classification', 'Confidential'])}
 ${row(['Security contact', esc(cfg.securityContact)])}
 </table>
 <h1>Executive Summary</h1>
-<p>This report documents the third-party software composition and known-vulnerability posture of <strong>${esc(cfg.title)}</strong>. It is aligned with U.S. Executive Order 14028, the NTIA <em>Minimum Elements for an SBOM</em>, and the CISA VEX guidance.</p>
-${untriagedNote ? `<div class="callout warn"><strong>⚠️ Assessment incomplete.</strong> ${rich(untriagedNote)}</div>` : ''}
-<div class="callout good"><strong>Headline posture${assessedAt ? ` (as assessed ${esc(assessedAt)})` : ''}.</strong> ${rich(cfg.headline)}</div>
+<p>This report documents the third-party software composition and known-vulnerability posture of <strong>${esc(cfg.title)}</strong>. ${esc(conformance)}</p>
+${untriagedNote ? `<div class="callout warn"><strong>⚠️ Assessment incomplete.</strong> ${rich(untriagedNote.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'))}</div>` : ''}
+<div class="callout${untriaged.length ? '' : ' good'}"><strong>${esc(headlineLabel)}.</strong> ${rich(cfg.headline)}</div>
 ${live ? '' : '<div class="callout"><strong>Note.</strong> Rendered without a live scan; the advisory counts below come from the stored assessment, not from a scan performed for this report.</div>'}
 <h2>Key metrics</h2>
 <table>${th(['Metric', 'Value'])}
@@ -266,9 +242,9 @@ ${cfg.affected.map((f) => row([esc(f.priority), `<code>${esc(f.component)}</code
 ${untriaged.length ? `<h1>4a. Untriaged in This Scan (no VEX determination yet)</h1>
 <div class="callout warn">These advisories surfaced after the VEX baseline was applied and are not accounted for by any entry in sections 4, 5 or 6. <strong>No reachability determination has been made.</strong> They must be triaged — upgraded, or documented as not-affected in <code>osv-scanner.toml</code> — before this report can be treated as a complete assessment.</div>
 <table>${th(['Severity', 'Component', 'Installed', 'Advisory', 'Fixed in', 'Summary'])}
-${untriaged.map((a) => row([`${esc(a.sev)}${a.approx ? ' *' : ''}`, `<code>${esc(a.pkg)}</code>`, esc(a.ver), `<a href="https://osv.dev/${esc(a.id)}">${esc(a.id)}</a>`, esc(a.fixed || '—'), esc(a.summary)])).join('\n')}
+${untriaged.map((a) => row([esc(a.sev), `<code>${esc(a.pkg)}</code>`, esc(a.ver), `<a href="https://osv.dev/${esc(a.id)}">${esc(a.id)}</a>`, esc(a.fixed || '—'), esc(a.summary)])).join('\n')}
 </table>
-${untriaged.some((a) => a.approx) ? '<p class="muted">* the advisory carries no qualitative severity and no CVSS v3.x vector; treated conservatively as HIGH pending manual scoring.</p>' : ''}` : ''}
+${hasUnknown ? `<p class="muted">${esc(unknownNote)}</p>` : ''}` : ''}
 <h1>5. Not Affected — VEX Justifications</h1>
 <table>${th(['VEX justification (CISA)', 'Count', 'Representative components', 'Basis'])}
 ${cfg.notAffected.map((n) => row([`<code>${esc(n.justification)}</code>`, esc(n.count), rich(n.components), rich(n.basis)])).join('\n')}

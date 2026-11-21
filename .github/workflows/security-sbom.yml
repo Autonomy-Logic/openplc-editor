@@ -9,8 +9,9 @@ name: Security — release SBOM
 # Output goes to the orphan branch `security-archive` under pr-<n>-<date>/ (see
 # scripts/security-archive.sh), next to that release's vulnerability report.
 #
-# workflow_dispatch exists for testing: any ref other than main writes the
-# security-archive-test branch, so real evidence is not touched.
+# workflow_dispatch exists for testing: from any ref other than main it writes
+# archive_branch (default security-archive-test); security-archive.sh refuses
+# security-archive outside main.
 
 on:
   push:
@@ -22,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       archive_branch:
-        description: "Archive branch (must start with security-archive)"
+        description: "Archive branch for runs outside main (must start with security-archive-)"
         required: true
         default: security-archive-test
 
@@ -37,13 +38,17 @@ jobs:
   sbom:
     runs-on: ubuntu-latest
     env:
-      # Only main writes the real evidence branch; any other ref writes the test one.
-      ARCHIVE_BRANCH: ${{ inputs.archive_branch || (github.ref == 'refs/heads/main' && 'security-archive' || 'security-archive-test') }}
+      # main always writes security-archive (the input is ignored there); other refs
+      # write the input or security-archive-test.
+      ARCHIVE_BRANCH: ${{ github.ref == 'refs/heads/main' && 'security-archive' || inputs.archive_branch || 'security-archive-test' }}
     steps:
       - name: Checkout (release state)
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
+          # The archive step gets GH_TOKEN explicitly; no token is left in .git/config
+          # for the downloaded tools that run before it.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with: { node-version: "22" }

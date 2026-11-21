@@ -20,6 +20,7 @@
 #      ARCHIVE_BRANCH (default security-archive; must start with security-archive),
 #      ARCHIVE_PROVENANCE (optional file name, e.g. PROVENANCE-sbom.txt),
 #      ARCHIVE_REMOTE_URL (optional; overrides the GitHub remote, for local tests).
+# The real security-archive branch is written only from refs/heads/main.
 
 set -euo pipefail
 
@@ -45,25 +46,32 @@ publish() {
     security-archive*) ;;
     *) echo "::error::ARCHIVE_BRANCH must start with security-archive (got: $branch)"; exit 1 ;;
   esac
+  if [ "$branch" = "security-archive" ] && [ -z "${ARCHIVE_REMOTE_URL:-}" ] \
+     && [ "${GITHUB_REF:-}" != "refs/heads/main" ]; then
+    echo "::error::security-archive is written only from refs/heads/main (got: ${GITHUB_REF:-none})"; exit 1
+  fi
   [ "$#" -gt 0 ] || { echo "::error::publish needs at least one file"; exit 1; }
   for f in "$@"; do [ -f "$f" ] || { echo "::error::missing file to archive: $f"; exit 1; }; done
 
-  # The token goes in an http.extraheader, never in the remote URL, so git error
-  # messages and .git/config cannot echo it.
+  # The token is passed to git through GIT_CONFIG_* env vars: never in the remote
+  # URL, the argv or a .git/config on disk.
   local remote="${ARCHIVE_REMOTE_URL:-https://github.com/${GITHUB_REPOSITORY}.git}"
-  local header=""
   if [ -z "${ARCHIVE_REMOTE_URL:-}" ]; then
-    header="Authorization: Basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader
+    GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+    export GIT_CONFIG_VALUE_0
   fi
   local sha
   sha="$(git rev-parse HEAD)"
 
-  local work attempt
+  local attempt
+  work=""
+  trap 'rm -rf "${work:-}"' EXIT
   for attempt in 1 2 3 4 5; do
+    rm -rf "${work:-}"
     work="$(mktemp -d)"
     git init -q "$work"
     git -C "$work" remote add origin "$remote"
-    [ -n "$header" ] && git -C "$work" config --local http.extraheader "$header"
     git -C "$work" config --local user.name "github-actions[bot]"
     git -C "$work" config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
     if git -C "$work" fetch -q --depth 1 origin "$branch" 2>/dev/null; then
