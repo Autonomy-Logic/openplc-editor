@@ -337,7 +337,7 @@ describe('AC26-j / BDD-19 row 6 (W05): a trailing coil group with unequal names,
     }
   })
 
-  it("puts both coils in the widest coil's column, on one vertical, ending parPad before the junction on the rail", () => {
+  it("puts both coils in the widest coil's column, on one vertical, ending at the junction on the rail", () => {
     const closeX = group.closeX + shift
     const widest = column('w05_conveyor_reject_gate_solenoid_output_main')
     expect(geometry(layout, shortCoil).position.x).toBeCloseTo(geometry(layout, longCoil).position.x, 6)
@@ -346,8 +346,8 @@ describe('AC26-j / BDD-19 row 6 (W05): a trailing coil group with unequal names,
       [shortCoil, 'w05_k'],
       [longCoil, 'w05_conveyor_reject_gate_solenoid_output_main'],
     ].map(([id]) => geometry(layout, id).position.x + LADDER_STYLE.sym / 2 + widest / 2 + dxOf(p, id))
-    expect(closeX - cellEnds[0]).toBeCloseTo(LADDER_STYLE.parPad, 6)
-    expect(closeX - cellEnds[1]).toBeCloseTo(LADDER_STYLE.parPad, 6)
+    expect(closeX - cellEnds[0]).toBeCloseTo(0, 6)
+    expect(closeX - cellEnds[1]).toBeCloseTo(0, 6)
   })
 
   it('keeps the closing junction one vertical line on the rail', () => {

@@ -538,13 +538,13 @@ describe('a name stays whole on one line and its column widens to fit (BDD-15, A
 describe('parallel groups', () => {
   const basic = loadCorpusProject('ld-corpus-basic')
 
-  it('stacks branches 12 px apart and pads the group 8 px each side (B10 rung 3: aux_c | aux_d, then TOF0)', () => {
+  it('stacks branches 12 px apart and pads the group 8 px at its opening junction (B10 rung 3: aux_c | aux_d, then TOF0)', () => {
     const rung = loadedRungs(basic, 'Aux')[2]
     const layout = layoutRung(rung, corpusLabelSource(basic, 'Aux'))
     const c = geometry(layout, nodeByName(rung, 'aux_c').id)
     const d = geometry(layout, nodeByName(rung, 'aux_d').id)
     const tof = geometry(layout, nodeByName(rung, 'TOF0').id)
-    const groupWidth = Math.max(column('aux_c'), column('aux_d')) + 2 * S.parPad
+    const groupWidth = Math.max(column('aux_c'), column('aux_d')) + S.parPad
     expect(d.position.x).toBeCloseTo(c.position.x, 6)
     expect(d.position.y - c.position.y).toBeCloseTo(CC_BOTTOM + S.branchGap + CC_TOP, 6)
     const groupStart = centreX(c) - S.parPad - column('aux_c') / 2

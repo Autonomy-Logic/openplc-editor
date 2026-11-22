@@ -96,7 +96,7 @@ function parallelBreaks(rung: RungLadderState, layout: RungLayout): string[] {
       group.closeNodeIds.length !== group.openNodeIds.length
     )
       breaks.push(`${name}: ${group.openNodeIds.length} pairs for ${group.branches.length} branches`)
-    if (!(group.closeX - group.openX >= 2 * S.parPad - EPS)) breaks.push(`${name}: closeX before openX + 2 parPad`)
+    if (!(group.closeX - group.openX >= S.parPad - EPS)) breaks.push(`${name}: closeX before openX + parPad`)
     if (!near(group.yTop, group.branches[0]?.y ?? NaN)) breaks.push(`${name}: yTop is not the top branch's y`)
     if (!near(group.yBottom, group.branches[group.branches.length - 1]?.y ?? NaN))
       breaks.push(`${name}: yBottom is not the bottom branch's y`)
@@ -107,7 +107,7 @@ function parallelBreaks(rung: RungLadderState, layout: RungLayout): string[] {
       const filler = fillers.find((candidate) => candidate.branchIndex === index)
       if (group.alignment === 'start') {
         if (!near(branch.startX, group.openX + S.parPad)) breaks.push(`${name}[${index}]: startX is not openX + parPad`)
-        if (branch.endX > group.closeX - S.parPad + EPS) breaks.push(`${name}[${index}]: endX past closeX - parPad`)
+        if (branch.endX > group.closeX + EPS) breaks.push(`${name}[${index}]: endX past closeX`)
         if (
           filler === undefined ||
           filler.side !== 'after' ||
@@ -159,9 +159,9 @@ describe('BDD-20 row 2 / AC26-a: contact A, then B, C, D / E, then coil Motor', 
   const group = groupOpenedBy(layout, 'p:open0')
   const columnEndA = geometry(layout, 'A').position.x + S.sym / 2 + column('A') / 2
 
-  it('opens the group at the end of A and closes it parPad after the widest branch (P1)', () => {
+  it('opens the group at the end of A and closes it at the end of the widest branch (P1)', () => {
     expect(group.openX).toBeCloseTo(columnEndA, 6)
-    expect(group.closeX).toBeCloseTo(group.openX + S.parPad + 3 * column('B') + S.parPad, 6)
+    expect(group.closeX).toBeCloseTo(group.openX + S.parPad + 3 * column('B'), 6)
   })
 
   it('starts both branches at openX + parPad and stacks E one branch pitch below (P2)', () => {
@@ -216,7 +216,7 @@ describe('AC26-b: three branches, the longest in the middle (a stack of pairs)',
     expect([...group.openNodeIds].sort()).toEqual(['p:open0', 'p:open1'])
     expect([...group.closeNodeIds].sort()).toEqual(['p:close0', 'p:close1'])
     expect(group.branches).toHaveLength(3)
-    expect(group.closeX - group.openX).toBeCloseTo(2 * S.parPad + 3 * column('G'), 6)
+    expect(group.closeX - group.openX).toBeCloseTo(S.parPad + 3 * column('G'), 6)
     expect(group.branches[1].y - group.branches[0].y).toBeCloseTo(BRANCH_PITCH, 6)
     expect(group.branches[2].y - group.branches[1].y).toBeCloseTo(BRANCH_PITCH, 6)
   })
@@ -255,7 +255,7 @@ describe('BDD-20 row 4 / AC26-c: A then an inner group B / "Conveyor_Infeed_Read
   })
 
   it('makes the inner group as wide as its longest branch, and the outer as wide as A plus the inner group (P1, P6)', () => {
-    expect(inner.closeX - inner.openX).toBeCloseTo(2 * S.parPad + column('Conveyor_Infeed_Ready'), 6)
+    expect(inner.closeX - inner.openX).toBeCloseTo(S.parPad + column('Conveyor_Infeed_Ready'), 6)
     expect(inner.openX).toBeCloseTo(outer.openX + S.parPad + column('A'), 6)
     expect(outer.closeX - outer.openX).toBeCloseTo(2 * S.parPad + column('A') + (inner.closeX - inner.openX), 6)
     expect(inner.closeX).toBeLessThan(outer.closeX)
@@ -282,7 +282,7 @@ describe('BDD-20 row 3 / AC26-d: the widest branch is decided by measured width,
     ])
     const layout = layoutRung(rung, EMPTY_LABEL_SOURCE)
     const group = groupOpenedBy(layout, 'p:open0')
-    expect(group.closeX - group.openX).toBeCloseTo(2 * S.parPad + column('Start_Button_Main_Line'), 6)
+    expect(group.closeX - group.openX).toBeCloseTo(S.parPad + column('Start_Button_Main_Line'), 6)
     expect(fillersOf(layout, group)[1]).toMatchObject({ side: 'after', x2: group.closeX })
     expect(parallelBreaks(rung, layout)).toEqual([])
   })
@@ -292,7 +292,7 @@ describe('BDD-20 row 3 / AC26-d: the widest branch is decided by measured width,
     const rung = seriesRung('rung_w04', [parallel('p', [contact('A'), contact('B')], [contact('L', long)]), coil('Y')])
     const layout = layoutRung(rung, EMPTY_LABEL_SOURCE)
     const group = groupOpenedBy(layout, 'p:open0')
-    expect(group.closeX - group.openX).toBeCloseTo(2 * S.parPad + column(long), 6)
+    expect(group.closeX - group.openX).toBeCloseTo(S.parPad + column(long), 6)
     expect(fillersOf(layout, group)[0]).toMatchObject({ x1: handleAt(layout, 'B', 'output').x, x2: group.closeX })
   })
 
@@ -300,7 +300,7 @@ describe('BDD-20 row 3 / AC26-d: the widest branch is decided by measured width,
     const rung = seriesRung('rung_equal', [parallel('p', [contact('X')], [contact('Y')]), coil('Q')])
     const layout = layoutRung(rung, EMPTY_LABEL_SOURCE)
     const group = groupOpenedBy(layout, 'p:open0')
-    const gap = S.gap + S.parPad
+    const gap = S.gap
     expect(fillersOf(layout, group).map((filler) => filler.x2 - filler.x1)).toEqual([gap, gap])
   })
 })
@@ -313,16 +313,16 @@ describe('BDD-19 row 6 / AC26-e: a trailing group of coils Motor and Conveyor_Re
   const layout = layoutRung(rung, EMPTY_LABEL_SOURCE)
   const group = groupOpenedBy(layout, 'p:open0')
 
-  it("is aligned to the end, both coils centred in the widest coil's column ending at closeX - parPad (P2)", () => {
+  it("is aligned to the end, both coils centred in the widest coil's column ending at closeX (P2)", () => {
     expect(group.alignment).toBe('end')
-    expect(group.closeX - group.openX).toBeCloseTo(2 * S.parPad + column('Conveyor_Reject_Gate'), 6)
+    expect(group.closeX - group.openX).toBeCloseTo(S.parPad + column('Conveyor_Reject_Gate'), 6)
     for (const [id, name] of [
       ['M', 'Motor'],
       ['G', 'Conveyor_Reject_Gate'],
     ] as const) {
       expect([name, geometry(layout, id).position.x + S.sym / 2 + column('Conveyor_Reject_Gate') / 2]).toEqual([
         name,
-        expect.closeTo(group.closeX - S.parPad, 6),
+        expect.closeTo(group.closeX, 6),
       ])
     }
   })
@@ -385,7 +385,7 @@ describe('AC26-e: groups that are not trailing coil groups stay aligned to the s
     const layout = layoutRung(rung, EMPTY_LABEL_SOURCE)
     const group = groupOpenedBy(layout, 'p:open0')
     const block = geometry(layout, 'T')
-    expect(group.closeX - S.parPad).toBeGreaterThanOrEqual(block.position.x + block.width + S.gapBlk - EPS)
+    expect(group.closeX).toBeGreaterThanOrEqual(block.position.x + block.width + S.gapBlk - EPS)
     expect(fillersOf(layout, group)[1]).toMatchObject({
       side: 'after',
       x1: handleAt(layout, 'B', 'output').x,
@@ -408,7 +408,7 @@ describe('AC26-f: parallel groups on block pin networks', () => {
     const ctu = rung.nodes.find((node) => node.type === 'block')
     if (ctu === undefined) throw new Error('W07 has no block')
     expect(group.closeX).toBeLessThan(geometry(layout, ctu.id).position.x)
-    expect(group.closeX - group.openX).toBeCloseTo(2 * S.parPad + column('w07_i') + column('w07_j'), 6)
+    expect(group.closeX - group.openX).toBeCloseTo(S.parPad + column('w07_i') + column('w07_j'), 6)
     expect(parallelBreaks(rung, layout)).toEqual([])
   })
 
@@ -419,7 +419,7 @@ describe('AC26-f: parallel groups on block pin networks', () => {
     expect(groups).toHaveLength(1)
     const [group] = groups
     expect(group.branches).toHaveLength(3)
-    expect(group.closeX - group.openX).toBeCloseTo(2 * S.parPad + column('i') + column('j'), 6)
+    expect(group.closeX - group.openX).toBeCloseTo(S.parPad + column('i') + column('j'), 6)
     const fillers = fillersOf(layout, group)
     expect(fillers.map((filler) => filler.x2)).toEqual([group.closeX, group.closeX, group.closeX])
     expect(new Set(group.branches.map((branch) => branch.startX)).size).toBe(1)
