@@ -124,3 +124,4 @@ export type {
 } from './types'
 export { WIDE_CODE_POINT_RANGES } from './wide-ranges'
 export { type LdEdgeEnds, parallelEdgeRoute, type WirePoint } from './wires'
+export { commentFirstLine, rungSummary, type SummaryNode } from './rung-summary'

@@ -11,10 +11,11 @@ import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
 import { LADDER_STYLE } from '@root/middleware/shared/utils/ladder-layout'
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
+import { useIsEditingLocked } from '../../../../../../hooks/use-editing-lock'
 import { useGraphicalFocus } from '../../../../../../hooks/use-graphical-focus'
 import { usePouSnapshot } from '../../../../../../hooks/use-pou-snapshot'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
@@ -28,7 +29,7 @@ import { BlockNode, BlockNodeData } from '../../../../../_atoms/graphical-editor
 import { CoilNode } from '../../../../../_atoms/graphical-editor/ladder/coil'
 import { ContactNode } from '../../../../../_atoms/graphical-editor/ladder/contact'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
-import { CreateRung } from '../../../../../_molecules/graphical-editor/ladder/rung/create-rung'
+import { EndRung } from '../../../../../_molecules/graphical-editor/ladder/rung/end-rung'
 import {
   LadderPouCanvasProvider,
   useLadderPouCanvasValue,
@@ -85,6 +86,11 @@ export default function LadderEditor() {
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
+  const [selectedRungId, setSelectedRungId] = useState<string | null>(null)
+  const [editingCommentRungId, setEditingCommentRungId] = useState<string | null>(null)
+  const isEditingLocked = useIsEditingLocked()
+  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
+  const getIsRungOpen = useOpenPLCStore((state) => state.editorActions.getIsRungOpen)
 
   const nodeDivergences = useMemo(() => {
     if (!flow) return EMPTY_DIVERGENCES
@@ -262,12 +268,42 @@ export default function LadderEditor() {
     closeModal()
   }
 
+  /** Selects `rungId`; a click on the selected rung's number clears the selection, a right click never does. */
+  const selectRung = useCallback((rungId: string, toggle = true) => {
+    setSelectedRungId((current) => (toggle && current === rungId ? null : rungId))
+    scrollableRef.current?.focus({ preventScroll: true })
+  }, [])
+
+  const setEditingComment = useCallback((rungId: string, editing: boolean) => {
+    setEditingCommentRungId(editing ? rungId : null)
+  }, [])
+
+  /** The rung shortcuts: they act on the selected rung while the canvas itself has the focus. */
+  const handleRungShortcut = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || selectedRungId === null) return
+    const rung = rungs.find((candidate) => candidate.id === selectedRungId)
+    if (!rung) return
+    const mod = event.metaKey || event.ctrlKey
+    const key = event.key.toLowerCase()
+    if (event.key === 'Escape') setSelectedRungId(null)
+    else if (mod && key === '.')
+      updateModelLadder({ openRung: { rungId: rung.id, open: !getIsRungOpen({ rungId: rung.id }) } })
+    else if (isEditingLocked) return
+    else if ((event.key === 'Delete' || event.key === 'Backspace') && !mod) openModal('confirm-delete-element', rung)
+    else if (mod && key === 'd') ladderFlowActions.duplicateRung({ editorName: pouName, rungId: rung.id })
+    else if (mod && key === '/') setEditingCommentRungId(rung.id)
+    else return
+    event.preventDefault()
+  }
+
   return (
     <div
       data-testid='ld-pou-canvas'
       className='h-full w-full overflow-auto'
       ref={scrollableRef}
       style={{ scrollbarGutter: 'stable' }}
+      tabIndex={-1}
+      onKeyDown={handleRungShortcut}
       onContextMenu={placement?.handleContextMenu}
     >
       <div
@@ -276,12 +312,7 @@ export default function LadderEditor() {
       >
         <LadderPouCanvasProvider value={pouCanvas}>
           <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-            <div
-              className={cn({
-                'h-fit rounded-lg outline outline-1 -outline-offset-1 outline-gray-200 dark:outline-neutral-800':
-                  rungs.length > 0,
-              })}
-            >
+            <div className='h-fit rounded-lg outline outline-1 -outline-offset-1 outline-gray-200 dark:outline-neutral-800'>
               <SortableContext items={rungs} strategy={verticalListSortingStrategy}>
                 {rungs.map((rung, index) => (
                   <Rung
@@ -294,9 +325,14 @@ export default function LadderEditor() {
                     })}
                     nodeDivergences={nodeDivergences}
                     isDebuggerActive={isDebuggerVisible}
+                    selected={selectedRungId === rung.id}
+                    onSelect={selectRung}
+                    editingComment={editingCommentRungId === rung.id}
+                    onEditingCommentChange={setEditingComment}
                   />
                 ))}
               </SortableContext>
+              <EndRung railX={pouCanvas.presentation.railX} onCreate={handleAddNewRung} />
               {createPortal(
                 <DragOverlay dropAnimation={defaultDropAnimation} modifiers={[restrictToParentElement]}>
                   {activeId && activeItem ? (
@@ -308,7 +344,6 @@ export default function LadderEditor() {
             </div>
           </DndContext>
         </LadderPouCanvasProvider>
-        <CreateRung onClick={handleAddNewRung} />
         <Portal.Root>
           {blockElement && (
             <BlockElement
