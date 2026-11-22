@@ -2,7 +2,7 @@ import { emitLdBody } from '@root/backend/shared/transpilers/st-transpiler/walke
 import type { RFEdge, RFNode } from '@root/backend/shared/transpilers/st-transpiler/walker/types'
 import type { Edge, Node } from '@xyflow/react'
 
-import type { BasicNodeData, PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
+import type { PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import type { OpenPLCStore } from '../../../../../../../../store'
 import type { RungLadderState } from '../../../../../../../../store/slices/ladder'
 import { createTestStore } from '../../../../../../../../store/testing'
@@ -15,6 +15,18 @@ const RUNG = 'rung-1'
 let store: OpenPLCStore
 
 type Marker = (placeholder: PlaceholderNode) => boolean
+
+/** The `name` of `data.variable` when the node holds a variable with a string name. */
+const variableName = (data: Record<string, unknown>): string | undefined => {
+  const variable = data.variable
+  return typeof variable === 'object' && variable !== null && 'name' in variable && typeof variable.name === 'string'
+    ? variable.name
+    : undefined
+}
+
+/** True for the drop markers `renderPlaceholderElements` adds to a rung. */
+const isPlaceholder = (node: Node): node is PlaceholderNode =>
+  node.type === 'placeholder' || node.type === 'parallelPlaceholder'
 
 const libraryVariant = (name: string) => {
   const pou = store
@@ -41,7 +53,7 @@ const rung = (): RungLadderState => {
 }
 
 const nodeNamed = (name: string): Node => {
-  const found = rung().nodes.find((node) => (node.data as BasicNodeData).variable?.name === name)
+  const found = rung().nodes.find((node) => variableName(node.data) === name)
   if (!found) throw new Error(`no node named ${name}`)
   return found
 }
@@ -50,7 +62,8 @@ const related =
   (name: string, position: 'left' | 'right' | 'bottom'): Marker =>
   (placeholder) =>
     placeholder.data.position === position &&
-    (placeholder.data.relatedNode?.data as BasicNodeData | undefined)?.variable?.name === name
+    placeholder.data.relatedNode !== undefined &&
+    variableName(placeholder.data.relatedNode.data) === name
 
 const leftRail: Marker = (placeholder) => placeholder.data.relatedNode?.id.startsWith('left-rail') ?? false
 
@@ -63,9 +76,7 @@ const pinOf =
 const drop = (marker: Marker, element: { elementType: string; blockVariant?: object }, name: string) => {
   const current = rung()
   const withPlaceholders = renderPlaceholderElements(current)
-  const target = withPlaceholders.find(
-    (node) => (node.type === 'placeholder' || node.type === 'parallelPlaceholder') && marker(node as PlaceholderNode),
-  )
+  const target = withPlaceholders.find((node) => isPlaceholder(node) && marker(node))
   if (!target) throw new Error(`no marker for ${name}`)
   const { nodes, edges, newNode, handleBranches } = addNewElement(
     { ...current, nodes: withPlaceholders.map((node) => ({ ...node, selected: node.id === target.id })) },
@@ -120,7 +131,7 @@ const downstreamNames = (name: string): string[] => {
   }
   return nodes
     .filter((node) => seen.has(node.id) && node.type !== 'powerRail' && node.type !== 'parallel')
-    .map((node) => (node.data as BasicNodeData).variable?.name ?? node.id)
+    .map((node) => variableName(node.data) ?? node.id)
 }
 
 /** The expression the generated ST passes to `pin`, e.g. `k OR j AND i` from `CTUD0(CU := a, LD := k OR j AND i);`. */
@@ -256,6 +267,8 @@ describe('Ladder: contacts added on the parallel path of a block pin branch', ()
 
     expect(downstreamNames('qu')).toEqual([])
     expectPinLogic('LD', ['i', 'k', 'l'], (v) => v.i || (v.k && v.l))
+    expect(nodeNamed('l').position.y).toBe(nodeNamed('k').position.y)
+    expect(nodeNamed('l').position.x).toBeLessThan(nodeNamed('k').position.x)
   })
 
   it('wires l in series with k on CTU.R', () => {

@@ -112,6 +112,57 @@ function ldExpression(rung: RFRung): string {
 const operands = (expression: string): string[] =>
   (expression.match(/[A-Za-z_]\w*/g) ?? []).filter((token) => token !== 'AND' && token !== 'OR').sort()
 
+/** Evaluates an ST boolean expression of AND, OR and parentheses over the given contact values. */
+function evaluate(expression: string, values: Record<string, boolean>): boolean {
+  const tokens = expression.match(/\(|\)|[A-Za-z_]\w*/g) ?? []
+  let at = 0
+  const primary = (): boolean => {
+    const token = tokens[at++]
+    if (token === '(') {
+      const value = or()
+      if (tokens[at++] !== ')') throw new Error(`unbalanced parentheses in ${expression}`)
+      return value
+    }
+    if (!(token in values)) throw new Error(`unexpected ${token} in ${expression}`)
+    return values[token]
+  }
+  const and = (): boolean => {
+    let value = primary()
+    while (tokens[at] === 'AND') {
+      at++
+      value = primary() && value
+    }
+    return value
+  }
+  const or = (): boolean => {
+    let value = and()
+    while (tokens[at] === 'OR') {
+      at++
+      value = and() || value
+    }
+    return value
+  }
+  const result = or()
+  if (at !== tokens.length) throw new Error(`trailing tokens in ${expression}`)
+  return result
+}
+
+/** Asserts the LD argument `expression` has the same truth table as `expected` over `contacts`. */
+function expectLdLogic(
+  expression: string,
+  contacts: readonly string[],
+  expected: (v: Record<string, boolean>) => boolean,
+): void {
+  for (let mask = 0; mask < 1 << contacts.length; mask++) {
+    const values = Object.fromEntries(contacts.map((name, bit) => [name, (mask & (1 << bit)) !== 0]))
+    expect({ expression, values, result: evaluate(expression, values) }, `LD := ${expression}`).toEqual({
+      expression,
+      values,
+      result: expected(values),
+    })
+  }
+}
+
 test('contacts on a CTUD LD pin parallel path are wired where the marker shows', async () => {
   test.setTimeout(180_000)
   const session = await launchOn(freshProfile('ld-pin-branch'))
@@ -124,6 +175,7 @@ test('contacts on a CTUD LD pin parallel path are wired where the marker shows',
     const step7 = savedRung(projectDir, STEP_7)
     expect(downstreamOf(step7, 'qu'), 'elements wired after coil qu').toEqual([])
     expect(operands(ldExpression(step7)), `LD := ${ldExpression(step7)}`).toEqual(['i', 'j', 'k', 'l'])
+    expectLdLogic(ldExpression(step7), ['i', 'j', 'k', 'l'], (v) => (v.i && v.j) || (v.k && v.l))
 
     await builder.buildRung({ comment: STEP_8, steps: [...STEPS_1_TO_7, contact('m', below('l'))] }, 'step 8')
     await saveAndWait(session, ['main'], () => pouFileHolds(projectDir, 'main', [STEP_7, STEP_8]), 'step 8')
@@ -141,6 +193,7 @@ test('contacts on a CTUD LD pin parallel path are wired where the marker shows',
         closes.some((close) => feeds(l, close.id) && feeds(m, close.id)),
       'm sits in a parallel with l, opened and closed by the same junctions',
     ).toBe(true)
+    expectLdLogic(ldExpression(step8), ['i', 'j', 'k', 'l', 'm'], (v) => (v.i && v.j) || (v.k && (v.l || v.m)))
   } catch (error) {
     await session.page.screenshot({ path: test.info().outputPath('failure.png') }).catch(() => undefined)
     throw error
