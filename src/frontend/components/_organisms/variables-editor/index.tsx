@@ -1,11 +1,18 @@
+import * as Popover from '@radix-ui/react-popover'
 import { ColumnFiltersState } from '@tanstack/react-table'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { createPortal } from 'react-dom'
 
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { MinusIcon } from '../../../assets/icons/interface/Minus'
-import { PlusIcon } from '../../../assets/icons/interface/Plus'
-import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
@@ -28,14 +35,14 @@ import {
   type ReferenceImpactAnalysis,
 } from '../../../utils/variable-references'
 import { applyVariablesToText } from '../../../utils/variable-text-edits'
-import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
-import TableActions from '../../_atoms/table-actions'
 import { ViewModeToggle } from '../../_atoms/view-mode-toggle'
 import { toast } from '../../_features/[app]/toast/use-toast'
+import { RungMenu, type RungMenuItem } from '../../_molecules/graphical-editor/ladder/rung/rung-menu'
 import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
 import { TypeChangeModal } from '../../_molecules/type-change-modal'
 import { VariablesTable } from '../../_molecules/variables-table'
+import { EDITOR_ACTIONS_SLOT_ID } from '../navigation'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
 /**
@@ -75,6 +82,21 @@ interface VariablesEditorProps {
    * expensive memos) has a hook to attach to without an API break.
    */
   isActive?: boolean
+}
+
+const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+
+/** The slot at the right of the tab bar, once the navigation bar has rendered it. */
+function useEditorActionsSlot(): HTMLElement | null {
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  useEffect(() => setSlot(document.getElementById(EDITOR_ACTIONS_SLOT_ID)), [])
+  return slot
+}
+
+const POU_TYPE_LABEL: Record<string, string> = {
+  program: 'Program',
+  function: 'Function',
+  'function-block': 'Function block',
 }
 
 const VariablesEditor = ({ name: propName, isActive: _isActive = true }: VariablesEditorProps = {}) => {
@@ -195,6 +217,12 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   })
 
   const pou = pous.find((p) => p.name === editor.meta.name)
+  const isFunction = pou?.pouType === 'function'
+  const [filtersOn, setFiltersOn] = useState(false)
+  const [rowMenu, setRowMenu] = useState<{ x: number; y: number; row: number } | null>(null)
+  const closeRowMenu = useCallback(() => setRowMenu(null), [])
+  const actionsSlot = useEditorActionsSlot()
+
   useEffect(() => {
     const data = pou?.documentation
     if (data) setPouDescription(data)
@@ -415,14 +443,15 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
     })
   }
 
-  const handleCreateVariable = () => {
+  /** Adds a variable copied from the selected row: below it, above it, or at the end of the table. */
+  const handleCreateVariable = ({ position = 'below' }: { position?: 'above' | 'below' | 'end' } = {}) => {
     if (editorVariables.display === 'code') return
 
     pushToHistory(editor.meta.name)
 
     const matchedPou = pous.find((p) => p.name === editor.meta.name)
     const variables = matchedPou?.interface?.variables ?? []
-    const selectedRow = parseInt(editorVariables.selectedRow)
+    const selectedRow = position === 'end' ? ROWS_NOT_SELECTED : parseInt(editorVariables.selectedRow)
 
     const language = 'language' in editor.meta ? editor.meta.language : null
     const defaultClass: PLCVariable['class'] = language === 'python' || language === 'cpp' ? 'input' : 'local'
@@ -484,11 +513,11 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       scope: 'local',
       associatedPou: editor.meta.name,
       data: newVarData,
-      rowToInsert: selectedRow + 1,
+      rowToInsert: position === 'above' ? selectedRow : selectedRow + 1,
     })
     updateModelVariables({
       display: 'table',
-      selectedRow: selectedRow + 1,
+      selectedRow: position === 'above' ? selectedRow : selectedRow + 1,
     })
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }
@@ -548,22 +577,106 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   //   tableData[parseInt(editorVariables.selectedRow)]?.type.definition === 'derived' &&
   //   editor?.type !== 'plc-textual'
 
-  const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    if (isEditingLocked) return
-    // This runs on blur: leaving the field without typing is not an edit.
-    if (event.target.value === (pou?.documentation ?? '')) return
-    updatePouDocumentation(editor.meta.name, event.target.value)
+  /** Commits the POU description from the properties popover; leaving it unchanged is not an edit. */
+  const commitDescription = (value: string) => {
+    if (isEditingLocked || value === (pou?.documentation ?? '')) return
+    updatePouDocumentation(editor.meta.name, value)
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
-  const handleDescriptionValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    if (isEditingLocked) return
-    setPouDescription(event.target.value)
+  const toggleColumnFilters = () => {
+    if (filtersOn) handleFilterChange('All')
+    setFiltersOn(!filtersOn)
   }
+
+  /** The row shortcuts: they act on the selected row while the table, not a cell field, has the focus. */
+  const handleTableKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const target = event.target
+    if (isEditingLocked || editorVariables.display !== 'table') return
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
+    if (target instanceof HTMLElement && target.isContentEditable) return
+    const selected = parseInt(editorVariables.selectedRow)
+    if (event.key === 'Enter') handleCreateVariable({ position: event.shiftKey ? 'above' : 'below' })
+    else if (event.altKey && event.key === 'ArrowUp' && selected > 0) handleRearrangeVariables(-1)
+    else if (event.altKey && event.key === 'ArrowDown' && selected >= 0 && selected < tableData.length - 1)
+      handleRearrangeVariables(1)
+    else if ((event.key === 'Delete' || event.key === 'Backspace') && selected !== ROWS_NOT_SELECTED)
+      handleRemoveVariable()
+    else return
+    event.preventDefault()
+  }
+
+  const handleRowContextMenu = (rowIndex: number, event: ReactMouseEvent<HTMLTableRowElement>) => {
+    event.preventDefault()
+    updateModelVariables({ display: 'table', selectedRow: rowIndex })
+    setRowMenu({ x: event.clientX, y: event.clientY, row: rowIndex })
+  }
+
+  const rowMenuItems: RungMenuItem[] = rowMenu
+    ? [
+        {
+          label: 'Insert row above',
+          shortcut: '⇧Enter',
+          disabled: isEditingLocked,
+          onSelect: () => handleCreateVariable({ position: 'above' }),
+        },
+        {
+          label: 'Insert row below',
+          shortcut: 'Enter',
+          disabled: isEditingLocked,
+          onSelect: () => handleCreateVariable({ position: 'below' }),
+        },
+        null,
+        {
+          label: 'Move up',
+          shortcut: IS_MAC ? '⌥↑' : 'Alt + ↑',
+          disabled: isEditingLocked || rowMenu.row === 0,
+          onSelect: () => handleRearrangeVariables(-1, rowMenu.row),
+        },
+        {
+          label: 'Move down',
+          shortcut: IS_MAC ? '⌥↓' : 'Alt + ↓',
+          disabled: isEditingLocked || rowMenu.row >= tableData.length - 1,
+          onSelect: () => handleRearrangeVariables(1, rowMenu.row),
+        },
+        null,
+        {
+          label: 'Delete variable',
+          shortcut: IS_MAC ? '⌫' : 'Del',
+          disabled: isEditingLocked,
+          danger: true,
+          onSelect: handleRemoveVariable,
+        },
+      ]
+    : []
+
+  const classFilter = editorVariables.display === 'table' ? editorVariables.classFilter : 'All'
+  const classFilterHeader = (
+    <Select value={classFilter} onValueChange={handleFilterChange}>
+      <SelectTrigger
+        aria-label='Class filter'
+        placeholder={classFilter === 'All' ? 'Class' : `Class: ${classFilter}`}
+        withIndicator
+        className='flex h-full w-full items-center justify-center gap-1 outline-none'
+      />
+      <SelectContent
+        position='popper'
+        sideOffset={3}
+        align='center'
+        className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+      >
+        {FilterOptions.map((filter) => (
+          <SelectItem
+            key={filter}
+            value={filter}
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+          >
+            <span className='text-xs font-normal text-neutral-700 dark:text-neutral-500'>{filter}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
 
   const askRenameBlocks = () =>
     new Promise<boolean>((resolve) => {
@@ -1117,232 +1230,85 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
         aria-label='Variables editor container'
         className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'
       >
-        <div aria-label='Variables editor actions' className='relative flex h-8 w-full gap-4'>
-          {editorVariables.display === 'table' && (
-            <div aria-label='Variables editor table actions container' className='flex h-full w-full select-none gap-4'>
-              {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
-                editor.meta.pouType === 'function' && (
-                  <div className='flex h-full max-w-lg flex-1 items-center gap-2'>
-                    <label
-                      htmlFor='return-type'
-                      className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
-                    >
-                      Return type :
-                    </label>
-                    <Select value={returnType} onValueChange={handleReturnTypeChange}>
-                      <SelectTrigger
-                        id='return-type'
-                        placeholder={returnType}
-                        withIndicator
-                        className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
-                      />
-                      <SelectContent
-                        position='popper'
-                        sideOffset={3}
-                        align='center'
-                        className='box h-fit max-h-[300px] min-w-44 overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
-                      >
-                        {returnTypeOptions.map((filter) => (
-                          <SelectItem
-                            key={filter}
-                            value={filter}
-                            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                          >
-                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                              {filter}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-              <div
-                id='Pou documentation'
-                aria-label='Variables editor table description container'
-                className='flex h-full max-w-lg flex-1 items-center  gap-2'
-              >
-                <label
-                  htmlFor='description'
-                  className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
+        {_isActive &&
+          actionsSlot &&
+          createPortal(
+            <>
+              {editorVariables.display === 'table' && (
+                <button
+                  aria-label='Column filters'
+                  aria-pressed={filtersOn}
+                  title='Column filters'
+                  onClick={toggleColumnFilters}
+                  className={cn(
+                    'rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900',
+                    filtersOn && 'bg-brand-light text-brand dark:bg-brand-medium-dark',
+                  )}
                 >
-                  Description :
-                </label>
-                <InputWithRef
-                  id='description'
-                  onBlur={handleDescriptionChange}
-                  value={pouDescription}
-                  onChange={handleDescriptionValueChange}
-                  disabled={isEditingLocked}
-                  className='h-full w-full rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-850 dark:text-neutral-300'
-                />
-              </div>
-
-              <div
-                aria-label='Variables editor table class filter container'
-                className='flex h-full max-w-lg flex-1 items-center  gap-2'
-              >
-                <label
-                  htmlFor='class-filter'
-                  className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
-                >
-                  Class Filter :
-                </label>
-                <Select value={editorVariables.classFilter} onValueChange={handleFilterChange}>
-                  <SelectTrigger
-                    id='class-filter'
-                    placeholder={editorVariables.classFilter}
-                    withIndicator
-                    className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
-                  />
-                  <SelectContent
-                    position='popper'
-                    sideOffset={3}
-                    align='center'
-                    className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-                  >
-                    {FilterOptions.map((filter) => (
-                      <SelectItem
-                        key={filter}
-                        value={filter}
-                        className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      >
-                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                          {filter}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          <div className='hidden justify-end xl:flex'>
-            {editorVariables.display === 'table' && (
-              <div
-                aria-label='Variables editor table actions container'
-                className='mr-2 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
-              >
-                <TableActions
-                  actions={[
-                    {
-                      ariaLabel: 'Add table row button',
-                      onClick: handleCreateVariable,
-                      disabled: isEditingLocked,
-                      icon: <PlusIcon className='!stroke-brand' />,
-                      id: 'add-variable-button',
-                    },
-                    {
-                      ariaLabel: 'Remove table row button',
-                      onClick: handleRemoveVariable,
-                      disabled: isEditingLocked || parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
-                      icon: <MinusIcon />,
-                      id: 'remove-variable-button',
-                    },
-                    {
-                      ariaLabel: 'Move table row up button',
-                      onClick: () => handleRearrangeVariables(-1),
-                      disabled:
-                        isEditingLocked ||
-                        parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                        parseInt(editorVariables.selectedRow) === 0,
-                      icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
-                      id: 'move-variable-up-button',
-                    },
-                    {
-                      ariaLabel: 'Move table row down button',
-                      onClick: () => handleRearrangeVariables(1),
-                      disabled:
-                        isEditingLocked ||
-                        parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                        parseInt(editorVariables.selectedRow) === tableData.length - 1,
-                      icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
-                      id: 'move-variable-down-button',
-                    },
-                  ]}
-                />
-              </div>
-            )}
-
-            <ViewModeToggle
-              display={editorVariables.display}
-              onDisplayChange={(value) => {
-                void handleVisualizationTypeChange(value)
-              }}
-              containerLabel='Variables visualization switch container'
-              tableLabel='Variables table visualization'
-              codeLabel='Variables code visualization'
-              className={cn({ 'absolute right-0': editorVariables.display === 'code' })}
-            />
-          </div>
-        </div>
-
-        <div className='flex w-full justify-end gap-4 xl:hidden'>
-          {editorVariables.display === 'table' && (
-            <div
-              aria-label='Variables editor table actions container'
-              className='mr-2 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
-            >
-              <TableActions
-                actions={[
-                  {
-                    ariaLabel: 'Add table row button',
-                    onClick: handleCreateVariable,
-                    disabled: isEditingLocked,
-                    icon: <PlusIcon className='!stroke-brand' />,
-                    id: 'add-variable-button',
-                  },
-                  {
-                    ariaLabel: 'Remove table row button',
-                    onClick: handleRemoveVariable,
-                    disabled: isEditingLocked || parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
-                    icon: <MinusIcon />,
-                    id: 'remove-variable-button',
-                  },
-                  {
-                    ariaLabel: 'Move table row up button',
-                    onClick: () => handleRearrangeVariables(-1),
-                    disabled:
-                      isEditingLocked ||
-                      parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                      parseInt(editorVariables.selectedRow) === 0,
-                    icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
-                    id: 'move-variable-up-button',
-                  },
-                  {
-                    ariaLabel: 'Move table row down button',
-                    onClick: () => handleRearrangeVariables(1),
-                    disabled:
-                      isEditingLocked ||
-                      parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                      parseInt(editorVariables.selectedRow) === tableData.length - 1,
-                    icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
-                    id: 'move-variable-down-button',
-                  },
-                ]}
+                  <svg viewBox='0 0 14 14' className='h-4 w-4 fill-none stroke-current' strokeWidth={1.6}>
+                    <path d='M1.5 2.5h11L8.3 7.5V11l-2.6 1.2V7.5z' />
+                  </svg>
+                </button>
+              )}
+              <ViewModeToggle
+                display={editorVariables.display}
+                onDisplayChange={(value) => {
+                  void handleVisualizationTypeChange(value)
+                }}
+                containerLabel='Variables visualization switch container'
+                tableLabel='Variables table visualization'
+                codeLabel='Variables code visualization'
               />
-            </div>
+              <Popover.Root>
+                <Popover.Trigger asChild>
+                  <button
+                    aria-label='POU properties'
+                    title='POU properties'
+                    className='rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  >
+                    <svg viewBox='0 0 14 14' className='h-4 w-4 fill-none stroke-current' strokeWidth={1.6}>
+                      <circle cx='7' cy='7' r='5.5' />
+                      <path d='M7 6.2V10M7 4.2v.1' />
+                    </svg>
+                  </button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content
+                    side='bottom'
+                    align='end'
+                    sideOffset={6}
+                    className='z-50 flex w-80 flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 text-xs shadow-lg dark:border-neutral-800 dark:bg-neutral-950'
+                  >
+                    <p className='font-semibold text-neutral-850 dark:text-neutral-300'>
+                      {editor.meta.name}{' '}
+                      <span className='font-normal text-neutral-500'>· {POU_TYPE_LABEL[pou?.pouType ?? ''] ?? ''}</span>
+                    </p>
+                    <textarea
+                      aria-label='POU description'
+                      key={pouDescription}
+                      defaultValue={pouDescription}
+                      readOnly={isEditingLocked}
+                      placeholder='Description'
+                      rows={4}
+                      onBlur={(event) => commitDescription(event.target.value)}
+                      className='resize-none rounded-md border border-neutral-300 bg-transparent p-2 text-neutral-850 outline-none read-only:cursor-not-allowed focus:border-brand dark:border-neutral-800 dark:text-neutral-300'
+                    />
+                    <p className='text-[11px] text-neutral-500'>
+                      Shown as the block&apos;s help when it is used from the library.
+                    </p>
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+            </>,
+            actionsSlot,
           )}
-
-          <ViewModeToggle
-            display={editorVariables.display}
-            onDisplayChange={(value) => {
-              void handleVisualizationTypeChange(value)
-            }}
-            containerLabel='Variables visualization switch container'
-            tableLabel='Variables table visualization'
-            codeLabel='Variables code visualization'
-            className={cn({ 'absolute right-0 top-0': editorVariables.display === 'code' })}
-          />
-        </div>
-
         {editorVariables.display === 'table' && (
           <div
             aria-label='Variables editor table container'
-            className='h-full overflow-x-auto overflow-y-auto lg:overflow-x-hidden'
+            className='h-full overflow-x-auto overflow-y-auto outline-none lg:overflow-x-hidden'
             style={{ scrollbarGutter: 'stable' }}
+            tabIndex={-1}
+            onKeyDown={handleTableKeyDown}
           >
             <VariablesTable
               tableData={tableData}
@@ -1351,7 +1317,23 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
               setColumnFilters={setColumnFilters}
               selectedRow={parseInt(editorVariables.selectedRow)}
               handleRowClick={handleRowClick}
+              classHeader={filtersOn ? classFilterHeader : undefined}
+              returnRow={
+                isFunction
+                  ? {
+                      name: editor.meta.name,
+                      type: returnType,
+                      options: returnTypeOptions,
+                      disabled: isEditingLocked,
+                      onChange: handleReturnTypeChange,
+                    }
+                  : undefined
+              }
+              onAddVariable={() => handleCreateVariable({ position: 'end' })}
+              addDisabled={isEditingLocked}
+              onRowContextMenu={handleRowContextMenu}
             />
+            {rowMenu && <RungMenu at={rowMenu} items={rowMenuItems} onClose={closeRowMenu} />}
           </div>
         )}
 
