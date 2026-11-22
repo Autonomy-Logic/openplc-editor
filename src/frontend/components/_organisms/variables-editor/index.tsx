@@ -36,7 +36,6 @@ import {
 } from '../../../utils/variable-references'
 import { applyVariablesToText } from '../../../utils/variable-text-edits'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
-import { ViewModeToggle } from '../../_atoms/view-mode-toggle'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { RungMenu, type RungMenuItem } from '../../_molecules/graphical-editor/ladder/rung/rung-menu'
 import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
@@ -92,6 +91,14 @@ function useEditorActionsSlot(): HTMLElement | null {
   useEffect(() => setSlot(document.getElementById(EDITOR_ACTIONS_SLOT_ID)), [])
   return slot
 }
+
+/** One button of the tab-bar segmented group, and its selected state. */
+const SEGMENT =
+  'grid w-7 place-items-center text-neutral-500 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-neutral-900'
+const SEGMENT_ON =
+  'bg-brand-light text-brand hover:bg-brand-light dark:bg-brand-medium-dark dark:hover:bg-brand-medium-dark'
+const SEGMENT_ICON =
+  'h-4 w-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.6]'
 
 const POU_TYPE_LABEL: Record<string, string> = {
   program: 'Program',
@@ -1233,42 +1240,58 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
         {_isActive &&
           actionsSlot &&
           createPortal(
-            <>
-              {editorVariables.display === 'table' && (
-                <button
-                  aria-label='Column filters'
-                  aria-pressed={filtersOn}
-                  title='Column filters'
-                  onClick={toggleColumnFilters}
-                  className={cn(
-                    'rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900',
-                    filtersOn && 'bg-brand-light text-brand dark:bg-brand-medium-dark',
-                  )}
-                >
-                  <svg viewBox='0 0 14 14' className='h-4 w-4 fill-none stroke-current' strokeWidth={1.6}>
-                    <path d='M1.5 2.5h11L8.3 7.5V11l-2.6 1.2V7.5z' />
-                  </svg>
-                </button>
-              )}
-              <ViewModeToggle
-                display={editorVariables.display}
-                onDisplayChange={(value) => {
-                  void handleVisualizationTypeChange(value)
-                }}
-                containerLabel='Variables visualization switch container'
-                tableLabel='Variables table visualization'
-                codeLabel='Variables code visualization'
-              />
+            <div
+              aria-label='Editor actions'
+              className='flex h-[26px] items-stretch overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-800 [&>*+*]:border-l [&>*+*]:border-neutral-300 dark:[&>*+*]:border-neutral-800'
+            >
+              <button
+                aria-label='Column filters'
+                aria-pressed={filtersOn}
+                title='Column filters'
+                disabled={editorVariables.display !== 'table'}
+                onClick={toggleColumnFilters}
+                className={cn(SEGMENT, filtersOn && SEGMENT_ON)}
+              >
+                <svg viewBox='0 0 16 16' className={SEGMENT_ICON}>
+                  <path d='M2 3h12L9.5 8.5V12l-3 1.5V8.5z' />
+                </svg>
+              </button>
+              <button
+                aria-label='Variables table visualization'
+                aria-pressed={editorVariables.display === 'table'}
+                title='Table'
+                onClick={() => void handleVisualizationTypeChange('table')}
+                className={cn(SEGMENT, editorVariables.display === 'table' && SEGMENT_ON)}
+              >
+                <svg viewBox='0 0 16 16' className={SEGMENT_ICON}>
+                  <rect x='2' y='2.5' width='12' height='11' rx='1.5' />
+                  <path d='M2 6.5h12M6.5 6.5V13.5' />
+                </svg>
+              </button>
+              <button
+                aria-label='Variables code visualization'
+                aria-pressed={editorVariables.display === 'code'}
+                title='Code'
+                onClick={() => void handleVisualizationTypeChange('code')}
+                className={cn(SEGMENT, editorVariables.display === 'code' && SEGMENT_ON)}
+              >
+                <svg viewBox='0 0 16 16' className={SEGMENT_ICON}>
+                  <path d='M5.5 4 2 8l3.5 4M10.5 4 14 8l-3.5 4' />
+                </svg>
+              </button>
               <Popover.Root>
                 <Popover.Trigger asChild>
                   <button
                     aria-label='POU properties'
                     title='POU properties'
-                    className='rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                    className={cn(
+                      SEGMENT,
+                      'data-[state=open]:bg-brand-light data-[state=open]:text-brand dark:data-[state=open]:bg-brand-medium-dark',
+                    )}
                   >
-                    <svg viewBox='0 0 14 14' className='h-4 w-4 fill-none stroke-current' strokeWidth={1.6}>
-                      <circle cx='7' cy='7' r='5.5' />
-                      <path d='M7 6.2V10M7 4.2v.1' />
+                    <svg viewBox='0 0 16 16' className={SEGMENT_ICON}>
+                      <circle cx='8' cy='8' r='6' />
+                      <path d='M8 7.2V11.2M8 5v.1' />
                     </svg>
                   </button>
                 </Popover.Trigger>
@@ -1299,7 +1322,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                   </Popover.Content>
                 </Popover.Portal>
               </Popover.Root>
-            </>,
+            </div>,
             actionsSlot,
           )}
         {editorVariables.display === 'table' && (
