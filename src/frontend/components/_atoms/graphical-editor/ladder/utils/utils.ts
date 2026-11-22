@@ -1,20 +1,17 @@
+import { legacyBlockSize } from '@root/middleware/shared/utils/ladder-layout'
 import { Position } from '@xyflow/react'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
-import {
-  blockInputVariables,
-  blockOutputVariables,
-  IN_OUT_MARKER_WIDTH,
-} from '../../../../../utils/graphical/in-out-pin-rules'
+import { blockInputVariables, blockOutputVariables } from '../../../../../utils/graphical/in-out-pin-rules'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import {
   getVariableRestrictionType as _getVariableRestrictionType,
   validateVariableType as _validateVariableType,
 } from '../../../../../utils/PLC/validate-variable-type'
 import { buildHandle } from '../handle'
-import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
+import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET } from './constants'
 import type { BasicNodeData, BlockVariant } from './types'
 
 // `pouName` is the bound POU for the caller's editor instance — see
@@ -126,33 +123,9 @@ export const getBlockSize = (
     y: number
   },
 ) => {
-  const inputVariables = blockInputVariables(variant.variables)
-  const inputConnectors = inputVariables.map((variable) => variable.name)
+  const inputConnectors = blockInputVariables(variant.variables).map((variable) => variable.name)
   const outputConnectors = blockOutputVariables(variant.variables).map((variable) => variable.name)
-
-  const blockHeight =
-    DEFAULT_BLOCK_CONNECTOR_Y +
-    24 +
-    Math.max(inputConnectors.length - 1, outputConnectors.length - 1) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
-
-  let variableInputWidth = 0
-  let variableOutputWidth = 0
-  const blockNameWidth = variant.name.length * 12
-  inputVariables.forEach((input) => {
-    // An in-out pin also renders the ⟷ marker after its name; pay for it here so a long
-    // name plus the arrow cannot overflow the block.
-    const inputWidth = input.name.length * 12 + (input.class === 'inOut' ? IN_OUT_MARKER_WIDTH : 0)
-    if (inputWidth > variableInputWidth) variableInputWidth = inputWidth
-  })
-  outputConnectors.forEach((output) => {
-    const outputWidth = output.length * 12
-    if (outputWidth > variableOutputWidth) variableOutputWidth = outputWidth
-  })
-
-  const blockWidth = Math.min(
-    Math.max(variableInputWidth + 18 + variableOutputWidth, blockNameWidth),
-    DEFAULT_BLOCK_WIDTH,
-  )
+  const { width: blockWidth, height: blockHeight } = legacyBlockSize(variant)
 
   const leftHandles = inputConnectors.map((connector, index) =>
     buildHandle({

@@ -1,4 +1,5 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
+import { hasBranchOnHandle } from '@root/middleware/shared/utils/ladder-layout'
 import type { Node, ReactFlowInstance } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -11,7 +12,6 @@ import {
   canPlaceElementOnHandle,
   getDeepestBranchParallelNodes,
   getNodesInsideAllBranchParallels,
-  hasBranchOnHandle,
 } from '../handle-branch'
 import { getDeepestNodesInsideParallels, getNodesInsideAllParallels, getPlaceholderPositionBasedOnNode } from '../utils'
 

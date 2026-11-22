@@ -1,6 +1,7 @@
 import { Edge, Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { updateDiagramElementsPosition } from '../../../../../middleware/shared/utils/ladder-layout'
 import { nodesBuilder } from '../../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type {
   BasicNodeData,
@@ -15,7 +16,6 @@ import type {
   PowerRailNode,
   VariableNode,
 } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
-import { updateDiagramElementsPosition } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { generateNumericUUID } from '../../../../utils/generate-uuid'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { newUuid } from '../../../../utils/new-uuid'

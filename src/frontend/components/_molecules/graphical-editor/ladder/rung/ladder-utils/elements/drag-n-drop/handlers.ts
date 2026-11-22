@@ -1,4 +1,5 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
+import { updateDiagramElementsPosition } from '@root/middleware/shared/utils/ladder-layout'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { BasicNodeData, HandleBranch } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
@@ -7,7 +8,6 @@ import { disconnectNodes } from '../../edges'
 import { removeNode } from '../../nodes'
 import { removeElement } from '..'
 import { spliceNodeIntoEdgeChain } from '../core'
-import { updateDiagramElementsPosition } from '../diagram'
 import {
   getBranch,
   insertIntoBranch,

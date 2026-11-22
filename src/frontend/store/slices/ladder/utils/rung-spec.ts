@@ -1,6 +1,7 @@
 import { Edge, getNodesBounds, Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { updateDiagramElementsPosition } from '../../../../../middleware/shared/utils/ladder-layout'
 import {
   defaultCustomNodesStyles,
   nodesBuilder,
@@ -12,7 +13,6 @@ import type {
   LadderBlockConnectedVariables,
 } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { connectNodes } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/edges'
-import { updateDiagramElementsPosition } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { getLiteralType } from '../../../../utils/keywords'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { validateVariableType } from '../../../../utils/PLC/validate-variable-type'

@@ -1,5 +1,6 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
 import { toast } from '@root/frontend/utils/toast'
+import { updateDiagramElementsPosition } from '@root/middleware/shared/utils/ladder-layout'
 import type { Edge, Node } from '@xyflow/react'
 
 import type {
@@ -9,7 +10,6 @@ import type {
 } from '../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { disconnectNodes } from '../edges'
 import { isNodeOfType, removeNode } from '../nodes'
-import { updateDiagramElementsPosition } from './diagram'
 import {
   blockHasBranches,
   getBranch,

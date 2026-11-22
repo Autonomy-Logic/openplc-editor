@@ -1,68 +1,18 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
-import type { Edge, Node } from '@xyflow/react'
+import { findParallelsInRung, getNodesInsideParallel } from '@root/middleware/shared/utils/ladder-layout'
+import type { Node } from '@xyflow/react'
 
 import type { CustomHandleProps } from '../../../../../../../_atoms/graphical-editor/ladder/handle'
 import { BasicNodeData, ParallelNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
-import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
+import { getDefaultNodeStyle } from '../../nodes'
 
-/**
- * Get the previous element by searching with edge in the rung
- *
- * @param rung: RungLadderState
- * @param node: Node
- *
- * @returns obj: { nodes: { serial: Node[]; parallel: Node[]; all: Node[] }; edges: Edge[] }
- */
-export const getPreviousElementsByEdge = (
-  rung: RungLadderState,
-  node: Node,
-): { nodes: { serial: Node[]; parallel: Node[]; all: Node[] }; edges: Edge[] } => {
-  const { edges } = rung
-  const lastNodes: { nodes: { serial: Node[]; parallel: Node[]; all: Node[] }; edges: Edge[] } = {
-    nodes: { serial: [], parallel: [], all: [] },
-    edges: [],
-  }
-
-  // Get the connected edges to the node
-  const connectedEdges = edges.filter((e) => e.target === node.id)
-  // If there is no connected edges, return the last nodes
-  if (connectedEdges.length === 0) {
-    return lastNodes
-  }
-
-  connectedEdges.forEach((e) => {
-    // Find the source of the edge
-    const n = rung.nodes.find((n) => n.id === e.source)
-
-    /**
-     * If the node is undefined, a variable, or a branch element, skip it.
-     * Branch elements connect to block handles but are not serial predecessors
-     * — they are positioned in a post-pass and must not affect the main layout.
-     */
-    if (!n || n.type === 'variable') return
-    if ((n.data as BasicNodeData).branchContext) return
-
-    /**
-     * If there is a parallel node, check if it is an open or close parallel
-     * If it is a close parallel, add it to the parallel nodes
-     */
-    if (
-      isNodeOfType(node, 'parallel') &&
-      (node as ParallelNode).data.type === 'close' &&
-      e.targetHandle === (node as ParallelNode).data.parallelInputConnector?.id
-    ) {
-      lastNodes.nodes.parallel.push({ ...n })
-      return
-    }
-
-    lastNodes.nodes.serial.push({ ...n })
-  })
-  lastNodes.nodes.all = [...lastNodes.nodes.serial, ...lastNodes.nodes.parallel]
-  const allNodeIds = new Set(lastNodes.nodes.all.map((n) => n.id))
-  lastNodes.edges = connectedEdges.filter((e) => allNodeIds.has(e.source))
-
-  return lastNodes
-}
+export {
+  findAllParallelsDepthAndNodes,
+  findParallelsInRung,
+  getNodePositionBasedOnPreviousNode,
+  getNodesInsideParallel,
+  getPreviousElementsByEdge,
+} from '@root/middleware/shared/utils/ladder-layout'
 
 /**
  * Get the previous main-line element when adding a new serial element.
@@ -132,101 +82,10 @@ export const getElementPositionBasedOnPlaceholderElement = (
 }
 
 /**
- * Get the node position based on the previous node
- *
- * @param previousElement
- * @param newElement
- * @param type: 'serial' | 'parallel'
- *
- * @returns { posX, posY, handleX, handleY }
- */
-export const getNodePositionBasedOnPreviousNode = (
-  previousElement: Node,
-  newElement: string | Node,
-  type: 'serial' | 'parallel',
-): {
-  posX: number
-  posY: number
-  handleX: number
-  handleY: number
-} => {
-  const previousElementOutputHandle = (
-    type === 'parallel'
-      ? (previousElement as ParallelNode).data.parallelOutputConnector
-      : previousElement.data.outputConnector
-  ) as CustomHandleProps
-  const previousElementStyle = getDefaultNodeStyle({ node: previousElement })
-  const newNodeStyle = getDefaultNodeStyle(
-    typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement },
-  )
-
-  const parallelNodeCheckingParallelNode =
-    previousElement.type === 'parallel' &&
-    (typeof newElement === 'string' ? newElement === 'parallel' : newElement.type === 'parallel')
-
-  let gap = 0
-  if (parallelNodeCheckingParallelNode) {
-    if (
-      typeof newElement === 'string' ||
-      ((previousElement as ParallelNode).data.type === 'close' &&
-        (newElement as ParallelNode).data.type === 'open' &&
-        previousElement.id !== (newElement as ParallelNode).data.parallelCloseReference)
-    ) {
-      gap = 100
-    }
-  } else {
-    gap = previousElementStyle.gap + newNodeStyle.gap
-  }
-
-  const offsetY = newNodeStyle.handle.y
-
-  const position = {
-    posX: previousElement.position.x + (!parallelNodeCheckingParallelNode ? previousElement.width || 0 : 0) + gap,
-    posY:
-      previousElement.type === (typeof newElement === 'string' ? newElement : newElement.type)
-        ? previousElement.position.y
-        : previousElementOutputHandle.glbPosition.y - offsetY,
-    handleX: previousElement.position.x + (!parallelNodeCheckingParallelNode ? previousElement.width || 0 : 0) + gap,
-    handleY: previousElementOutputHandle.glbPosition.y,
-  }
-
-  return position
-}
-
-/**
  * ========================
  * Parallel Utils Functions
  * ========================
  */
-
-/**
- * Find all parallels in a rung
- *
- * @param rung
- *
- * @returns ParallelNode[]
- */
-export const findParallelsInRung = (rung: RungLadderState): ParallelNode[] => {
-  const parallels: Node[] = []
-  let isAnotherParallel = true
-  let parallel: ParallelNode | undefined = undefined
-  rung.nodes.forEach((node) => {
-    if (isAnotherParallel && node.type === 'parallel' && (node as ParallelNode).data.type === 'open') {
-      parallels.push(node)
-      parallel = node as ParallelNode
-      isAnotherParallel = false
-    }
-    if (
-      !isAnotherParallel &&
-      node.type === 'parallel' &&
-      (node as ParallelNode).data.type === 'close' &&
-      parallel?.data.parallelCloseReference === node.id
-    ) {
-      isAnotherParallel = true
-    }
-  })
-  return parallels as ParallelNode[]
-}
 
 /**
  * Find the deepest parallel inside a parallel connection
@@ -245,97 +104,6 @@ export const findDeepestParallelInsideParallel = (rung: RungLadderState, paralle
     }
   }
   return parallel as ParallelNode
-}
-
-/**
- * Find all parallels depth and nodes of those parallels
- *
- * @param rung
- * @param openParallel - The open parallel node
- * @param depth - The depth of the parallel
- * @param parentNode - The parent node of the parallel
- *
- * @returns object: { [key: string]: { parent: ParallelNode | undefined, parallels: { open: ParallelNode, close: ParallelNode }, depth: number, height: number, highestNode: Node, nodes: { serial: Node[], parallel: Node[] } } }
- */
-export const findAllParallelsDepthAndNodes = (
-  rung: RungLadderState,
-  openParallel: ParallelNode,
-  depth: number = 0,
-  parentNode: ParallelNode | undefined = undefined,
-) => {
-  let objectParallel: {
-    [key: string]: {
-      parent: ParallelNode | undefined
-      parallels: {
-        open: ParallelNode
-        close: ParallelNode
-      }
-      depth: number
-      height: number
-      highestNode: Node
-      nodes: {
-        serial: Node[]
-        parallel: Node[]
-      }
-    }
-  } = {}
-
-  const closeNode = rung.nodes.find((node) => node.id === openParallel.data.parallelCloseReference) as ParallelNode
-  const nodesInsideParallel = getNodesInsideParallel(rung, closeNode)
-
-  // check serial nodes
-  const serialNodes = nodesInsideParallel.serial
-  let highestNode = serialNodes[0]
-  let serialHeight = highestNode.height ?? 0
-  for (const serialNode of serialNodes) {
-    // If it is a parallel node, check if it is an open parallel
-    // If it is, call the function recursively
-    if (serialNode.type === 'parallel') {
-      const serialParallel = serialNode as ParallelNode
-      if (serialParallel.data.type === 'open') {
-        const object = findAllParallelsDepthAndNodes(rung, serialParallel, depth, openParallel)
-        objectParallel = { ...objectParallel, ...object }
-      }
-    }
-    if (serialHeight < (serialNode.height ?? 0)) {
-      serialHeight = serialNode.height ?? 0
-      highestNode = serialNode
-    }
-  }
-
-  let deepestDepth = 0
-  for (const objects in objectParallel) {
-    const object = objectParallel[objects]
-    deepestDepth = Math.max(deepestDepth, object.depth)
-  }
-  deepestDepth = deepestDepth === depth || depth > deepestDepth ? depth + 1 : deepestDepth
-
-  // check parallel nodes
-  const parallelNodes = nodesInsideParallel.parallel
-  for (const parallelNode of parallelNodes) {
-    const parallel = parallelNode as ParallelNode
-    if (parallel.data.type === 'open') {
-      const object = findAllParallelsDepthAndNodes(rung, parallel, deepestDepth, openParallel)
-      objectParallel = { ...objectParallel, ...object }
-    }
-  }
-
-  objectParallel[openParallel.id] = {
-    parent: parentNode,
-    depth,
-    height: serialHeight,
-    highestNode,
-    parallels: {
-      open: openParallel,
-      close: closeNode,
-    },
-    nodes: {
-      serial: nodesInsideParallel.serial,
-      parallel: nodesInsideParallel.parallel,
-    },
-  }
-
-  return objectParallel
 }
 
 /**
@@ -373,44 +141,6 @@ export const getNodesInsideAllParallels = (rung: RungLadderState): Node[] => {
     nodes.push(...serial, ...parallelNodes)
   })
   return nodes
-}
-
-/**
- * Get the nodes inside a parallel connection
- *
- * @param rung
- * @param closeParallelNode - The close parallel node
- *
- * @returns object: { serial: Node[], parallel: Node[] }
- */
-export const getNodesInsideParallel = (
-  rung: RungLadderState,
-  closeParallelNode: Node,
-): { serial: Node[]; parallel: Node[] } => {
-  const openParallelNode = rung.nodes.find(
-    (node) => node.id === closeParallelNode.data.parallelOpenReference,
-  ) as ParallelNode
-  const serial: Node[] = []
-  const parallel: Node[] = []
-
-  const openParallelEdges = rung.edges.filter((edge) => edge.source === openParallelNode.id)
-  for (const parallelEdge of openParallelEdges) {
-    let nextEdge = parallelEdge
-    while (nextEdge && nextEdge.target !== closeParallelNode.id) {
-      const node = rung.nodes.find((n) => n.id === nextEdge.target)
-      if (!node) break // Broken chain — bail out (continue would infinite-loop without advancing)
-      nextEdge = rung.edges.find(
-        (edge) =>
-          edge.source === nextEdge.target && edge.sourceHandle === (node.data as BasicNodeData).outputConnector?.id,
-      ) as Edge
-      // Serial
-      if (parallelEdge.sourceHandle === openParallelNode.data.outputConnector?.id) serial.push(node)
-      // Parallel
-      else parallel.push(node)
-    }
-  }
-
-  return { serial, parallel }
 }
 
 /**

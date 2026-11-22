@@ -13,13 +13,13 @@ import {
   VariableNode,
 } from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
 import { buildEdge } from '@root/frontend/components/_molecules/graphical-editor/ladder/rung/ladder-utils/edges'
-import { updateDiagramElementsPosition } from '@root/frontend/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { LadderFlowType, RungLadderState } from '@root/frontend/store/slices'
 import { newUuid } from '@root/frontend/utils/new-uuid'
 import {
   classifyBlockVariables,
   rebuildVariablesForInputCount,
 } from '@root/frontend/utils/PLC/extensible-block-variables'
+import { updateDiagramElementsPosition } from '@root/middleware/shared/utils/ladder-layout'
 import { Edge, Position } from '@xyflow/react'
 
 import type { BlockSignature, BlockSignatureResolver } from '../block-signatures'
