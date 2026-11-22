@@ -1,5 +1,6 @@
 /**
- * The UI-built LD corpus gives its frozen Structured Text, per POU and per rung, on today's transpiler.
+ * The UI-built LD corpus gives its frozen Structured Text, per POU and per rung, on today's transpiler, and again after
+ * every LD rung is laid out by the ladder-layout engine.
  * `LD_CORPUS_FREEZE=1` writes each missing expected file once and fails, so a freeze never passes as a run.
  * @jest-environment node
  * @vitest-environment node
@@ -29,6 +30,8 @@ import {
   transpileDiagnostics,
   UI_BUILT_PROJECTS,
 } from './ld-relayout-corpus/corpus'
+import { describeStDifference } from './ld-relayout-corpus/diagnostics'
+import { relayoutProject, savedRungs } from './ld-relayout-corpus/relayout'
 
 const FREEZE = process.env.LD_CORPUS_FREEZE === '1'
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..', '..')
@@ -178,6 +181,82 @@ describe('LD re-layout corpus: coverage table', () => {
         comments.map(({ rung, expected }) => ({ rung, comment: expected })),
       )
       expect(comments.filter(({ expected }) => expected === '').map(({ rung }) => rung)).toEqual([])
+    })
+  }
+})
+
+/** Reads a frozen expected file; the re-layout half never writes one. */
+function readExpected(file: string): string {
+  if (!existsSync(file)) throw new Error(`missing ${relative(REPO_ROOT, file)}; the re-layout half never freezes`)
+  return readFileSync(file, 'utf8')
+}
+
+/** A project after the re-layout of its LD rungs, its program text split per POU, and why each LD POU differs. */
+interface Relaid {
+  data: PLCProjectData
+  split: { pous: ReadonlyMap<string, string>; rest: string }
+  why: ReadonlyMap<string, string>
+}
+
+/** Computes the re-layout on first use, inside a test, so a layout failure fails tests rather than collection. */
+function relaidLazily(project: CorpusProjectName, data: PLCProjectData): () => Relaid {
+  let relaid: Relaid | undefined
+  return () => {
+    if (relaid !== undefined) return relaid
+    const ldPous = ldPouNames(data)
+    const after = relayoutProject(data, ldPous)
+    const why = new Map(
+      ldPous.map((pou) => [pou, describeStDifference(project, pou, savedRungs(data, pou), savedRungs(after, pou))]),
+    )
+    relaid = { data: after, split: stByPou(after), why }
+    return relaid
+  }
+}
+
+describe('LD re-layout corpus: the same Structured Text after the re-layout (BDD-48, AC16)', () => {
+  for (const project of CORPUS_PROJECTS) {
+    const entry = loaded.get(project)
+    if (entry === undefined || entry instanceof Error) {
+      it(`${project} loads for the re-layout`, () => {
+        throw entry ?? new Error(`${project} was not loaded`)
+      })
+      continue
+    }
+    const { data } = entry
+    const relaid = relaidLazily(project, data)
+
+    for (const pou of stByPou(data).pous.keys()) {
+      const ids = CORPUS_COVERAGE.filter((s) => s.project === project && s.pou === pou).map((s) => s.id)
+      it(`after re-layout: ${project}/${pou} ${idTag(ids)}`, () => {
+        const { split, why } = relaid()
+        const section = split.pous.get(pou)
+        const expected = readExpected(join(expectedStDir(project), `${pou}.st`))
+        const reason = section === expected ? '' : why.get(pou) || `${project}/${pou}: POU section differs`
+        expect({ section, reason }).toEqual({ section: expected, reason: '' })
+      })
+    }
+
+    for (const pou of ldPouNames(data)) {
+      stByRung(data, pou).forEach((_, index) => {
+        const ids = scenariosAt(project, pou, index + 1).map((s) => s.id)
+        it(`after re-layout: ${project}/${pou}/rung ${index + 1} ${idTag(ids)}`, () => {
+          const { data: after, why } = relaid()
+          const rungSt = stByRung(after, pou)[index]
+          const expected = readExpected(join(expectedStDir(project), pou, rungFileName(index + 1)))
+          const reason = rungSt === expected ? '' : why.get(pou) || `${project}/${pou}/rung ${index + 1}: differs`
+          expect({ rungSt, reason }).toEqual({ rungSt: expected, reason: '' })
+        })
+      })
+    }
+
+    it(`after re-layout: ${project}/_project`, () => {
+      expect(relaid().split.rest).toBe(readExpected(join(expectedStDir(project), '_project.st')))
+    })
+
+    it(`after re-layout: ${project} keeps every rung and node of its LD POUs`, () => {
+      const ids = (source: PLCProjectData) =>
+        ldPouNames(data).map((pou) => savedRungs(source, pou).map((rung) => rung.nodes.map((node) => node.id)))
+      expect(ids(relaid().data)).toEqual(ids(data))
     })
   }
 })

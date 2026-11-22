@@ -1,6 +1,8 @@
 import type { Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { EMPTY_LABEL_SOURCE } from '../../../middleware/shared/utils/ladder-layout/labels'
+import { layoutRung, rungLayoutDiffers } from '../../../middleware/shared/utils/ladder-layout/layout'
 import type { BlockVariant } from '../../components/_atoms/graphical-editor/ladder/utils/types'
 import type { RungLadderState } from '../slices/ladder/types'
 import { buildRungFromSpec, rungToSpec, type RungSpec } from '../slices/ladder/utils/rung-spec'
@@ -74,10 +76,11 @@ describe('buildRungFromSpec', () => {
     expect(result.rung.nodes.map((n) => n.type)).toEqual(['powerRail', 'powerRail'])
     expect(result.rung.selectedNodes).toEqual([])
     expect(result.rung.nodes.every((n) => n.selected === false)).toBe(true)
-    expect(result.rung.defaultBounds).toEqual([300, 100])
+    const { size } = layoutRung(result.rung, EMPTY_LABEL_SOURCE)
+    expect(result.rung.defaultBounds).toEqual([size.width, size.height])
   })
 
-  it('respects a custom defaultBounds', () => {
+  it('stores the layout engine output, whatever defaultBounds seed it is given', () => {
     const result = buildRungFromSpec({
       rungId: 'r1',
       spec: { elements: [] },
@@ -88,7 +91,7 @@ describe('buildRungFromSpec', () => {
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.rung.defaultBounds).toEqual([600, 200])
+    expect(rungLayoutDiffers(result.rung, layoutRung(result.rung, EMPTY_LABEL_SOURCE))).toBe(false)
   })
 
   it('builds a contact bound to an existing variable, defaulting variant', () => {
@@ -164,8 +167,10 @@ describe('buildRungFromSpec', () => {
     expect(leftRail!.position.x).toBeLessThan(contact!.position.x)
     expect(contact!.position.x).toBeLessThan(coil!.position.x)
     expect(coil!.position.x).toBeLessThan(rightRail!.position.x)
-    expect(result.rung.reactFlowViewport[0]).toBeGreaterThanOrEqual(result.rung.defaultBounds[0])
-    expect(result.rung.reactFlowViewport[1]).toBeGreaterThan(result.rung.defaultBounds[1])
+    const { size } = layoutRung(result.rung, EMPTY_LABEL_SOURCE)
+    expect(result.rung.reactFlowViewport).toEqual([size.width, size.height])
+    expect(result.rung.defaultBounds).toEqual([size.width, size.height])
+    expect(rungLayoutDiffers(result.rung, layoutRung(result.rung, EMPTY_LABEL_SOURCE))).toBe(false)
   })
 
   it('fails with a listed error when a contact variable does not exist', () => {
