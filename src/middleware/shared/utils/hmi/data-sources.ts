@@ -115,6 +115,9 @@ export interface HmiFeedMethod {
 }
 
 /** The feed methods each kind overrides, and what each reads. */
+/** Feed slots a data element has (`HmiDataElement.SetFeed` takes 0 to 7). */
+export const HMI_FEED_SLOTS = 8
+
 export const HMI_FEED_METHODS: Readonly<Record<HmiSourceKind, readonly HmiFeedMethod[]>> = {
   alarms: [
     { method: 'Used', result: 'BOOL', field: 'Used', indexed: true },
@@ -123,6 +126,7 @@ export const HMI_FEED_METHODS: Readonly<Record<HmiSourceKind, readonly HmiFeedMe
     { method: 'Severity', result: 'INT', field: 'Severity', indexed: true },
     { method: 'Message', result: 'STRING(80)', field: 'Message', indexed: true },
     { method: 'Stamp', result: 'DT', field: 'Raised', indexed: true },
+    { method: 'Seq', result: 'UDINT', field: 'Seq', indexed: true },
   ],
   events: [
     { method: 'Seq', result: 'UDINT', field: 'Seq', indexed: true },
@@ -139,6 +143,7 @@ export const HMI_FEED_METHODS: Readonly<Record<HmiSourceKind, readonly HmiFeedMe
     { method: 'Severity', result: 'INT', field: 'TopSeverity', indexed: true },
     { method: 'Message', result: 'STRING(80)', field: 'TopMessage', indexed: true },
     { method: 'Stamp', result: 'DT', field: 'TopRaised', indexed: true },
+    { method: 'Seq', result: 'UDINT', field: 'TopSeq', indexed: true },
   ],
   numbers: [{ method: 'Number', result: 'REAL', field: '', indexed: true }],
 }

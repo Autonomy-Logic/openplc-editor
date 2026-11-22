@@ -108,13 +108,17 @@ describe('HMI data feeds', () => {
     expect(screen).toContain('Plot.SetFeed(1, ADR(HMI__F_Plot_1));')
   })
 
-  it('writes acknowledgements back as TRUE to the row, the top alarm or every alarm', () => {
+  it('writes acknowledgements back with the occurrence shown, to the row, the top alarm or every alarm', () => {
     const screen = result.sources['Overview.st']
     expect(screen).toContain(
-      'CASE List.AckRow OF 0: instance0.Main.Alarms[1].AckReq := TRUE; 1: instance0.Main.Alarms[2].AckReq := TRUE; ' +
-        '2: instance0.Main.Alarms[3].AckReq := TRUE; END_CASE;',
+      'CASE List.AckRow OF ' +
+        '0: instance0.Main.Alarms[1].AckSeq := List.AckRowSeq; instance0.Main.Alarms[1].AckReq := TRUE; ' +
+        '1: instance0.Main.Alarms[2].AckSeq := List.AckRowSeq; instance0.Main.Alarms[2].AckReq := TRUE; ' +
+        '2: instance0.Main.Alarms[3].AckSeq := List.AckRowSeq; instance0.Main.Alarms[3].AckReq := TRUE; END_CASE;',
     )
-    expect(screen).toContain('IF Ban.AckTop THEN instance0.Main.Sys.AckTop := TRUE; END_IF;')
+    expect(screen).toContain(
+      'IF Ban.AckTop THEN instance0.Main.Sys.AckTopSeq := Ban.AckTopSeq; instance0.Main.Sys.AckTop := TRUE; END_IF;',
+    )
     expect(screen).toContain('IF List.AckAll THEN instance0.Main.Sys.AckAll := TRUE; END_IF;')
   })
 
@@ -162,6 +166,34 @@ describe('HMI data feeds', () => {
     expect(generateHmiUnit(dataProject(DATA_SCREEN, { capabilities: { hmiDataWidgets: true } })).ok).toBe(true)
   })
 
+  it('feeds the occurrence of every alarm row and of the top alarm', () => {
+    const feeds = result.sources['hmi_feed_Overview.st']
+    expect(feeds).toContain('0: Seq := instance0.Main.Alarms[1].Seq;')
+    expect(feeds).toContain('Seq := instance0.Main.Sys.TopSeq;')
+  })
+
+  it('refuses a data source set in code, which the build cannot feed', () => {
+    const coded = generateHmiUnit(
+      dataProject(DATA_SCREEN.replace('END_VAR\n', "END_VAR\n  Log.Source := 'instance0.Main.Events';\n")),
+    )
+    expect(messages(coded)).toContain(
+      'Overview: Log.Source is set in code; a data source is set in the declaration, as a literal',
+    )
+  })
+
+  it('refuses a source past the eighth a widget block declares, which no feed slot can hold', () => {
+    const inputs = Array.from(
+      { length: 9 },
+      (_, i) => `    {attribute 'hmi_source' := 'ARRAY OF REAL'}\n    S${i + 1} : STRING(96);\n`,
+    )
+    const nine = `FUNCTION_BLOCK Nine EXTENDS HmiDataElement\n  VAR_INPUT\n${inputs.join('')}  END_VAR\nEND_FUNCTION_BLOCK\n`
+    const project = dataProject(
+      "FUNCTION_BLOCK Overview EXTENDS HmiScreen\n  VAR\n    Body : HmiHorizontalStack;\n    N : Nine := (Parent := 'Body', S8 := 'instance0.Main.Head', S9 := 'instance0.Main.Head');\n  END_VAR\nEND_FUNCTION_BLOCK\n",
+    )
+    const result = generateHmiUnit({ ...project, widgets: [...project.widgets, { name: 'Nine', source: nine }] })
+    expect(messages(result)).toEqual(['Overview: N.S9: Nine has more than 8 data sources; only the first 8 can be fed'])
+  })
+
   it('leaves a data widget without a source unfed', () => {
     const plain = generateHmiUnit(
       dataProject(
@@ -202,7 +234,9 @@ END_FUNCTION_BLOCK
     )
     expect(messages(nested)).toEqual([])
     expect(nested.sources['hmi_feed_Overview.st']).toContain('1: Message := instance0.Main.Lines[2].Alarms[2].Message;')
-    expect(nested.sources['Overview.st']).toContain('1: instance0.Main.Lines[2].Alarms[2].AckReq := TRUE;')
+    expect(nested.sources['Overview.st']).toContain(
+      '1: instance0.Main.Lines[2].Alarms[2].AckSeq := List.AckRowSeq; instance0.Main.Lines[2].Alarms[2].AckReq := TRUE;',
+    )
     expect(nested.sources['Overview.st']).toContain(
       'IF List.AckAll THEN instance0.Main.Lines[2].Sys.AckAll := TRUE; END_IF;',
     )
