@@ -168,8 +168,7 @@ function ReturnTypeRow({
               <SelectTrigger
                 aria-label='Return type'
                 placeholder={row.type}
-                withIndicator
-                className='flex h-full w-full items-center justify-between px-2 not-italic outline-none disabled:cursor-not-allowed'
+                className='flex h-full w-full cursor-pointer items-center justify-center p-2 font-caption text-xs font-normal not-italic text-neutral-700 outline-none disabled:cursor-not-allowed dark:text-neutral-500'
               />
               <SelectContent
                 position='popper'
