@@ -73,6 +73,19 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
     return !nodesInsideParallels.includes(node) || deepestNodesParallels.includes(node)
   }
 
+  // A coil ends its rung: nothing may follow a coil, or a parallel group of coils, only sit below it.
+  const endsInCoil = (nodeId: string, seen = new Set<string>()): boolean => {
+    if (seen.has(nodeId)) return false
+    seen.add(nodeId)
+    return rung.edges
+      .filter((edge) => edge.target === nodeId)
+      .some((edge) => {
+        const source = nodes.find((candidate) => candidate.id === edge.source)
+        if (source?.type === 'coil') return true
+        return source?.type === 'parallel' && source.data.type !== 'open' && endsInCoil(source.id, seen)
+      })
+  }
+
   nodes.forEach((node) => {
     let placeholders: Node[] = []
     if (
@@ -235,6 +248,10 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
     }
 
     if (node.id.startsWith('right-rail')) {
+      if (endsInCoil(node.id)) {
+        placeholderNodes.push(node)
+        return
+      }
       placeholders = [
         nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
@@ -260,6 +277,10 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
           }),
         ]
         placeholderNodes.push(placeholders[0], node)
+        return
+      }
+      if (endsInCoil(node.id)) {
+        placeholderNodes.push(node)
         return
       }
       placeholders = [
@@ -293,21 +314,22 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
       }),
     ]
 
+    const [left, right] = placeholders
+    const after = node.type === 'coil' ? [] : [right]
+
     if (allowsBottomPlaceholder(node)) {
-      placeholders.push(
-        nodesBuilder.placeholder({
-          id: `parallelPlaceholder_${node.id}_${uuidv4()}`,
-          type: 'parallel',
-          relatedNode: node,
-          position: 'bottom',
-          ...getPlaceholderPositionBasedOnNode(node, 'bottom'),
-        }),
-      )
-      placeholderNodes.push(placeholders[0], node, placeholders[2], placeholders[1])
+      const bottom = nodesBuilder.placeholder({
+        id: `parallelPlaceholder_${node.id}_${uuidv4()}`,
+        type: 'parallel',
+        relatedNode: node,
+        position: 'bottom',
+        ...getPlaceholderPositionBasedOnNode(node, 'bottom'),
+      })
+      placeholderNodes.push(left, node, bottom, ...after)
       return placeholderNodes
     }
 
-    placeholderNodes.push(placeholders[0], node, placeholders[1])
+    placeholderNodes.push(left, node, ...after)
   })
 
   // Generate handle placeholders for block input handles (BOOL-type, index > 0, no existing branch).

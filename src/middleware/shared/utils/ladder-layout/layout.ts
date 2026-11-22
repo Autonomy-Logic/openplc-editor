@@ -161,6 +161,14 @@ class RungLayoutBuilder {
 
   alignToEnd(group: LdGroup): void {
     this.endAligned.add(group)
+    // Parallel coils share the widest coil's column, so their centred symbols and names line up vertically.
+    const coils = group.branches
+      .flat()
+      .filter((element): element is LdCell => element.kind === 'cell' && element.node.type === 'coil')
+    if (coils.length < 2) return
+    const widest = Math.max(...coils.map((coil) => this.cell(coil).w))
+    for (const coil of coils) this.cellExtents.set(coil, { ...this.cell(coil), w: widest })
+    this.groupMeasures.clear()
   }
 
   /** Width and extents above and below the wire of a series; a block's pin networks clear what precedes it. */

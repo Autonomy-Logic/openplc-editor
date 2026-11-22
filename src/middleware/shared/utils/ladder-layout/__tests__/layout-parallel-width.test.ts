@@ -313,14 +313,17 @@ describe('BDD-19 row 6 / AC26-e: a trailing group of coils Motor and Conveyor_Re
   const layout = layoutRung(rung, EMPTY_LABEL_SOURCE)
   const group = groupOpenedBy(layout, 'p:open0')
 
-  it("is aligned to the end, both coils' columns ending at closeX - parPad (P2)", () => {
+  it("is aligned to the end, both coils centred in the widest coil's column ending at closeX - parPad (P2)", () => {
     expect(group.alignment).toBe('end')
     expect(group.closeX - group.openX).toBeCloseTo(2 * S.parPad + column('Conveyor_Reject_Gate'), 6)
     for (const [id, name] of [
       ['M', 'Motor'],
       ['G', 'Conveyor_Reject_Gate'],
     ] as const) {
-      expect(geometry(layout, id).position.x + S.sym / 2 + column(name) / 2).toBeCloseTo(group.closeX - S.parPad, 6)
+      expect([name, geometry(layout, id).position.x + S.sym / 2 + column('Conveyor_Reject_Gate') / 2]).toEqual([
+        name,
+        expect.closeTo(group.closeX - S.parPad, 6),
+      ])
     }
   })
 
