@@ -66,12 +66,16 @@ export interface SymbolLine {
   y2: number
 }
 
-/** Stroke geometry of a contact or coil in its local box, origin top-left; `glyphText` is the S/R/P/N letter, centred. */
+/**
+ * Stroke geometry of a contact or coil in its local box, origin top-left; `glyphText` is the S/R/P/N letter, centred.
+ * `wireInset` is how far inside the box, from either side, the rung wire runs on to meet the symbol.
+ */
 export interface SymbolGeometry {
   width: typeof LADDER_STYLE.sym
   height: typeof LADDER_STYLE.symH
   paths: readonly string[]
   lines: readonly SymbolLine[]
+  wireInset: number
   glyphText?: { text: string; sizePx: number }
 }
 
@@ -99,27 +103,34 @@ const COIL_PATHS: readonly string[] = [
 
 const NEGATION_LINE: SymbolLine = { x1: CENTER_X - 3, y1: HEIGHT - 1, x2: CENTER_X + 3, y2: 1 }
 
-/** The geometry of a symbol with the given strokes and optional letter. */
+/** The geometry of a symbol with the given strokes, wire inset and optional letter. */
 function geometry(
   paths: readonly string[],
   lines: readonly SymbolLine[],
+  wireInset: number,
   letter: string,
   letterSizePx: number,
 ): SymbolGeometry {
-  const base = { width: WIDTH, height: HEIGHT, paths, lines }
+  const base = { width: WIDTH, height: HEIGHT, paths, lines, wireInset }
   return letter ? { ...base, glyphText: { text: letter, sizePx: letterSizePx } } : base
 }
 
-/** The geometry of a contact variant: two brackets, a diagonal when negated, and its P/N letter. */
+/** The geometry of a contact variant: two brackets, a diagonal when negated, and its P/N letter; the wire meets the bars. */
 function contactGeometry(variant: ContactVariant): SymbolGeometry {
   const lines = variant === 'negated' ? [NEGATION_LINE] : []
-  return geometry(CONTACT_PATHS, lines, CONTACT_VARIANT_GLYPHS[variant], CONTACT_LETTER_SIZE_PX)
+  return geometry(
+    CONTACT_PATHS,
+    lines,
+    CENTER_X - CONTACT_HALF,
+    CONTACT_VARIANT_GLYPHS[variant],
+    CONTACT_LETTER_SIZE_PX,
+  )
 }
 
-/** The geometry of a coil variant: two arcs, a diagonal when negated, and its S/R/P/N letter. */
+/** The geometry of a coil variant: two arcs, a diagonal when negated, and its S/R/P/N letter; the wire meets the arcs. */
 function coilGeometry(variant: CoilVariant): SymbolGeometry {
   const lines = variant === 'negated' ? [NEGATION_LINE] : []
-  return geometry(COIL_PATHS, lines, COIL_VARIANT_GLYPHS[variant], COIL_LETTER_SIZE_PX)
+  return geometry(COIL_PATHS, lines, CENTER_X - COIL_HALF, COIL_VARIANT_GLYPHS[variant], COIL_LETTER_SIZE_PX)
 }
 
 const SYMBOLS: Readonly<Record<LadderSymbolKind, SymbolGeometry>> = {

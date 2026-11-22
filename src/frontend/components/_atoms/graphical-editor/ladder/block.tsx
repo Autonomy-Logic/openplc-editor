@@ -1,10 +1,11 @@
-import { pouLabelSource, relayoutRung } from '@root/middleware/shared/utils/ladder-layout'
-import { FocusEvent, memo, useEffect, useMemo, useRef, useState } from 'react'
+import { type LabelBox, pouLabelSource, relayoutRung } from '@root/middleware/shared/utils/ladder-layout'
+import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports'
 import { PLCPou } from '../../../../../middleware/shared/ports'
 import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
+import { useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { LibraryState } from '../../../../store/slices/library'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
@@ -14,21 +15,14 @@ import { isLegalIdentifier } from '../../../../utils/keywords'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { reconcileBranchesIfNeeded } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
-import { HighlightedTextArea } from '../../highlighted-textarea'
-import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockOutputDebugBadges } from '../block-output-debug-badges'
-import { InOutPinMarker } from '../in-out-pin-marker'
-import { BlockVariant as newBlockVariant } from '../types/block'
-import {
-  blockInputVariables,
-  blockOutputVariables,
-  getBlockDocumentation,
-  getVariableRestrictionType,
-  inOutVariableNames,
-} from '../utils'
+import { getVariableRestrictionType, inOutVariableNames } from '../utils'
+import { LadderBlockVisual, standaloneBlockLayout } from './block-visual'
 import { buildBlockNode } from './buildNodes'
-import { CustomHandle } from './handle'
+import { CustomHandle, ladderHandleStyle } from './handle'
+import { LadderNameField } from './ladder-text'
+import { LADDER_ERROR_COLOUR, useLadderBlockPowered, useLadderNodeView, useLadderThemePalette } from './rung-view'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import {
   DEFAULT_BLOCK_CONNECTOR_Y,
@@ -56,6 +50,8 @@ export const BlockNodeElement = <T extends object>({
   selected,
   wrongVariable = false,
   scale = 1,
+  energized = false,
+  instance,
 }: {
   nodeId?: string
   data: BlockNodeData<T>
@@ -65,6 +61,9 @@ export const BlockNodeElement = <T extends object>({
   disabled?: boolean
   wrongVariable?: boolean
   scale?: number
+  energized?: boolean
+  /** The instance name drawn above the box, and the editable field that replaces its text. */
+  instance?: { name: string; colour?: string; slot?: (label: LabelBox) => ReactNode }
 }) => {
   const store = useOpenPLCStoreApi()
   const pouName = useBoundPou()
@@ -73,6 +72,9 @@ export const BlockNodeElement = <T extends object>({
   const { setNodes, setEdges, setHandleBranches } = useOpenPLCStore((state) => state.ladderFlowActions)
   const { updateVariable, deleteVariable } = useOpenPLCStore((state) => state.projectActions)
   const pushToHistory = useOpenPLCStore((state) => state.snapshotActions.pushToHistory)
+  const isDebuggerVisible = useIsDebuggerVisible()
+  const view = useLadderNodeView(nodeId ?? '')
+  const themePalette = useLadderThemePalette()
 
   const {
     name: blockName,
@@ -80,43 +82,27 @@ export const BlockNodeElement = <T extends object>({
     type: blockType,
   } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
-  const inputConnectors = blockInputVariables(blockVariables).map((variable) => variable.name)
-  const outputConnectors = blockOutputVariables(blockVariables).map((variable) => variable.name)
   const inOutConnectors = inOutVariableNames(blockVariables)
 
-  const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
-  const [validBlockNameValue, setValidBlockNameValue] = useState<string>(blockNameValue)
+  const standalone = useMemo(
+    () =>
+      view.geometry === undefined
+        ? standaloneBlockLayout({
+            id: nodeId ?? 'preview',
+            type: 'block',
+            position: { x: 0, y: 0 },
+            data,
+            width,
+            height,
+          })
+        : undefined,
+    [view.geometry, nodeId, data, width, height],
+  )
+  const palette = standalone === undefined ? view.palette : themePalette
+
+  const [typeValue, setTypeValue] = useState<string>('')
+  const [editingType, setEditingType] = useState<boolean>(() => blockType === 'generic' && !disabled)
   const [wrongName, setWrongName] = useState<boolean>(false)
-
-  const inputNameRef = useRef<HTMLInputElement>(null)
-  const [inputNameFocus, setInputNameFocus] = useState<boolean>(true)
-
-  /**
-   * useEffect to focus the name input when the correct block type is selected
-   */
-  useEffect(() => {
-    if (disabled) return
-
-    if (inputNameRef.current) {
-      switch (blockType) {
-        case 'generic':
-          inputNameRef.current.focus()
-          break
-        default:
-          break
-      }
-    }
-  }, [])
-
-  /**
-   * In case the block is disabled, we need to set the block name value to the block name
-   */
-  useEffect(() => {
-    if (disabled) {
-      setBlockNameValue(blockName)
-      return
-    }
-  }, [data])
 
   const resolveLibraryBlock = (blockNameValue: string, libraries: LibraryState['libraries'], pous: PLCPou[]) => {
     const userLibrary = libraries.user.find((lib) => lib.name.toLowerCase() === blockNameValue.toLowerCase())
@@ -159,9 +145,7 @@ export const BlockNodeElement = <T extends object>({
     }
   }
 
-  const handleNameInputOnBlur = () => {
-    setInputNameFocus(false)
-
+  const handleTypeCommit = (blockNameValue: string) => {
     if (blockNameValue === blockName) {
       return
     }
@@ -171,7 +155,6 @@ export const BlockNodeElement = <T extends object>({
     const libraryBlock = resolveLibraryBlock(blockNameValue, libraries, pous)
 
     if (!libraryBlock) {
-      setBlockNameValue(validBlockNameValue)
       toast({ title: 'Invalid name', description: 'The name could not be changed', variant: 'fail' })
       return
     }
@@ -349,74 +332,47 @@ export const BlockNodeElement = <T extends object>({
     setWrongName(false)
   }
 
-  const handleFocusInput = (e: FocusEvent<HTMLInputElement, Element>) => {
-    e.target.select()
-    setValidBlockNameValue(blockNameValue)
-    setInputNameFocus(true)
-  }
-
   return (
-    <div
-      className={cn(
-        'relative flex flex-col rounded-md border border-neutral-850 bg-white text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
-        {
-          'hover:border-transparent hover:ring-2 hover:ring-brand': !disabled,
-          'border-transparent ring-1 ring-red-500': wrongVariable || wrongName,
-          'border-transparent ring-2 ring-brand': selected,
-        },
-      )}
-      style={{
-        width: width,
-        height: height,
-        transform: `scale(${scale})`,
-      }}
-    >
-      <InputWithRef
-        id={`block-input-name${nodeId ? `-${nodeId}` : ''}`}
-        value={blockNameValue}
-        onChange={(e) => setBlockNameValue(e.target.value)}
-        maxLength={20}
-        placeholder='???'
-        className='w-full bg-transparent p-1 text-center text-xs outline-none'
-        disabled={disabled}
-        onFocus={handleFocusInput}
-        onBlur={() => inputNameFocus && handleNameInputOnBlur()}
-        onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
-        ref={inputNameRef}
+    <div style={{ transform: `scale(${scale})`, transformOrigin: 'center' }}>
+      <LadderBlockVisual
+        nodeId={nodeId ?? 'preview'}
+        width={standalone?.width ?? width}
+        height={standalone?.height ?? height}
+        labels={standalone?.labels ?? view.labels}
+        palette={palette}
+        typeName={blockType === 'generic' ? '' : blockName}
+        instanceName={instance?.name ?? ''}
+        showInstance={instance !== undefined}
+        instanceColour={instance?.colour}
+        inOutPins={inOutConnectors}
+        borderColour={energized ? palette.on : palette.wire}
+        energized={energized}
+        selected={selected}
+        invalid={wrongVariable || wrongName}
+        interactive={!disabled}
+        instanceSlot={instance?.slot}
+        typeSlot={(label) => (
+          <LadderNameField
+            label={label}
+            text={blockType === 'generic' ? '' : blockName}
+            testId={`ld-block-type-${nodeId ?? 'preview'}`}
+            palette={palette}
+            fill={palette.text}
+            editable={!disabled && !isDebuggerVisible}
+            editing={editingType}
+            onEditingChange={setEditingType}
+            value={typeValue}
+            onValueChange={setTypeValue}
+            onCommit={handleTypeCommit}
+          />
+        )}
       />
-      {/*
-       * Labels are placed from the pin they name, looked up BY ID rather than by position in the
-       * list. The two can disagree: a rung saved before VAR_IN_OUT became input-only still holds
-       * the in-out's output-side pin, so indexing the persisted array by the derived list's index
-       * would draw every real output label one slot too high until the block is updated.
-       */}
-      {inputConnectors.map((connector, index) => {
-        const handle = (data as BasicNodeData).inputHandles?.find((h) => h.id === connector)
-        const top =
-          (handle?.relPosition?.y ?? DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
-        return (
-          <div key={index} className='absolute text-xs' style={{ top, left: 6 }}>
-            {connector}
-            {inOutConnectors.has(connector) && <InOutPinMarker />}
-          </div>
-        )
-      })}
-      {outputConnectors.map((connector, index) => {
-        const handle = (data as BasicNodeData).outputHandles?.find((h) => h.id === connector)
-        const top =
-          (handle?.relPosition?.y ?? DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
-        return (
-          <div key={index} className='absolute text-xs' style={{ top, right: 6 }}>
-            {connector}
-          </div>
-        )
-      })}
     </div>
   )
 }
 
 const Block = <T extends object>(block: BlockProps<T>) => {
-  const { data, dragging, height, width, selected, id } = block
+  const { data, height, width, selected, id } = block
   const store = useOpenPLCStoreApi()
 
   const pouName = useBoundPou()
@@ -430,11 +386,27 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     setHandleBranches: setHandleBranchesBlock,
   } = useOpenPLCStore((state) => state.ladderFlowActions)
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
-  const documentation = getBlockDocumentation(data.variant as newBlockVariant)
+  const isDebuggerVisible = useIsDebuggerVisible()
+  const powered = useLadderBlockPowered(id)
+  const { palette } = useLadderNodeView(id)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
+  const [editingInstance, setEditingInstance] = useState<boolean>(false)
+
+  const setDraggable = (draggable: (nodeData: Record<string, unknown>) => boolean) => {
+    const { ladderFlows } = store.getState()
+    const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, { nodeId: id })
+    if (!node || !rung) return
+    updateNode({
+      editorName: pouName,
+      nodeId: node.id,
+      rungId: rung.id,
+      node: { ...node, draggable: draggable(node.data) },
+      transient: true,
+    })
+  }
 
   // Output-side pins this block still carries for an in-out parameter — empty for every rung
   // saved since in-outs became input-only.
@@ -493,16 +465,6 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     return names
   }, [connectedOutputKey, data.connectedVariables])
 
-  const inputVariableRef = useRef<
-    HTMLTextAreaElement & {
-      blur: ({ submit }: { submit?: boolean }) => void
-      isFocused: boolean
-    }
-  >(null)
-
-  /**
-   * useEffect to focus the variable input when the correct block type is selected
-   */
   const hasCreatedRef = useRef(false)
 
   useEffect(() => {
@@ -512,26 +474,16 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if (inputVariableRef.current && !hasCreatedRef.current) {
-      switch (blockType) {
-        case 'function-block': {
-          if (!data.variable || data.variable.name === '') {
-            const { project, ladderFlows } = store.getState()
-            const { variables } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
-              nodeId: id,
-            })
-            const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
+    if (hasCreatedRef.current || blockType !== 'function-block') return
+    if (!data.variable || data.variable.name === '') {
+      const { project, ladderFlows } = store.getState()
+      const { variables } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
+        nodeId: id,
+      })
+      const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
 
-            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`, true)
-            hasCreatedRef.current = true
-            return
-          }
-          inputVariableRef.current.focus()
-          return
-        }
-        default:
-          break
-      }
+      handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`, true)
+      hasCreatedRef.current = true
     }
   }, [store, data])
 
@@ -901,6 +853,13 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     }
   }
 
+  const showsInstance = blockType !== 'function' && blockType !== 'generic'
+  const handleY = (handleId: string): number | undefined => {
+    const handle = data.handles.find((candidate) => candidate.id === handleId)
+    const y: unknown = handle?.relPosition?.y
+    return typeof y === 'number' ? y : undefined
+  }
+
   return (
     <div
       className={cn('relative', {
@@ -927,90 +886,45 @@ const Block = <T extends object>(block: BlockProps<T>) => {
         </div>
       )}
 
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger>
-            <BlockNodeElement
-              nodeId={id}
-              data={data}
-              height={height ?? DEFAULT_BLOCK_HEIGHT}
-              width={width ?? DEFAULT_BLOCK_WIDTH}
-              selected={selected ?? false}
-              wrongVariable={wrongVariable}
-            />
-          </TooltipTrigger>
-          {!dragging && blockType !== 'generic' && documentation && (
-            <TooltipContent side='right' className='text-xs'>
-              <span className='whitespace-pre-line'>{documentation}</span>
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </TooltipProvider>
-      <div
-        className='absolute -top-[10px]'
-        style={{
-          width: width ?? DEFAULT_BLOCK_WIDTH,
-        }}
-      >
-        {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
-          <HighlightedTextArea
-            id={`block-input-variable-${id}`}
-            textAreaValue={blockVariableValue}
-            setTextAreaValue={setBlockVariableValue}
-            handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
-            onFocus={(e) => {
-              e.target.select()
-              const { ladderFlows } = store.getState()
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-                nodeId: id,
-              })
-              if (!node || !rung) return
-              // Drag-lock while typing is UI state, not an edit — transient
-              // so focusing the input never marks the flow as modified.
-              updateNode({
-                editorName: pouName,
-                nodeId: node.id,
-                rungId: rung.id,
-                node: {
-                  ...node,
-                  draggable: false,
-                },
-                transient: true,
-              })
-              return
-            }}
-            onBlur={() => {
-              const { ladderFlows } = store.getState()
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-                nodeId: id,
-              })
-              if (!node || !rung) return
-              updateNode({
-                editorName: pouName,
-                nodeId: node.id,
-                rungId: rung.id,
-                node: {
-                  ...node,
-                  draggable: node.data.draggable as boolean,
-                },
-                transient: true,
-              })
-              return
-            }}
-            inputHeight={{
-              height: 13,
-              scrollLimiter: 14,
-            }}
-            ref={inputVariableRef}
-            textAreaClassName='text-center text-xs leading-3'
-            highlightClassName='text-center text-xs leading-3'
-          />
-        )}
-      </div>
+      <BlockNodeElement
+        nodeId={id}
+        data={data}
+        height={height ?? DEFAULT_BLOCK_HEIGHT}
+        width={width ?? DEFAULT_BLOCK_WIDTH}
+        selected={selected ?? false}
+        wrongVariable={wrongVariable}
+        energized={isDebuggerVisible && powered}
+        instance={
+          showsInstance
+            ? {
+                name: data.variable?.name ?? '',
+                colour: wrongVariable ? LADDER_ERROR_COLOUR : undefined,
+                slot: (label) => (
+                  <LadderNameField
+                    label={label}
+                    text={data.variable?.name ?? ''}
+                    testId={`ld-block-instance-${id}`}
+                    palette={palette}
+                    fill={wrongVariable ? LADDER_ERROR_COLOUR : palette.text}
+                    editable={!isDebuggerVisible}
+                    editing={editingInstance}
+                    onEditingChange={setEditingInstance}
+                    value={blockVariableValue}
+                    onValueChange={setBlockVariableValue}
+                    onCommit={(value) => handleSubmitBlockVariableOnTextareaBlur(value, false)}
+                    onFocus={() => setDraggable(() => false)}
+                    onBlur={() => setDraggable((nodeData) => nodeData.draggable === true)}
+                  />
+                ),
+              }
+            : undefined
+        }
+      />
       {data.handles.map((handle, index) => (
         <CustomHandle
           key={index}
           {...handle}
+          style={ladderHandleStyle(handle)}
           // A rung saved before VAR_IN_OUT became input-only still carries the pin's output
           // side, and this list is what actually renders. Keep drawing it so the existing rung
           // wiring stays visible, but refuse NEW connections from a pin that no longer exists.
@@ -1030,6 +944,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
         outputVariables={(data.variant as BlockVariant).variables}
         connectorStartY={DEFAULT_BLOCK_CONNECTOR_Y}
         connectorOffsetY={DEFAULT_BLOCK_CONNECTOR_Y_OFFSET}
+        connectorYOf={handleY}
         blockWidth={width ?? DEFAULT_BLOCK_WIDTH}
         connectedOutputNames={connectedOutputNames}
       />

@@ -1,4 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
+import { LADDER_TYPOGRAPHY } from '@root/middleware/shared/utils/ladder-layout'
 import { memo, useEffect, useRef, useState } from 'react'
 
 import { PLCVariable } from '../../../../../middleware/shared/ports'
@@ -15,18 +16,20 @@ import { encodeForceValue, isForcedValueHigh } from '../../../../utils/variable-
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
-import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
 import { DebugValueBadge } from '../debug-value-badge'
 import { VariablesBlockAutoComplete } from './autocomplete'
-import { CustomHandle } from './handle'
+import { CustomHandle, ladderHandleStyle } from './handle'
+import { LadderNameField } from './ladder-text'
+import { LADDER_ERROR_COLOUR, LADDER_FORCED_COLOURS, useLadderNodeView } from './rung-view'
 import { getLadderPouVariablesRungNodeAndEdges, validateVariableType } from './utils'
 import { DEFAULT_VARIABLE_HEIGHT, DEFAULT_VARIABLE_WIDTH } from './utils/constants'
 import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables, VariableNode, VariableProps } from './utils/types'
+import { LadderPinVariableVisual } from './variable-visual'
 
 const VariableElement = (block: VariableProps) => {
   const store = useOpenPLCStoreApi()
-  const { id, data } = block
+  const { id, data, width, height } = block
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
@@ -36,12 +39,6 @@ const VariableElement = (block: VariableProps) => {
   const compositeKey = getCompositeKey(data.variable.name)
   const { isForced, forcedValue: forcedBoolValue, debugIndex } = useDebugValue(compositeKey)
 
-  const inputVariableRef = useRef<
-    HTMLTextAreaElement & {
-      blur: ({ submit }: { submit?: boolean }) => void
-      isFocused: boolean
-    }
-  >(null)
   const autocompleteRef = useRef<
     HTMLDivElement & {
       focus: () => void
@@ -59,6 +56,9 @@ const VariableElement = (block: VariableProps) => {
   const [forceValue, setForceValue] = useState<string>('')
 
   const [variableValue, setVariableValue] = useState(data.variable.name)
+  const [editing, setEditing] = useState<boolean>(false)
+  const { palette } = useLadderNodeView(id)
+  const placeholder = `(*${data.block.variableType.type.value}*)`
   const [inputError, setInputError] = useState<boolean>(false)
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
@@ -337,78 +337,79 @@ const VariableElement = (block: VariableProps) => {
   const variableType = getVariableType()
   const isBoolVariable = variableType?.toUpperCase() === 'BOOL'
 
+  const nameFill = (() => {
+    if (isForced) return forcedBoolValue ? LADDER_FORCED_COLOURS.high : LADDER_FORCED_COLOURS.low
+    if (inputError) return LADDER_ERROR_COLOUR
+    return isAVariable ? palette.text : palette.literal
+  })()
+
   return (
     <>
       <div
-        style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
+        className='relative'
+        style={{ width: width ?? DEFAULT_VARIABLE_WIDTH, height: height ?? DEFAULT_VARIABLE_HEIGHT }}
         onClick={isDebuggerVisible ? handleClick : undefined}
       >
-        <HighlightedTextArea
-          id={`variable-input-${id}`}
-          textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-            'text-yellow-500': !isAVariable,
-            'text-red-500': inputError,
-            'text-left placeholder:text-left': data.variant === 'output',
-            'text-right placeholder:text-right': data.variant === 'input',
-            'font-bold': isForced,
-            'text-[#80C000]': isForced && forcedBoolValue,
-            'text-[#4080FF]': isForced && !forcedBoolValue,
-          })}
-          highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-            'text-left placeholder:text-left': data.variant === 'output',
-            'text-right placeholder:text-right': data.variant === 'input',
-          })}
-          scrollableIndicatorClassName={cn({
-            '-right-3': data.variant === 'output',
-            '-left-3': data.variant === 'input',
-          })}
-          placeholder={`(*${data.block.variableType.type.value}*)`}
-          textAreaValue={variableValue}
-          setTextAreaValue={setVariableValue}
-          handleSubmit={handleSubmitVariableValueOnTextareaBlur}
-          inputHeight={{
-            height: DEFAULT_VARIABLE_HEIGHT,
-            scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
-          }}
-          ref={inputVariableRef}
-          disabled={isDebuggerVisible}
-          readOnly={isDebuggerVisible}
-          onChange={onChangeHandler}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
-            if (e.key === 'Enter' && openAutocomplete) {
-              e.preventDefault()
-              autocompleteRef.current?.triggerSubmit?.()
-              inputVariableRef.current?.blur({ submit: false })
-              return
-            }
-            setKeyPressedAtTextarea(e.key)
-          }}
-          onKeyUp={() => setKeyPressedAtTextarea('')}
-        />
-        {openAutocomplete && (
-          <div className='relative flex justify-center'>
-            <div className='absolute -bottom-1'>
-              <VariablesBlockAutoComplete
-                ref={autocompleteRef}
-                block={block}
-                blockType={'variable'}
-                valueToSearch={variableValue}
-                isOpen={openAutocomplete}
-                setIsOpen={(value) => setOpenAutocomplete(value)}
-                keyPressed={keyPressedAtTextarea}
+        <LadderPinVariableVisual
+          nodeId={id}
+          side={data.variant}
+          variableName={data.variable.name}
+          placeholder={placeholder}
+          width={width ?? DEFAULT_VARIABLE_WIDTH}
+          badge={
+            isDebuggerVisible && isAVariable ? (
+              <DebugValueBadge
+                compositeKey={compositeKey}
+                variableType={variableType}
+                position={data.variant === 'output' ? 'right' : 'left'}
               />
-            </div>
-          </div>
-        )}
-
-        {isDebuggerVisible && isAVariable && (
-          <DebugValueBadge
-            compositeKey={compositeKey}
-            variableType={variableType}
-            position={data.variant === 'output' ? 'left' : 'right'}
-          />
-        )}
+            ) : undefined
+          }
+          nameSlot={(label) => (
+            <LadderNameField
+              label={label}
+              text={data.variable.name}
+              testId={`ld-name-${id}`}
+              palette={palette}
+              fill={nameFill}
+              placeholder={placeholder}
+              placeholderOnHover
+              fontWeight={isForced ? LADDER_TYPOGRAPHY.semiboldWeight : undefined}
+              editable={!isDebuggerVisible}
+              editing={editing}
+              onEditingChange={setEditing}
+              value={variableValue}
+              onValueChange={(value) => {
+                setVariableValue(value)
+                if (editing) onChangeHandler()
+              }}
+              onCommit={handleSubmitVariableValueOnTextareaBlur}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+                if (e.key === 'Enter' && openAutocomplete) {
+                  e.preventDefault()
+                  autocompleteRef.current?.triggerSubmit?.()
+                  return true
+                }
+                setKeyPressedAtTextarea(e.key)
+                return false
+              }}
+              onKeyUp={() => setKeyPressedAtTextarea('')}
+            >
+              {openAutocomplete ? (
+                <VariablesBlockAutoComplete
+                  ref={autocompleteRef}
+                  block={block}
+                  blockType={'variable'}
+                  valueToSearch={variableValue}
+                  isOpen={openAutocomplete}
+                  setIsOpen={(value) => setOpenAutocomplete(value)}
+                  keyPressed={keyPressedAtTextarea}
+                />
+              ) : undefined}
+            </LadderNameField>
+          )}
+        />
 
         {isDebuggerVisible && contextMenuPosition && (
           <Popover.Root open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
@@ -520,7 +521,7 @@ const VariableElement = (block: VariableProps) => {
       </Modal>
 
       {data.handles.map((handle, index) => (
-        <CustomHandle key={index} {...handle} />
+        <CustomHandle key={index} {...handle} style={ladderHandleStyle(handle)} />
       ))}
     </>
   )

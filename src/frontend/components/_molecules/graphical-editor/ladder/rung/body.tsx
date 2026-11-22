@@ -19,7 +19,12 @@ import {
 } from 'react'
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
-import { pouLabelSource } from '../../../../../../middleware/shared/utils/ladder-layout'
+import {
+  labelSourceSignature,
+  type LadderLabelSource,
+  layoutRung,
+  pouLabelSource,
+} from '../../../../../../middleware/shared/utils/ladder-layout'
 import { mapsEqual, useContentStable } from '../../../../../hooks/use-content-stable'
 import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
 import { useDebugBoolValuesMap, useIsDebuggerVisible } from '../../../../../hooks/use-debug-value'
@@ -38,6 +43,12 @@ import {
 import { isLadderPlacementElement, PLACEMENT_TARGET_ATTRIBUTE } from '../../../../../utils/graphical/placement-elements'
 import { syncNodesWithVariables } from '../../../../../utils/graphical/sync-nodes-with-variables'
 import { customNodeTypes } from '../../../../_atoms/graphical-editor/ladder'
+import { ladderEdgeTypes, ladderRouteEdgeData } from '../../../../_atoms/graphical-editor/ladder/route-edge'
+import {
+  ladderDisplayNode,
+  LadderRungViewProvider,
+  useLadderThemePalette,
+} from '../../../../_atoms/graphical-editor/ladder/rung-view'
 import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
 import { getVariableRestrictionType } from '../../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
@@ -52,7 +63,7 @@ import {
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
 import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
-import { computeRungDebugStates, type RungDebugStates } from './rung-debug-states'
+import { computeRungDebugStates, poweredBlockIds, type RungDebugStates } from './rung-debug-states'
 import { isSameSelection } from './selection'
 
 /** Whether the related target or one of its ancestors is inside the ladder viewport. */
@@ -85,7 +96,8 @@ type RungBodyProps = {
   isDebuggerActive?: boolean
 }
 
-const EDGE_COLOR_TRUE = '#00FF00'
+/** Stroke width of an LD wire, and of one drawn in the energized colour. */
+const WIRE_STROKE = { normal: 1.25, on: 2 } as const
 
 const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
   deletable: false,
@@ -96,6 +108,10 @@ const PRO_OPTIONS = { hideAttribution: true }
 const NOOP = () => {}
 const PLACEMENT_EXTENT_PADDING = 50
 const PLACEMENT_SWALLOW_MS = 500
+
+/** True when two label sources draw the same location texts. */
+const sameLabelSource = (previous: LadderLabelSource, next: LadderLabelSource): boolean =>
+  labelSourceSignature(previous) === labelSourceSignature(next)
 
 const rungDebugStatesEqual = (previous: RungDebugStates | null, next: RungDebugStates | null): boolean =>
   previous !== null &&
@@ -141,26 +157,28 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     (rung?.reactFlowViewport as [number, number]) ?? [1530, 200],
   ])
 
+  const projectData = useOpenPLCStore((state) => state.project.data)
+  const labelSource = useContentStable(
+    useMemo(() => pouLabelSource(projectData, pouName), [projectData, pouName]),
+    sameLabelSource,
+  )
+  const layout = useMemo(() => layoutRung(rung, labelSource), [rung, labelSource])
+  const palette = useLadderThemePalette()
+  const rungView = useMemo(() => ({ layout, labelSource, palette }), [layout, labelSource, palette])
+
   const updateReactFlowPanelExtent = (rung: RungLadderState) => {
     const bounds = getRungNodesBounds(rung.nodes)
-    const [defaultWidth, defaultHeight] = rung.defaultBounds
-
-    if (bounds.width < defaultWidth) bounds.width = defaultWidth
-    if (bounds.height < defaultHeight) bounds.height = defaultHeight
+    const width = Math.max(bounds.width, layout.size.width)
+    const height = Math.max(bounds.height, layout.size.height)
 
     setReactFlowPanelExtent((prev) =>
-      prev[1][0] === bounds.width && prev[1][1] === bounds.height + 20
+      prev[1][0] === width && prev[1][1] === height
         ? prev
         : [
             [0, 0],
-            [bounds.width, bounds.height + 20],
+            [width, height],
           ],
     )
-    ladderFlowActions.updateReactFlowViewport({
-      editorName: pouName,
-      rungId: rungLocal.id,
-      reactFlowViewport: [bounds.width, bounds.height + 20],
-    })
   }
 
   const debugStates = useMemo(
@@ -186,40 +204,28 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const stableDebugStates = useContentStable(debugStates, rungDebugStatesEqual)
 
+  const poweredBlocks = useMemo(
+    () =>
+      stableDebugStates ? poweredBlockIds(rungLocal.nodes, rungLocal.edges, stableDebugStates.edgeStates) : undefined,
+    [rungLocal.nodes, rungLocal.edges, stableDebugStates],
+  )
+
   const styledEdges = useMemo(() => {
-    if (!stableDebugStates) {
-      return rungLocal.edges
-    }
+    const nodeById = new Map(rungLocal.nodes.map((node) => [node.id, node]))
 
-    const { edgeStates } = stableDebugStates
     return rungLocal.edges.map((edge) => {
-      if (edgeStates.get(edge.id) === true) {
-        return {
-          ...edge,
-          style: { stroke: EDGE_COLOR_TRUE, strokeWidth: 2 },
-        }
+      const energized = stableDebugStates?.edgeStates.get(edge.id) === true
+      const style = {
+        stroke: energized ? palette.on : palette.wire,
+        strokeWidth: energized ? WIRE_STROKE.on : WIRE_STROKE.normal,
       }
-
-      return edge
+      const route = ladderRouteEdgeData(layout, edge, nodeById)
+      return route === undefined ? { ...edge, style } : { ...edge, type: 'ladderRoute', style, data: route }
     })
-  }, [rungLocal.edges, stableDebugStates])
+  }, [rungLocal.nodes, rungLocal.edges, stableDebugStates, layout, palette])
 
   const styledNodes = useMemo(() => {
-    const baseNodes = !stableDebugStates
-      ? rungLocal.nodes
-      : rungLocal.nodes.map((node) => {
-          if (node.type === 'parallel') {
-            const isFlowActive = stableDebugStates.nodeInputStates.get(node.id) || false
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                isFlowActive,
-              },
-            }
-          }
-          return node
-        })
+    const baseNodes = rungLocal.nodes.map(ladderDisplayNode)
 
     if (isDebuggerActive) {
       return baseNodes.map((node) => ({
@@ -231,7 +237,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     return baseNodes
-  }, [rungLocal.nodes, stableDebugStates, isDebuggerActive])
+  }, [rungLocal.nodes, isDebuggerActive])
 
   useEffect(() => {
     setRungLocal({
@@ -243,6 +249,10 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     })
     updateReactFlowPanelExtent(rung)
   }, [rung.nodes])
+
+  useEffect(() => {
+    updateReactFlowPanelExtent(rung)
+  }, [layout])
 
   useEffect(() => {
     if (dragging || isSameSelection(rungLocal.selectedNodes, rung.selectedNodes)) return
@@ -761,47 +771,50 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
             width: reactFlowPanelExtent[1][0],
           }}
         >
-          <ReactFlowPanel
-            viewportConfig={{
-              nodeTypes: nodeTypes,
-              nodes: styledNodes,
-              edges: styledEdges,
-              nodesFocusable: false,
-              edgesFocusable: false,
-              elementsSelectable: true,
-              nodesDraggable: !isDebuggerActive,
-              nodesConnectable: !isDebuggerActive,
-              defaultEdgeOptions: DEFAULT_EDGE_OPTIONS,
+          <LadderRungViewProvider view={rungView} poweredBlockIds={poweredBlocks}>
+            <ReactFlowPanel
+              viewportConfig={{
+                nodeTypes: nodeTypes,
+                edgeTypes: ladderEdgeTypes,
+                nodes: styledNodes,
+                edges: styledEdges,
+                nodesFocusable: false,
+                edgesFocusable: false,
+                elementsSelectable: true,
+                nodesDraggable: !isDebuggerActive,
+                nodesConnectable: !isDebuggerActive,
+                defaultEdgeOptions: DEFAULT_EDGE_OPTIONS,
 
-              onInit: setReactFlowInstance,
+                onInit: setReactFlowInstance,
 
-              onNodesChange: onNodesChange,
-              onNodeClick: isDebuggerActive ? NOOP : undefined,
-              onNodesDelete: isDebuggerActive ? undefined : onNodesDelete,
-              onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,
-              onNodeDrag: isDebuggerActive ? undefined : onNodeDrag,
-              onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
-              onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
+                onNodesChange: onNodesChange,
+                onNodeClick: isDebuggerActive ? NOOP : undefined,
+                onNodesDelete: isDebuggerActive ? undefined : onNodesDelete,
+                onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,
+                onNodeDrag: isDebuggerActive ? undefined : onNodeDrag,
+                onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
+                onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
 
-              onDragEnter: onDragEnterViewport,
-              onDragLeave: onDragLeaveViewport,
-              onDragOver: onDragOver,
-              onDrop: onDrop,
+                onDragEnter: onDragEnterViewport,
+                onDragLeave: onDragLeaveViewport,
+                onDragOver: onDragOver,
+                onDrop: onDrop,
 
-              translateExtent: reactFlowPanelExtent,
-              panActivationKeyCode: null,
-              panOnDrag: false,
-              panOnScroll: false,
-              zoomActivationKeyCode: null,
-              zoomOnDoubleClick: false,
-              zoomOnPinch: false,
-              zoomOnScroll: false,
-              preventScrolling: false,
-              nodeDragThreshold: 25,
+                translateExtent: reactFlowPanelExtent,
+                panActivationKeyCode: null,
+                panOnDrag: false,
+                panOnScroll: false,
+                zoomActivationKeyCode: null,
+                zoomOnDoubleClick: false,
+                zoomOnPinch: false,
+                zoomOnScroll: false,
+                preventScrolling: false,
+                nodeDragThreshold: 25,
 
-              proOptions: PRO_OPTIONS,
-            }}
-          />
+                proOptions: PRO_OPTIONS,
+              }}
+            />
+          </LadderRungViewProvider>
         </div>
       </div>
     </div>

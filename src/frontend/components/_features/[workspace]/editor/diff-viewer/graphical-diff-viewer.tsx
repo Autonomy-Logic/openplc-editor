@@ -12,6 +12,7 @@ import { Background, ReactFlow, ReactFlowProvider } from '@xyflow/react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
+import type { RungLadderState } from '../../../../../../middleware/shared/ports/types'
 import type {
   DiffStatus,
   FlowData,
@@ -19,6 +20,14 @@ import type {
   VarDiffEntry,
 } from '../../../../../../middleware/shared/ports/version-control-port'
 import { useVersionControl } from '../../../../../../middleware/shared/providers'
+import {
+  applyRungLayout,
+  LADDER_PALETTE,
+  layoutRung,
+  pouLabelSource,
+  type RungLayout,
+} from '../../../../../../middleware/shared/utils/ladder-layout'
+import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
 import {
   EDGE_DIFF_STROKE,
@@ -26,6 +35,8 @@ import {
   ladderDiffNodeTypes,
   VAR_DIFF_COLORS,
 } from '../../../../_atoms/graphical-editor/diff'
+import { ladderEdgeTypes, ladderRouteEdgeData } from '../../../../_atoms/graphical-editor/ladder/route-edge'
+import { ladderDisplayNode, LadderRungViewProvider } from '../../../../_atoms/graphical-editor/ladder/rung-view'
 
 // ---------------------------------------------------------------------------
 // Hidden edge node types (edges to/from these are filtered out)
@@ -41,15 +52,16 @@ function prepareFlowForRender(
   flow: FlowData,
   diffMap: Map<string, DiffStatus>,
   edgeDiffMap?: Map<string, DiffStatus>,
-  isLadder?: boolean,
+  ladder?: { layout: RungLayout; wire: string },
 ) {
   const nodes: Node[] = (flow.nodes as Node[]).map((node) => ({
-    ...node,
+    ...(ladder ? ladderDisplayNode(node) : node),
     data: { ...node.data, diffStatus: diffMap.get(node.id) ?? 'unchanged', nodeType: node.type },
     draggable: false,
     selectable: false,
     connectable: false,
   }))
+  const nodeById = new Map(flow.nodes.filter(isFlowNode).map((node) => [node.id, node]))
 
   const flowNodes = flow.nodes as Node[]
   const edges: Edge[] = (flow.edges as Edge[])
@@ -61,13 +73,11 @@ function prepareFlowForRender(
     .map((edge) => {
       const edgeStatus = edgeDiffMap?.get(edge.id) ?? 'unchanged'
       const strokeColor = EDGE_DIFF_STROKE[edgeStatus]
-      return {
-        ...edge,
-        type: 'smoothstep',
-        selectable: false,
-        focusable: false,
-        style: strokeColor ? { stroke: strokeColor, strokeWidth: 2.5 } : isLadder ? { stroke: '#50545f' } : {},
-      }
+      const style = strokeColor ? { stroke: strokeColor, strokeWidth: 2.5 } : ladder ? { stroke: ladder.wire } : {}
+      const route = ladder ? ladderRouteEdgeData(ladder.layout, edge, nodeById) : undefined
+      return route
+        ? { ...edge, type: 'ladderRoute', data: route, selectable: false, focusable: false, style }
+        : { ...edge, type: 'smoothstep', selectable: false, focusable: false, style }
     })
 
   return { nodes, edges }
@@ -129,6 +139,80 @@ function VariableDiffSection({ entries, collapsible = false }: { entries: VarDif
 // Single rung cell (one ReactFlow instance)
 // ---------------------------------------------------------------------------
 
+/** The POU a graphical file holds: its file name without the extension. */
+function pouNameOf(filePath: string): string {
+  const fileName = filePath.split('/').pop() ?? ''
+  const dot = fileName.lastIndexOf('.')
+  return dot > 0 ? fileName.slice(0, dot) : fileName
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+/** True for a serialised flow node: an id, a numeric position and a data record. */
+function isFlowNode(value: unknown): value is Node {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    isRecord(value.position) &&
+    typeof value.position.x === 'number' &&
+    typeof value.position.y === 'number' &&
+    isRecord(value.data)
+  )
+}
+
+/** True for a serialised flow edge: an id, a source and a target. */
+function isFlowEdge(value: unknown): value is Edge {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.source === 'string' &&
+    typeof value.target === 'string'
+  )
+}
+
+/** A serialised LD rung as the layout engine reads it; nodes and edges that are not well formed are left out. */
+function rungOf(flow: FlowData): RungLadderState {
+  return {
+    id: 'id' in flow && typeof flow.id === 'string' ? flow.id : '',
+    comment: '',
+    defaultBounds: [0, 0],
+    reactFlowViewport: [0, 0],
+    selectedNodes: [],
+    nodes: flow.nodes.filter(isFlowNode),
+    edges: flow.edges.filter(isFlowEdge),
+  }
+}
+
+/** One side of a changed LD rung, laid out by the editor's engine with the project's current variables, and drawn. */
+function LadderRungCell({
+  flow,
+  filePath,
+  ...cell
+}: Omit<Parameters<typeof RungCell>[0], 'flow' | 'ladder' | 'isLadder'> & { flow: FlowData; filePath: string }) {
+  const projectData = useOpenPLCStore((state) => state.project.data)
+  const labelSource = useMemo(() => pouLabelSource(projectData, pouNameOf(filePath)), [projectData, filePath])
+  const palette = cell.isDark ? LADDER_PALETTE.dark : LADDER_PALETTE.light
+  const laidOut = useMemo(() => {
+    const rung = rungOf(flow)
+    const layout = layoutRung(rung, labelSource)
+    return { layout, flow: { ...flow, nodes: applyRungLayout(rung, layout).nodes } }
+  }, [flow, labelSource])
+  const view = useMemo(() => ({ layout: laidOut.layout, labelSource, palette }), [laidOut, labelSource, palette])
+
+  return (
+    <LadderRungViewProvider view={view}>
+      <RungCell
+        {...cell}
+        flow={laidOut.flow}
+        height={laidOut.layout.size.height}
+        minWidth={laidOut.layout.size.width}
+        ladder={{ layout: laidOut.layout, wire: palette.wire }}
+        isLadder
+      />
+    </LadderRungViewProvider>
+  )
+}
+
 function RungCell({
   flow,
   diffMap,
@@ -139,6 +223,7 @@ function RungCell({
   minWidth,
   className,
   isLadder,
+  ladder,
 }: {
   flow: FlowData | null
   diffMap: Map<string, DiffStatus>
@@ -149,15 +234,14 @@ function RungCell({
   minWidth?: number
   className?: string
   isLadder?: boolean
+  ladder?: { layout: RungLayout; wire: string }
 }) {
   const { nodes, edges } = useMemo(
-    () => (flow ? prepareFlowForRender(flow, diffMap, edgeDiffMap, isLadder) : { nodes: [], edges: [] }),
-    [flow, diffMap, edgeDiffMap, isLadder],
+    () => (flow ? prepareFlowForRender(flow, diffMap, edgeDiffMap, ladder) : { nodes: [], edges: [] }),
+    [flow, diffMap, edgeDiffMap, ladder],
   )
 
-  // Block labels are rendered with `-top-[16px]` absolute positioning, so we
-  // need extra top padding in the ladder cell to keep them visible.
-  const ladderTopPadding = isLadder ? 20 : 0
+  const ladderTopPadding = isLadder ? 4 : 0
 
   // FBD: render at natural scale (zoom 1) and scroll, mirroring the editable FBD
   // editor (which renders nodes at their saved positions, no fitView). fitView
@@ -203,6 +287,7 @@ function RungCell({
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
+            edgeTypes={isLadder ? ladderEdgeTypes : undefined}
             fitView={false}
             defaultViewport={fbd?.viewport}
             panOnDrag={false}
@@ -297,7 +382,7 @@ export function GraphicalDiffViewer({
         )}
 
         {changedIndexes.map((i) => {
-          const { original, current, originalHeight, currentHeight, originalWidth, currentWidth } = flows[i]
+          const { original, current, originalHeight, currentHeight } = flows[i]
           const rungEdgeDiff = edgeDiffMaps[i]
 
           return (
@@ -314,14 +399,13 @@ export function GraphicalDiffViewer({
                         <div className='bg-red-500/5 px-2 py-0.5 text-[9px] font-medium text-red-400 dark:text-red-500'>
                           {originalLabel}
                         </div>
-                        <RungCell
+                        <LadderRungCell
                           flow={original}
+                          filePath={filePath}
                           diffMap={nodeDiffMaps.original}
                           nodeTypes={nodeTypes as Record<string, React.ComponentType<NodeProps>>}
                           isDark={isDark}
                           height={originalHeight}
-                          minWidth={originalWidth}
-                          isLadder
                         />
                       </>
                     ) : (
@@ -336,14 +420,13 @@ export function GraphicalDiffViewer({
                           {currentLabel}
                         </div>
                       )}
-                      <RungCell
+                      <LadderRungCell
                         flow={current}
+                        filePath={filePath}
                         diffMap={nodeDiffMaps.current}
                         nodeTypes={nodeTypes as Record<string, React.ComponentType<NodeProps>>}
                         isDark={isDark}
                         height={currentHeight}
-                        minWidth={currentWidth}
-                        isLadder
                       />
                     </>
                   ) : (
