@@ -27,6 +27,7 @@ export {
 } from './runtime-license-keys'
 export {
   classifyPublicRuntimeLicense,
+  createInFlightByKey,
   lookupRuntimeLicenses,
   MAX_RUNTIME_LICENSE_BYTES,
   readRuntimeHardwareId,

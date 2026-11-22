@@ -124,6 +124,27 @@ describe('the licence badge on each vPLC row', () => {
     expect(rowBadge('palletizer')).toBeNull()
   })
 
+  it('hides the badge of a vPLC that stopped since it was read', async () => {
+    render(<OrchestratorsList />)
+    await waitFor(() => expect(rowBadge('filler')).toBe('GPLv3'))
+    listOrchestrators.mockResolvedValue([
+      {
+        id: 'edge-1',
+        agentId: 'agent-1',
+        name: 'shop-floor-01',
+        description: '',
+        devices: [
+          { id: 'vplc-commercial', name: 'mixer', status: 'online', active: true },
+          { id: 'vplc-gpl', name: 'filler', status: 'offline', active: false },
+        ],
+      },
+    ])
+    await act(async () => screen.getByRole('button', { name: 'Refresh Edge Devices' }).click())
+    await waitFor(() => expect(screen.getByText('filler').parentElement?.className).toContain('cursor-not-allowed'))
+    expect(rowBadge('filler')).toBeNull()
+    expect(rowBadge('mixer')).toBe('Commercial')
+  })
+
   it('reads the rows again once the connected runtime licence check settles', async () => {
     render(<OrchestratorsList />)
     await waitFor(() => expect(rowBadge('mixer')).toBe('Commercial'))

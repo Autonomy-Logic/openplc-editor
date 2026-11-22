@@ -29,8 +29,9 @@ import {
 } from '@root/middleware/shared/utils/licensing'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
+import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget } from '../utils/device'
+import { getErrorMessage } from '../utils/get-error-message'
 import { buildLicenseBuyUrl } from '../utils/license-buy-url'
 
 /** How often a purchase started here is checked for, and for how long. */
@@ -42,6 +43,14 @@ export function boardRuntimeLicense(outcome: DeviceLicenseState): RuntimeCommerc
   if (outcome.state === 'licensed') return 'commercial'
   if (outcome.state === 'unlicensed' || outcome.state === 'unsupported') return 'gpl'
   return null
+}
+
+/** Logs a licence delivery that rejected as a skipped check. */
+function logSkippedCheck(store: OpenPLCStore, error: unknown): void {
+  store.getState().consoleActions.addLog({
+    level: 'debug',
+    message: `Runtime license check skipped: ${getErrorMessage(error)}`,
+  })
 }
 
 export interface RuntimeCommercialLicenseView {
@@ -98,6 +107,13 @@ export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
   )
 }
 
+/**
+ * Runs the licence delivery of the connected target and keeps the resolved status in the store. The VPP
+ * licence mode is null while the manifest is read, so a vendor board never shows as unlicensed. A failed
+ * runtime check keeps what the last successful one found. The no-licence dialog waits for this
+ * connection's delivery, so a licence still on its way never shows as GPLv3. A delivery that rejects is
+ * logged at debug level as a skipped check.
+ */
 export function useRuntimeCommercialLicenseOwner(): void {
   const store = useOpenPLCStoreApi()
   const runtime = useRuntime()
@@ -133,7 +149,6 @@ export function useRuntimeCommercialLicenseOwner(): void {
   const status = useOpenPLCStore((state) => state.runtimeCommercialLicense.status)
   const awaitingPurchaseUntil = useOpenPLCStore((state) => state.runtimeCommercialLicense.awaitingPurchaseUntil)
 
-  // Null while the manifest is being read, so a vendor board never flashes as unlicensed.
   const [mode, setMode] = useState<RuntimeLicenseMode | null>(null)
   useEffect(() => {
     if (!packageId || !packages) {
@@ -194,7 +209,6 @@ export function useRuntimeCommercialLicenseOwner(): void {
         deviceActions.setRuntimeHardwareElements(id?.success ? id.elements : [])
         return
       }
-      // A failed check keeps what the last successful one found.
       if (result.status === 'failed') {
         consoleActions.addLog({ level: 'debug', message: `Runtime license check skipped: ${result.error}` })
         return
@@ -249,7 +263,6 @@ export function useRuntimeCommercialLicenseOwner(): void {
         ? `board:${packageId ?? ''}:${mode}`
         : null
 
-  // The dialog waits for this connection's delivery, so a licence still on its way never shows as GPLv3.
   const [delivered, setDelivered] = useState(false)
   useEffect(() => {
     const { deviceActions } = store.getState()
@@ -263,10 +276,20 @@ export function useRuntimeCommercialLicenseOwner(): void {
       return
     }
     let cancelled = false
-    if (deliveryKey.startsWith('runtime')) deviceActions.setRuntimeLicense(null)
+    if (deliveryKey.startsWith('runtime')) {
+      deviceActions.setRuntimeLicense(null)
+      deviceActions.setBoardRuntimeLicense({ deviceId: null, license: null })
+    } else {
+      deviceActions.setRuntimeHardwareId(null)
+      deviceActions.setRuntimeHardwareElements([])
+    }
     deviceActions.setRuntimeLicenseChecking(true)
     void deliverRef
       .current(() => !cancelled)
+      .catch((error: unknown) => {
+        if (cancelled) return
+        logSkippedCheck(store, error)
+      })
       .finally(() => {
         if (cancelled) return
         setDelivered(true)
@@ -335,6 +358,10 @@ export function useRuntimeCommercialLicenseOwner(): void {
       inFlight = true
       void deliverRef
         .current(() => !stopped)
+        .catch((error: unknown) => {
+          if (stopped) return
+          logSkippedCheck(store, error)
+        })
         .finally(() => {
           inFlight = false
         })

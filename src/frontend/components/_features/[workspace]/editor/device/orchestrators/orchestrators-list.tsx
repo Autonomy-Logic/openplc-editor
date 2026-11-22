@@ -651,7 +651,9 @@ const OrchestratorsList = () => {
                                   {device.name}
                                 </span>
                                 {device.backplaneAccess === true && <BackplaneBadge />}
-                                <RowLicenseBadge status={rowLicenses[`${orchestrator.agentId}:${device.id}`]} />
+                                {!isInactive && (
+                                  <RowLicenseBadge status={rowLicenses[`${orchestrator.agentId}:${device.id}`]} />
+                                )}
                                 <StatusBadge status={device.status} />
                                 {isConnected && (
                                   <span className='text-xs font-medium text-green-600 dark:text-green-400'>

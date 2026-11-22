@@ -414,6 +414,47 @@ describe('purchase watch', () => {
   })
 })
 
+describe('rejected deliveries', () => {
+  afterEach(() => jest.useRealTimers())
+  const logs = () => store.getState().logs.map(({ level, message }) => ({ level, message }))
+
+  it('logs a skipped check and settles when the runtime licence sync rejects on connect', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockRejectedValue(new Error('IPC channel closed'))
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.checking).toBe(false)
+    expect(logs()).toContainEqual({ level: 'debug', message: 'Runtime license check skipped: IPC channel closed' })
+  })
+
+  it('logs a skipped check when a purchase-watch sync rejects, and keeps watching', async () => {
+    setup({ license: 'gpl' })
+    const { result } = renderOwner()
+    await flush()
+    jest.useFakeTimers()
+    await act(async () => result.current.buy())
+    runtimeMock.syncRuntimeLicenses.mockRejectedValue(new Error('Edge timeout'))
+    await act(async () => jest.advanceTimersByTime(20_000))
+    await flush()
+    expect(logs()).toContainEqual({ level: 'debug', message: 'Runtime license check skipped: Edge timeout' })
+    expect(result.current.awaitingPurchase).toBe(true)
+    expect(result.current.hardwareId).toBe(ID)
+  })
+
+  it('logs nothing for a rejection that lands after the connection is gone', async () => {
+    setup()
+    let fail: (reason: unknown) => void = () => undefined
+    runtimeMock.syncRuntimeLicenses.mockReturnValue(new Promise((_resolve, reject) => (fail = reject)))
+    renderOwner()
+    await flush()
+    act(() => store.getState().deviceActions.setRuntimeConnectionStatus('disconnected'))
+    await flush()
+    await act(async () => fail(new Error('late')))
+    await flush()
+    expect(logs()).not.toContainEqual({ level: 'debug', message: 'Runtime license check skipped: late' })
+  })
+})
+
 describe('useRuntimeCommercialLicense', () => {
   it('opens the purchase page for the hardware ID and watches for the licence', async () => {
     setup({ license: 'gpl' })
@@ -495,6 +536,46 @@ describe('built-in boards', () => {
     await flush()
     expect(result.current.status).toBe('unknown')
     expect(dialog()?.open ?? false).toBe(false)
+  })
+
+  it('logs a skipped check and settles when the board licence read rejects', async () => {
+    getManifest.mockResolvedValue(manifestWith('user'))
+    refreshLicense.mockRejectedValue(new Error('IPC channel closed'))
+    setupBoard()
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.checking).toBe(false)
+    expect(result.current.status).toBe('unknown')
+    expect(store.getState().logs.map(({ level, message }) => ({ level, message }))).toContainEqual({
+      level: 'debug',
+      message: 'Runtime license check skipped: IPC channel closed',
+    })
+    expect(dialog()?.open ?? false).toBe(false)
+  })
+
+  it('drops the board ID when the target switches straight to a runtime', async () => {
+    getManifest.mockResolvedValue(manifestWith('user'))
+    setupBoard()
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.hardwareId).toBe(DEVICE_ID)
+    act(() => store.getState().modalActions.closeModal())
+
+    let finish: (value: unknown) => void = () => undefined
+    runtimeMock.syncRuntimeLicenses.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    act(() => {
+      store.getState().deviceActions.setRuntimeJwtToken('tok')
+      store.getState().deviceActions.setRuntimeConnectionStatus('connected')
+    })
+    await flush()
+    expect(store.getState().runtimeCommercialLicense.boardDeviceId).toBeNull()
+    expect(result.current.hardwareId).toBeNull()
+    expect(result.current.buyUrl).toBeNull()
+
+    await act(async () => finish(synced('gpl')))
+    await flush()
+    expect(result.current.hardwareId).toBe(ID)
+    expect(result.current.idLabel).toBe('Hardware ID')
   })
 
   it('never runs for the simulator', async () => {

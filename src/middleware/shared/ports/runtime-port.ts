@@ -132,7 +132,8 @@ export interface RuntimeLicenseRevocation {
 
 /**
  * The runtime's commercial licence as the editor verified it, and the Edge licences it uploaded.
- * `detail` says why a licence could not be confirmed when Edge could not be reached.
+ * `detail` says why a licence could not be confirmed: Edge could not be reached, or the runtime
+ * reported another hardware ID when read back after an upload.
  * `elements` are the runtime's hardware elements from `GET /api/hardware-id`, empty when unknown.
  */
 export type RuntimeLicenseSyncResult =

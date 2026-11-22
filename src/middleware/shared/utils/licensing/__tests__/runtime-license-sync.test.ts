@@ -8,6 +8,7 @@ import { canonicalRuntimeLicensePayload } from '../runtime-license-file'
 import { RUNTIME_LICENSE_PRODUCT_ID } from '../runtime-license-keys'
 import {
   classifyPublicRuntimeLicense,
+  createInFlightByKey,
   lookupRuntimeLicenses,
   MAX_RUNTIME_LICENSE_BYTES,
   readRuntimeHardwareId,
@@ -552,6 +553,78 @@ describe('syncRuntimeLicenses', () => {
       ],
       elements: ELEMENTS,
     })
+  })
+})
+
+describe('syncRuntimeLicenses read-back', () => {
+  it('reports GPLv3 when the runtime reads back another hardware ID after the upload', async () => {
+    const otherLicence = signed({ hardware_id: OTHER_ID })
+    let uploaded = false
+    const swapped = mechanisms({
+      runtimeGet: async (path) => {
+        if (path === '/api/hardware-id') return { status: 200, body: { hardwareId: ID, elements: ELEMENTS } }
+        return uploaded
+          ? { status: 200, body: { hardwareId: OTHER_ID, licenses: [otherLicence] } }
+          : { status: 200, body: { hardwareId: ID, licenses: [] } }
+      },
+      runtimePost: async () => {
+        uploaded = true
+        return { status: 200, body: {} }
+      },
+      edgePost: async () => ({ status: 200, body: envelope([signed()]) }),
+    })
+    await expect(syncRuntimeLicenses(swapped.m, KEYS)).resolves.toEqual({
+      status: 'synced',
+      hardwareId: ID,
+      license: 'gpl',
+      uploads: [{ orderId: 'cmv0a1b2c3d4e5f6g7h8i9j0', stored: true }],
+      elements: ELEMENTS,
+      detail: 'The runtime reported another hardware ID after the upload.',
+    })
+  })
+})
+
+describe('createInFlightByKey', () => {
+  it('shares one run between overlapping calls for the same key and starts a new one after it settles', async () => {
+    const shared = createInFlightByKey<string>()
+    const finishers: ((value: string) => void)[] = []
+    let runs = 0
+    const run = () =>
+      new Promise<string>((resolve) => {
+        runs += 1
+        finishers.push(resolve)
+      })
+
+    const first = shared('10.0.0.1', run)
+    const second = shared('10.0.0.1', run)
+    expect(second).toBe(first)
+    expect(runs).toBe(1)
+
+    finishers[0]('done')
+    await expect(Promise.all([first, second])).resolves.toEqual(['done', 'done'])
+
+    const third = shared('10.0.0.1', run)
+    expect(third).not.toBe(first)
+    expect(runs).toBe(2)
+    finishers[1]('again')
+    await expect(third).resolves.toBe('again')
+  })
+
+  it('runs different keys independently and frees the key after a rejection', async () => {
+    const shared = createInFlightByKey<string>()
+    let runs = 0
+    const a = shared('a', () => {
+      runs += 1
+      return Promise.reject(new Error('down'))
+    })
+    const b = shared('b', () => {
+      runs += 1
+      return Promise.resolve('b')
+    })
+    expect(runs).toBe(2)
+    await expect(a).rejects.toThrow('down')
+    await expect(b).resolves.toBe('b')
+    await expect(shared('a', () => Promise.resolve('a'))).resolves.toBe('a')
   })
 })
 

@@ -123,6 +123,7 @@ import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-ga
 import {
   BAREMETAL_RUNTIME_LICENSE_KEYS,
   BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
+  createInFlightByKey,
   LINUX_RUNTIME_LICENSE_KEYS,
   parseRuntimeLicenseDevKey,
   readRuntimeHardwareId,
@@ -180,17 +181,17 @@ import {
 } from '../../../backend/editor/utils'
 import { getDesktopWasmCompileService } from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
 import {
+  armBoardLicenceBackup,
   BoardBackupHolder,
-  restoreBoardLicence,
-  takeBoardLicenceBackup,
+  openLinkWithBackup,
+  readBoardIdentityWithBackup,
+  restoreBoardLicenceFromBackup,
 } from '../../../backend/shared/license/board-licence-backup'
-import { deriveDeviceId, generateBoardId } from '../../../backend/shared/license/device-identity'
 import {
   type DeviceIdentity,
   identityFromSources,
   inspectDeviceLicense,
   type LicenseReadWritable,
-  readBoardIdSources,
   resolveDeviceLicense,
 } from '../../../backend/shared/license/license-flow'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
@@ -601,10 +602,15 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeGetHardwareId = (_event: IpcMainInvokeEvent, ipAddress: string): Promise<RuntimeHardwareIdResult> =>
     readRuntimeHardwareId(createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress))
 
+  /** Licence syncs in flight, one per runtime address. */
+  private readonly runtimeLicenseSyncs = createInFlightByKey<RuntimeLicenseSyncResult>()
+
   handleRuntimeSyncLicenses = (_event: IpcMainInvokeEvent, ipAddress: string): Promise<RuntimeLicenseSyncResult> =>
-    syncRuntimeLicenses(
-      createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress),
-      runtimeKeysWithDevKey(LINUX_RUNTIME_LICENSE_KEYS),
+    this.runtimeLicenseSyncs(ipAddress, () =>
+      syncRuntimeLicenses(
+        createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress),
+        runtimeKeysWithDevKey(LINUX_RUNTIME_LICENSE_KEYS),
+      ),
     )
 
   handleRuntimeStartPlc = (_event: IpcMainInvokeEvent, ipAddress: string) => this.restStartPlc(ipAddress)
@@ -2600,20 +2606,15 @@ class MainProcessBridge implements MainIpcModule {
   private readonly boardLicenceBackup = new BoardBackupHolder()
 
   private async backUpBoardLicence(port: string | null | undefined): Promise<void> {
-    this.boardLicenceBackup.arm(null)
     const link = this.deviceSession.getLink()
-    const client = this.deviceClient()
-    if (!link || link.transport !== 'rtu' || !client) return
-    if (port !== undefined && port !== null && link.descriptor !== String(port)) return
-    try {
-      const backup = await takeBoardLicenceBackup(client, link.descriptor)
-      this.boardLicenceBackup.arm(backup)
-      if (backup) {
-        const kept = [backup.generatedId && 'board ID', backup.blob && 'licence'].filter(Boolean).join(' and ')
-        this.traceDeviceLink(`release ${link.descriptor}: backed up ${kept}`)
-      }
-    } catch (error) {
-      this.traceDeviceLink(`release ${link.descriptor}: backup skipped — ${getErrorMessage(error)}`)
+    const taken = await armBoardLicenceBackup(this.boardLicenceBackup, this.deviceClient(), link, port)
+    if (!taken || !link) return
+    if ('error' in taken) {
+      this.traceDeviceLink(`release ${link.descriptor}: backup skipped — ${taken.error}`)
+    } else if (taken.backup) {
+      const { generatedId, blob } = taken.backup
+      const kept = [generatedId && 'board ID', blob && 'licence'].filter(Boolean).join(' and ')
+      this.traceDeviceLink(`release ${link.descriptor}: backed up ${kept}`)
     }
   }
 
@@ -2708,7 +2709,6 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     candidates: DebugConnectionConfig[],
   ): Promise<DeviceProbeOutcome> => {
-    this.boardLicenceBackup.linkOpened()
     this.deviceLinkProbe = null
     this.tracedChannelUses.clear()
     this.traceDeviceLink(
@@ -2723,7 +2723,7 @@ class MainProcessBridge implements MainIpcModule {
       return { status: 'error', error: 'No usable serial or Modbus TCP connection was configured for this device.' }
     }
 
-    const result = await this.deviceSession.open(linkCandidates)
+    const result = await openLinkWithBackup(this.boardLicenceBackup, () => this.deviceSession.open(linkCandidates))
     const probe = this.takeDeviceLinkProbe()
     if (result.ok) return probe ?? { status: 'connected-with-firmware' }
 
@@ -2763,22 +2763,15 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     if (client.getDeviceId) {
-      const backup = this.boardLicenceBackup.usable(this.deviceSession.getLink()?.descriptor)
-      const read = await readBoardIdSources(client, () => backup?.generatedId ?? generateBoardId())
+      const port = this.deviceSession.getLink()?.descriptor
+      const read = await readBoardIdentityWithBackup(this.boardLicenceBackup, client, port)
       const bad = settle(read)
       if (bad) return bad
       const identity = identityFromSources(read.sources ?? [])
       if ('error' in identity) return { error: identity.error, retryable: false } as const
-      if (backup && identity.anchor.length > 0) {
-        this.boardLicenceBackup.consume()
-        try {
-          if (await restoreBoardLicence(client, backup, await deriveDeviceId(identity.anchor))) {
-            this.traceDeviceLink('restored the licence backed up before the upload')
-          }
-        } catch (error) {
-          this.traceDeviceLink(`licence restore skipped — ${getErrorMessage(error)}`)
-        }
-      }
+      const restore = await restoreBoardLicenceFromBackup(this.boardLicenceBackup, client, port, identity.anchor)
+      if (restore?.status === 'restored') this.traceDeviceLink('restored the licence backed up before the upload')
+      else if (restore?.status === 'failed') this.traceDeviceLink(`licence restore skipped — ${restore.error}`)
       return { identity }
     }
 

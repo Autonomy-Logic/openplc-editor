@@ -494,8 +494,16 @@ describe('licence backup across an upload (baremetal)', () => {
     expect(port.postMessage.mock.calls.at(-1)).toEqual([{ closePort: true, success }])
   }
 
-  /** The renderer's reconnect after the upload; no candidates, so only the entry bookkeeping runs. */
-  async function connect(bridge: ReturnType<typeof createBridge>) {
+  /** The renderer's reconnect after the upload, with the session's open answering `opens`. */
+  async function connect(bridge: ReturnType<typeof createBridge>, opens = true) {
+    const internals = bridge as unknown as {
+      deviceSession: { open: (...args: unknown[]) => Promise<unknown> }
+      toDeviceLinkCandidates: (...args: unknown[]) => unknown[]
+    }
+    jest.spyOn(internals, 'toDeviceLinkCandidates').mockReturnValue([{ transport: 'rtu', descriptor: PORT }])
+    jest
+      .spyOn(internals.deviceSession, 'open')
+      .mockResolvedValue(opens ? { ok: true, transport: 'rtu', descriptor: PORT } : { ok: false, attempts: [] })
     await bridge.handleDeviceConnect({} as never, [])
   }
 
@@ -579,6 +587,36 @@ describe('licence backup across an upload (baremetal)', () => {
     expectFreshId(await refreshWiped(bridge))
   })
 
+  it('keeps the backup across a connect that fails, for the retry that opens', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, true)
+    await connect(bridge, false)
+    await connect(bridge)
+
+    const after = await refreshWiped(bridge)
+
+    expect(after.provisionBoardId).toHaveBeenCalledWith(GENERATED)
+    expect(after.writeLicense).toHaveBeenCalledWith(BLOB)
+  })
+
+  it('keeps the backup when writing the licence back fails, and writes it on the next read', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, true)
+    await connect(bridge)
+    const board = wipedBoard()
+    board.writeLicense.mockResolvedValueOnce({ success: false, status: 0x82 })
+    holdClient(bridge, board)
+
+    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+
+    expect(board.writeLicense).toHaveBeenCalledTimes(2)
+    expect(board.writeLicense).toHaveBeenLastCalledWith(BLOB)
+    expectFreshId(await refreshWiped(bridge))
+  })
+
   it('drops the backup on Disconnect', async () => {
     const bridge = createBridge()
     await release(bridge)
@@ -629,5 +667,33 @@ describe('licence backup across an upload (baremetal)', () => {
 
     expect(board.getDeviceId).not.toHaveBeenCalled()
     expect(board.readLicense).not.toHaveBeenCalled()
+  })
+})
+
+describe('runtime licence sync', () => {
+  it('shares one sync between overlapping calls for the same runtime, and runs another runtime on its own', async () => {
+    const bridge = createBridge()
+    const api = (bridge as unknown as { runtimeApi: { runtimeApiExchange: (...args: unknown[]) => Promise<unknown> } })
+      .runtimeApi
+    const replies: ((reply: { status: number; body: string }) => void)[] = []
+    const exchange = jest
+      .spyOn(api, 'runtimeApiExchange')
+      .mockImplementation(() => new Promise((resolve) => replies.push(resolve)))
+
+    const first = bridge.handleRuntimeSyncLicenses({} as never, '10.0.0.5')
+    const second = bridge.handleRuntimeSyncLicenses({} as never, '10.0.0.5')
+    const other = bridge.handleRuntimeSyncLicenses({} as never, '10.0.0.6')
+
+    expect(second).toBe(first)
+    expect(exchange.mock.calls.map((call) => call[1])).toEqual(['10.0.0.5', '10.0.0.6'])
+    for (const reply of replies) reply({ status: 503, body: '' })
+    await expect(Promise.all([first, second, other])).resolves.toEqual([
+      { status: 'failed', error: 'Get runtime licenses failed: 503' },
+      { status: 'failed', error: 'Get runtime licenses failed: 503' },
+      { status: 'failed', error: 'Get runtime licenses failed: 503' },
+    ])
+
+    void bridge.handleRuntimeSyncLicenses({} as never, '10.0.0.5')
+    expect(exchange).toHaveBeenCalledTimes(3)
   })
 })

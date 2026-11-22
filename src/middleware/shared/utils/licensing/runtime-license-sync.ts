@@ -287,8 +287,34 @@ export async function syncRuntimeLicenses(
   if (!again.ok) {
     return { status: 'failed', error: `License uploaded, but the runtime could not be read back: ${again.error}` }
   }
+  if (again.report.hardwareId !== hardwareId) {
+    return {
+      status: 'synced',
+      hardwareId,
+      license: 'gpl',
+      uploads,
+      elements,
+      ...withRevocation,
+      detail: 'The runtime reported another hardware ID after the upload.',
+    }
+  }
   const license = (await reportHasValidLicense(again.report, keys)) ? 'commercial' : 'gpl'
   return { status: 'synced', hardwareId, license, uploads, elements, ...withRevocation }
+}
+
+/**
+ * Runs `run` once per key at a time: a call made while the run for its key is in flight shares that
+ * run's promise, and the first call after it settles starts a new one.
+ */
+export function createInFlightByKey<T>(): (key: string, run: () => Promise<T>) => Promise<T> {
+  const inFlight = new Map<string, Promise<T>>()
+  return (key, run) => {
+    const pending = inFlight.get(key)
+    if (pending) return pending
+    const started = run().finally(() => inFlight.delete(key))
+    inFlight.set(key, started)
+    return started
+  }
 }
 
 function isSuccess(reply: RawHttpReply): boolean {

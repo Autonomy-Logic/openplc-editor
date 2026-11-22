@@ -6,8 +6,13 @@
 
 import { LIC_STATUS_SUCCESS } from '../debug/license-blob'
 import type { DebugDeviceIdResult, DebugLicenseReadResult } from '../debug/types'
-import { deriveDeviceId } from './device-identity'
-import { checkLicenseBlobStructure, type LicenseReadWritable } from './license-flow'
+import { deriveDeviceId, generateBoardId } from './device-identity'
+import {
+  type BoardIdentityChannel,
+  checkLicenseBlobStructure,
+  type LicenseReadWritable,
+  readBoardIdSources,
+} from './license-flow'
 
 /** How long a backup stays usable after it was taken. */
 export const BOARD_BACKUP_TTL_MS = 15 * 60 * 1000
@@ -56,20 +61,39 @@ export async function takeBoardLicenceBackup(
 }
 
 /**
+ * What a restore did: `restored` wrote the licence back; `skipped` is a definitive no (no licence kept,
+ * another board, a store that still holds a licence, a board that cannot store one); `failed` is a
+ * transport error, after which the backup is worth another try.
+ */
+export type BoardRestoreVerdict =
+  | { status: 'restored' }
+  | { status: 'skipped'; reason: 'no-licence' | 'other-board' | 'store-in-use' | 'unsupported' }
+  | { status: 'failed'; error: string }
+
+/**
  * Write the backed-up licence back when the board answers with the same device ID
- * and an empty or corrupt store. Returns whether a write was made; the caller's
- * licence flow then reads the blob back and verifies it.
+ * and an empty or corrupt store. The caller's licence flow then reads the blob back
+ * and verifies it. Never throws.
  */
 export async function restoreBoardLicence(
   transport: LicenseReadWritable,
   backup: BoardLicenceBackup,
   deviceId: string,
-): Promise<boolean> {
-  if (!backup.blob || backup.deviceId !== deviceId) return false
-  const stored = await transport.readLicense()
-  if (!stored.success || !(stored.empty || stored.corrupt)) return false
-  const write = await transport.writeLicense(backup.blob)
-  return write.success && !write.unsupported
+): Promise<BoardRestoreVerdict> {
+  if (!backup.blob) return { status: 'skipped', reason: 'no-licence' }
+  if (backup.deviceId !== deviceId) return { status: 'skipped', reason: 'other-board' }
+  try {
+    const stored = await transport.readLicense()
+    if (stored.unsupported) return { status: 'skipped', reason: 'unsupported' }
+    if (!stored.success) return { status: 'failed', error: stored.error ?? 'the licence store could not be read' }
+    if (!(stored.empty || stored.corrupt)) return { status: 'skipped', reason: 'store-in-use' }
+    const write = await transport.writeLicense(backup.blob)
+    if (write.unsupported) return { status: 'skipped', reason: 'unsupported' }
+    if (!write.success) return { status: 'failed', error: write.error ?? 'the licence could not be written' }
+    return { status: 'restored' }
+  } catch (error) {
+    return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
+  }
 }
 
 /**
@@ -93,7 +117,7 @@ export class BoardBackupHolder {
     else this.clear()
   }
 
-  /** A link is opening; only the first one after a successful upload keeps the backup. */
+  /** A link opened; only the first one after a successful upload keeps the backup. */
   linkOpened(): void {
     if (this.backup && this.phase === 'uploaded') this.phase = 'linked'
     else this.clear()
@@ -121,4 +145,77 @@ export class BoardBackupHolder {
     this.backup = null
     this.phase = 'armed'
   }
+}
+
+/** The held link as the backup coordinator needs it. */
+export interface BoardLinkInfo {
+  transport: string
+  descriptor: string
+}
+
+/**
+ * Arm `holder` for the upload that follows the release of `port`: with a backup of the board on `link`
+ * when that link is the serial link on `port` (any port when `port` is absent), else with none. Returns
+ * the backup taken, null when none applies, or the read error. Never throws.
+ */
+export async function armBoardLicenceBackup(
+  holder: BoardBackupHolder,
+  channel: BoardBackupChannel | null,
+  link: BoardLinkInfo | null,
+  port: string | null | undefined,
+  now: number = Date.now(),
+): Promise<{ backup: BoardLicenceBackup | null } | { error: string } | null> {
+  holder.arm(null)
+  if (!link || link.transport !== 'rtu' || !channel) return null
+  if (port !== undefined && port !== null && link.descriptor !== String(port)) return null
+  try {
+    const backup = await takeBoardLicenceBackup(channel, link.descriptor, now)
+    holder.arm(backup)
+    return { backup }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** Open a link through `open` and report it to `holder` only once it opened, so a failed attempt keeps the backup. */
+export async function openLinkWithBackup<T extends { ok: boolean }>(
+  holder: BoardBackupHolder,
+  open: () => Promise<T>,
+): Promise<T> {
+  const result = await open()
+  if (result.ok) holder.linkOpened()
+  return result
+}
+
+/**
+ * Read the board's ID sources on the link on `port`. A board that reports none is given the backed-up
+ * generated ID when a backup is usable, else a new one.
+ */
+export async function readBoardIdentityWithBackup(
+  holder: BoardBackupHolder,
+  channel: BoardIdentityChannel,
+  port: string | null | undefined,
+  now: number = Date.now(),
+): Promise<DebugDeviceIdResult> {
+  const backup = holder.usable(port, now)
+  return readBoardIdSources(channel, () => backup?.generatedId ?? generateBoardId())
+}
+
+/**
+ * Write the backed-up licence back to the board with identity `anchor` on the link on `port`. The
+ * backup is dropped after a restore or a definitive no, and kept within its TTL after a transport
+ * error. Returns null when no backup applies.
+ */
+export async function restoreBoardLicenceFromBackup(
+  holder: BoardBackupHolder,
+  transport: LicenseReadWritable,
+  port: string | null | undefined,
+  anchor: Uint8Array,
+  now: number = Date.now(),
+): Promise<BoardRestoreVerdict | null> {
+  const backup = holder.usable(port, now)
+  if (!backup || anchor.length === 0) return null
+  const verdict = await restoreBoardLicence(transport, backup, await deriveDeviceId(anchor))
+  if (verdict.status !== 'failed') holder.consume()
+  return verdict
 }
