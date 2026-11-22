@@ -1,0 +1,3321 @@
+{
+  "description": "Today's layout output (geometry projection) for the corpus rungs whose saved geometry it does not reproduce: ld-corpus-imported/main_ld rungs 1 and 2 keep the coordinates of their e2e fixture source (first contact at x 58; today's layout puts it at x 68). Recorded from updateDiagramElementsPosition before the move; never regenerate.",
+  "rungs": {
+    "ld-corpus-imported/main_ld/rung 1/as-saved": {
+      "nodes": [
+        {
+          "key": "left-rail",
+          "type": "powerRail",
+          "position": {
+            "x": 0,
+            "y": 30
+          },
+          "width": 3,
+          "height": 40,
+          "measured": {
+            "width": 3,
+            "height": 40
+          },
+          "handles": [
+            {
+              "id": "left-rail",
+              "position": "right",
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "id": "left-rail",
+              "position": "right",
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": null,
+          "outputConnector": {
+            "id": "left-rail",
+            "position": "right",
+            "glbPosition": {
+              "x": 3,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "style": {
+              "top": 20,
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9",
+          "type": "contact",
+          "position": {
+            "x": 68,
+            "y": 38
+          },
+          "width": 24,
+          "height": 24,
+          "measured": {
+            "width": 24,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 68,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 92,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 68,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 92,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 68,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 92,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 24,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa",
+          "type": "contact",
+          "position": {
+            "x": 182,
+            "y": 38
+          },
+          "width": 24,
+          "height": 24,
+          "measured": {
+            "width": 24,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 182,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 206,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 182,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 206,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 182,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 206,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 24,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "CONTACT_e2e-ld-tof0-q",
+          "type": "contact",
+          "position": {
+            "x": 296,
+            "y": 38
+          },
+          "width": 24,
+          "height": 24,
+          "measured": {
+            "width": 24,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 296,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 320,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 296,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 320,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 296,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 320,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 24,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191",
+          "type": "coil",
+          "position": {
+            "x": 410,
+            "y": 38
+          },
+          "width": 28,
+          "height": 24,
+          "measured": {
+            "width": 28,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 410,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 438,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 28,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 410,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 438,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 28,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 410,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 438,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 28,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "right-rail",
+          "type": "powerRail",
+          "position": {
+            "x": 548,
+            "y": 30
+          },
+          "width": 3,
+          "height": 40,
+          "measured": {
+            "width": 3,
+            "height": 40
+          },
+          "handles": [
+            {
+              "id": "right-rail",
+              "position": "left",
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "right-rail",
+              "position": "left",
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "id": "right-rail",
+            "position": "left",
+            "glbPosition": {
+              "x": 297,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "style": {
+              "top": 20,
+              "left": -3
+            }
+          },
+          "outputConnector": null,
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_left-rail_CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9__left-rail_input",
+          "source": "left-rail",
+          "target": "CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9",
+          "sourceHandle": "left-rail",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9_CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa__output_input",
+          "source": "CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9",
+          "target": "CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa",
+          "sourceHandle": "output",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa_CONTACT_e2e-ld-tof0-q__output_input",
+          "source": "CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa",
+          "target": "CONTACT_e2e-ld-tof0-q",
+          "sourceHandle": "output",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_CONTACT_e2e-ld-tof0-q_COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191__output_input",
+          "source": "CONTACT_e2e-ld-tof0-q",
+          "target": "COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191",
+          "sourceHandle": "output",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191_right-rail__output_right-rail",
+          "source": "COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191",
+          "target": "right-rail",
+          "sourceHandle": "output",
+          "targetHandle": "right-rail"
+        }
+      ]
+    },
+    "ld-corpus-imported/main_ld/rung 1/cleared": {
+      "nodes": [
+        {
+          "key": "left-rail",
+          "type": "powerRail",
+          "position": {
+            "x": 0,
+            "y": 30
+          },
+          "width": 3,
+          "height": 40,
+          "measured": {
+            "width": 3,
+            "height": 40
+          },
+          "handles": [
+            {
+              "id": "left-rail",
+              "position": "right",
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "id": "left-rail",
+              "position": "right",
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": null,
+          "outputConnector": {
+            "id": "left-rail",
+            "position": "right",
+            "glbPosition": {
+              "x": 3,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "style": {
+              "top": 20,
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9",
+          "type": "contact",
+          "position": {
+            "x": 68,
+            "y": 38
+          },
+          "width": 24,
+          "height": 24,
+          "measured": {
+            "width": 24,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 68,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 92,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 68,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 92,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 68,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 92,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 24,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa",
+          "type": "contact",
+          "position": {
+            "x": 182,
+            "y": 38
+          },
+          "width": 24,
+          "height": 24,
+          "measured": {
+            "width": 24,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 182,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 206,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 182,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 206,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 182,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 206,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 24,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "CONTACT_e2e-ld-tof0-q",
+          "type": "contact",
+          "position": {
+            "x": 296,
+            "y": 38
+          },
+          "width": 24,
+          "height": 24,
+          "measured": {
+            "width": 24,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 296,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 320,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 296,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 320,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 296,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 320,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 24,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191",
+          "type": "coil",
+          "position": {
+            "x": 410,
+            "y": 38
+          },
+          "width": 28,
+          "height": 24,
+          "measured": {
+            "width": 28,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 410,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 438,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 28,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 410,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 438,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 28,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 410,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 438,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 28,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "right-rail",
+          "type": "powerRail",
+          "position": {
+            "x": 548,
+            "y": 30
+          },
+          "width": 3,
+          "height": 40,
+          "measured": {
+            "width": 3,
+            "height": 40
+          },
+          "handles": [
+            {
+              "id": "right-rail",
+              "position": "left",
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "right-rail",
+              "position": "left",
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "id": "right-rail",
+            "position": "left",
+            "glbPosition": {
+              "x": 297,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "style": {
+              "top": 20,
+              "left": -3
+            }
+          },
+          "outputConnector": null,
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_left-rail_CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9__left-rail_input",
+          "source": "left-rail",
+          "target": "CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9",
+          "sourceHandle": "left-rail",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9_CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa__output_input",
+          "source": "CONTACT_b107f102-b43e-49bc-85cb-f801679d42e9",
+          "target": "CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa",
+          "sourceHandle": "output",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa_CONTACT_e2e-ld-tof0-q__output_input",
+          "source": "CONTACT_68a5bc7e-9531-4a18-a96b-b474cdb4a5fa",
+          "target": "CONTACT_e2e-ld-tof0-q",
+          "sourceHandle": "output",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_CONTACT_e2e-ld-tof0-q_COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191__output_input",
+          "source": "CONTACT_e2e-ld-tof0-q",
+          "target": "COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191",
+          "sourceHandle": "output",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191_right-rail__output_right-rail",
+          "source": "COIL_815c5baf-56a4-4e4c-a3be-24dfaec93191",
+          "target": "right-rail",
+          "sourceHandle": "output",
+          "targetHandle": "right-rail"
+        }
+      ]
+    },
+    "ld-corpus-imported/main_ld/rung 2/as-saved": {
+      "nodes": [
+        {
+          "key": "left-rail",
+          "type": "powerRail",
+          "position": {
+            "x": 0,
+            "y": 30
+          },
+          "width": 3,
+          "height": 40,
+          "measured": {
+            "width": 3,
+            "height": 40
+          },
+          "handles": [
+            {
+              "id": "left-rail",
+              "position": "right",
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "id": "left-rail",
+              "position": "right",
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": null,
+          "outputConnector": {
+            "id": "left-rail",
+            "position": "right",
+            "glbPosition": {
+              "x": 3,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "style": {
+              "top": 20,
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30",
+          "type": "contact",
+          "position": {
+            "x": 68,
+            "y": 38
+          },
+          "width": 24,
+          "height": 24,
+          "measured": {
+            "width": 24,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 68,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 92,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 68,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 92,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 68,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 92,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 24,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "BLOCK_e2e-ld-ton0",
+          "type": "block",
+          "position": {
+            "x": 257,
+            "y": 14
+          },
+          "width": 66,
+          "height": 100,
+          "measured": {
+            "width": 66,
+            "height": 100
+          },
+          "handles": [
+            {
+              "id": "IN",
+              "position": "left",
+              "glbPosition": {
+                "x": 257,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "left": 0
+              }
+            },
+            {
+              "id": "PT",
+              "position": "left",
+              "glbPosition": {
+                "x": 257,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "left": 0
+              }
+            },
+            {
+              "id": "Q",
+              "position": "right",
+              "glbPosition": {
+                "x": 323,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "right": 0
+              }
+            },
+            {
+              "id": "ET",
+              "position": "right",
+              "glbPosition": {
+                "x": 323,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "right": 0
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "IN",
+              "position": "left",
+              "glbPosition": {
+                "x": 257,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "left": 0
+              }
+            },
+            {
+              "id": "PT",
+              "position": "left",
+              "glbPosition": {
+                "x": 257,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "left": 0
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "Q",
+              "position": "right",
+              "glbPosition": {
+                "x": 323,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "right": 0
+              }
+            },
+            {
+              "id": "ET",
+              "position": "right",
+              "glbPosition": {
+                "x": 323,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "right": 0
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "IN",
+            "position": "left",
+            "glbPosition": {
+              "x": 257,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 36
+            },
+            "style": {
+              "top": 36,
+              "left": 0
+            }
+          },
+          "outputConnector": {
+            "id": "Q",
+            "position": "right",
+            "glbPosition": {
+              "x": 323,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 66,
+              "y": 36
+            },
+            "style": {
+              "top": 36,
+              "right": 0
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "BLOCK_e2e-ld-tof0",
+          "type": "block",
+          "position": {
+            "x": 563,
+            "y": 14
+          },
+          "width": 66,
+          "height": 100,
+          "measured": {
+            "width": 66,
+            "height": 100
+          },
+          "handles": [
+            {
+              "id": "IN",
+              "position": "left",
+              "glbPosition": {
+                "x": 563,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "left": 0
+              }
+            },
+            {
+              "id": "PT",
+              "position": "left",
+              "glbPosition": {
+                "x": 563,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "left": 0
+              }
+            },
+            {
+              "id": "Q",
+              "position": "right",
+              "glbPosition": {
+                "x": 629,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "right": 0
+              }
+            },
+            {
+              "id": "ET",
+              "position": "right",
+              "glbPosition": {
+                "x": 629,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "right": 0
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "IN",
+              "position": "left",
+              "glbPosition": {
+                "x": 563,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "left": 0
+              }
+            },
+            {
+              "id": "PT",
+              "position": "left",
+              "glbPosition": {
+                "x": 563,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "left": 0
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "Q",
+              "position": "right",
+              "glbPosition": {
+                "x": 629,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "right": 0
+              }
+            },
+            {
+              "id": "ET",
+              "position": "right",
+              "glbPosition": {
+                "x": 629,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "right": 0
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "IN",
+            "position": "left",
+            "glbPosition": {
+              "x": 563,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 36
+            },
+            "style": {
+              "top": 36,
+              "left": 0
+            }
+          },
+          "outputConnector": {
+            "id": "Q",
+            "position": "right",
+            "glbPosition": {
+              "x": 629,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 66,
+              "y": 36
+            },
+            "style": {
+              "top": 36,
+              "right": 0
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "COIL_cd84dd40-4246-4690-bd12-a31972b3e05b",
+          "type": "coil",
+          "position": {
+            "x": 794,
+            "y": 38
+          },
+          "width": 28,
+          "height": 24,
+          "measured": {
+            "width": 28,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 794,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 822,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 28,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 794,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 822,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 28,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 794,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 822,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 28,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "right-rail",
+          "type": "powerRail",
+          "position": {
+            "x": 932,
+            "y": 30
+          },
+          "width": 3,
+          "height": 40,
+          "measured": {
+            "width": 3,
+            "height": 40
+          },
+          "handles": [
+            {
+              "id": "right-rail",
+              "position": "left",
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "right-rail",
+              "position": "left",
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "id": "right-rail",
+            "position": "left",
+            "glbPosition": {
+              "x": 297,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "style": {
+              "top": 20,
+              "left": -3
+            }
+          },
+          "outputConnector": null,
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "variable@BLOCK_e2e-ld-ton0::PT::input",
+          "type": "variable",
+          "position": {
+            "x": 147,
+            "y": 74
+          },
+          "width": 80,
+          "height": 32,
+          "measured": {
+            "width": 80,
+            "height": 32
+          },
+          "handles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 307,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 80,
+                "y": 16
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 307,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 80,
+                "y": 16
+              }
+            }
+          ],
+          "inputConnector": null,
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 307,
+              "y": 90
+            },
+            "relPosition": {
+              "x": 80,
+              "y": 16
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "variable@BLOCK_e2e-ld-ton0::ET::output",
+          "type": "variable",
+          "position": {
+            "x": 353,
+            "y": 74
+          },
+          "width": 80,
+          "height": 32,
+          "measured": {
+            "width": 80,
+            "height": 32
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 353,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 16
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 353,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 16
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 353,
+              "y": 90
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 16
+            }
+          },
+          "outputConnector": null,
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "variable@BLOCK_e2e-ld-tof0::PT::input",
+          "type": "variable",
+          "position": {
+            "x": 453,
+            "y": 74
+          },
+          "width": 80,
+          "height": 32,
+          "measured": {
+            "width": 80,
+            "height": 32
+          },
+          "handles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 613,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 80,
+                "y": 16
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 613,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 80,
+                "y": 16
+              }
+            }
+          ],
+          "inputConnector": null,
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 613,
+              "y": 90
+            },
+            "relPosition": {
+              "x": 80,
+              "y": 16
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "variable@BLOCK_e2e-ld-tof0::ET::output",
+          "type": "variable",
+          "position": {
+            "x": 659,
+            "y": 74
+          },
+          "width": 80,
+          "height": 32,
+          "measured": {
+            "width": 80,
+            "height": 32
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 659,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 16
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 659,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 16
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 659,
+              "y": 90
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 16
+            }
+          },
+          "outputConnector": null,
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_left-rail_CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30__left-rail_input",
+          "source": "left-rail",
+          "target": "CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30",
+          "sourceHandle": "left-rail",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30_BLOCK_e2e-ld-ton0__output_IN",
+          "source": "CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30",
+          "target": "BLOCK_e2e-ld-ton0",
+          "sourceHandle": "output",
+          "targetHandle": "IN"
+        },
+        {
+          "id": "e_COIL_cd84dd40-4246-4690-bd12-a31972b3e05b_right-rail__output_right-rail",
+          "source": "COIL_cd84dd40-4246-4690-bd12-a31972b3e05b",
+          "target": "right-rail",
+          "sourceHandle": "output",
+          "targetHandle": "right-rail"
+        },
+        {
+          "id": "e_BLOCK_e2e-ld-ton0_BLOCK_e2e-ld-tof0__Q_IN",
+          "source": "BLOCK_e2e-ld-ton0",
+          "target": "BLOCK_e2e-ld-tof0",
+          "sourceHandle": "Q",
+          "targetHandle": "IN"
+        },
+        {
+          "id": "e_BLOCK_e2e-ld-tof0_COIL_cd84dd40-4246-4690-bd12-a31972b3e05b__Q_input",
+          "source": "BLOCK_e2e-ld-tof0",
+          "target": "COIL_cd84dd40-4246-4690-bd12-a31972b3e05b",
+          "sourceHandle": "Q",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_variable@BLOCK_e2e-ld-ton0::PT::input_BLOCK_e2e-ld-ton0__output_PT",
+          "source": "variable@BLOCK_e2e-ld-ton0::PT::input",
+          "target": "BLOCK_e2e-ld-ton0",
+          "sourceHandle": "output",
+          "targetHandle": "PT"
+        },
+        {
+          "id": "e_BLOCK_e2e-ld-ton0_variable@BLOCK_e2e-ld-ton0::ET::output__ET_input",
+          "source": "BLOCK_e2e-ld-ton0",
+          "target": "variable@BLOCK_e2e-ld-ton0::ET::output",
+          "sourceHandle": "ET",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_variable@BLOCK_e2e-ld-tof0::PT::input_BLOCK_e2e-ld-tof0__output_PT",
+          "source": "variable@BLOCK_e2e-ld-tof0::PT::input",
+          "target": "BLOCK_e2e-ld-tof0",
+          "sourceHandle": "output",
+          "targetHandle": "PT"
+        },
+        {
+          "id": "e_BLOCK_e2e-ld-tof0_variable@BLOCK_e2e-ld-tof0::ET::output__ET_input",
+          "source": "BLOCK_e2e-ld-tof0",
+          "target": "variable@BLOCK_e2e-ld-tof0::ET::output",
+          "sourceHandle": "ET",
+          "targetHandle": "input"
+        }
+      ]
+    },
+    "ld-corpus-imported/main_ld/rung 2/cleared": {
+      "nodes": [
+        {
+          "key": "left-rail",
+          "type": "powerRail",
+          "position": {
+            "x": 0,
+            "y": 30
+          },
+          "width": 3,
+          "height": 40,
+          "measured": {
+            "width": 3,
+            "height": 40
+          },
+          "handles": [
+            {
+              "id": "left-rail",
+              "position": "right",
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "id": "left-rail",
+              "position": "right",
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": null,
+          "outputConnector": {
+            "id": "left-rail",
+            "position": "right",
+            "glbPosition": {
+              "x": 3,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "style": {
+              "top": 20,
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30",
+          "type": "contact",
+          "position": {
+            "x": 68,
+            "y": 38
+          },
+          "width": 24,
+          "height": 24,
+          "measured": {
+            "width": 24,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 68,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 92,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 68,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 92,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 24,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 68,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 92,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 24,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "BLOCK_e2e-ld-ton0",
+          "type": "block",
+          "position": {
+            "x": 257,
+            "y": 14
+          },
+          "width": 66,
+          "height": 100,
+          "measured": {
+            "width": 66,
+            "height": 100
+          },
+          "handles": [
+            {
+              "id": "IN",
+              "position": "left",
+              "glbPosition": {
+                "x": 257,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "left": 0
+              }
+            },
+            {
+              "id": "PT",
+              "position": "left",
+              "glbPosition": {
+                "x": 257,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "left": 0
+              }
+            },
+            {
+              "id": "Q",
+              "position": "right",
+              "glbPosition": {
+                "x": 323,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "right": 0
+              }
+            },
+            {
+              "id": "ET",
+              "position": "right",
+              "glbPosition": {
+                "x": 323,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "right": 0
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "IN",
+              "position": "left",
+              "glbPosition": {
+                "x": 257,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "left": 0
+              }
+            },
+            {
+              "id": "PT",
+              "position": "left",
+              "glbPosition": {
+                "x": 257,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "left": 0
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "Q",
+              "position": "right",
+              "glbPosition": {
+                "x": 323,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "right": 0
+              }
+            },
+            {
+              "id": "ET",
+              "position": "right",
+              "glbPosition": {
+                "x": 323,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "right": 0
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "IN",
+            "position": "left",
+            "glbPosition": {
+              "x": 257,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 36
+            },
+            "style": {
+              "top": 36,
+              "left": 0
+            }
+          },
+          "outputConnector": {
+            "id": "Q",
+            "position": "right",
+            "glbPosition": {
+              "x": 323,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 66,
+              "y": 36
+            },
+            "style": {
+              "top": 36,
+              "right": 0
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "BLOCK_e2e-ld-tof0",
+          "type": "block",
+          "position": {
+            "x": 563,
+            "y": 14
+          },
+          "width": 66,
+          "height": 100,
+          "measured": {
+            "width": 66,
+            "height": 100
+          },
+          "handles": [
+            {
+              "id": "IN",
+              "position": "left",
+              "glbPosition": {
+                "x": 563,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "left": 0
+              }
+            },
+            {
+              "id": "PT",
+              "position": "left",
+              "glbPosition": {
+                "x": 563,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "left": 0
+              }
+            },
+            {
+              "id": "Q",
+              "position": "right",
+              "glbPosition": {
+                "x": 629,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "right": 0
+              }
+            },
+            {
+              "id": "ET",
+              "position": "right",
+              "glbPosition": {
+                "x": 629,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "right": 0
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "IN",
+              "position": "left",
+              "glbPosition": {
+                "x": 563,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "left": 0
+              }
+            },
+            {
+              "id": "PT",
+              "position": "left",
+              "glbPosition": {
+                "x": 563,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "left": 0
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "Q",
+              "position": "right",
+              "glbPosition": {
+                "x": 629,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 36
+              },
+              "style": {
+                "top": 36,
+                "right": 0
+              }
+            },
+            {
+              "id": "ET",
+              "position": "right",
+              "glbPosition": {
+                "x": 629,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 66,
+                "y": 76
+              },
+              "style": {
+                "top": 76,
+                "right": 0
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "IN",
+            "position": "left",
+            "glbPosition": {
+              "x": 563,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 36
+            },
+            "style": {
+              "top": 36,
+              "left": 0
+            }
+          },
+          "outputConnector": {
+            "id": "Q",
+            "position": "right",
+            "glbPosition": {
+              "x": 629,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 66,
+              "y": 36
+            },
+            "style": {
+              "top": 36,
+              "right": 0
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "COIL_cd84dd40-4246-4690-bd12-a31972b3e05b",
+          "type": "coil",
+          "position": {
+            "x": 794,
+            "y": 38
+          },
+          "width": 28,
+          "height": 24,
+          "measured": {
+            "width": 28,
+            "height": 24
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 794,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            },
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 822,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 28,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 794,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 12
+              },
+              "style": {
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 822,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 28,
+                "y": 12
+              },
+              "style": {
+                "right": -3
+              }
+            }
+          ],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 794,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 12
+            },
+            "style": {
+              "left": -3
+            }
+          },
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 822,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 28,
+              "y": 12
+            },
+            "style": {
+              "right": -3
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "right-rail",
+          "type": "powerRail",
+          "position": {
+            "x": 932,
+            "y": 30
+          },
+          "width": 3,
+          "height": 40,
+          "measured": {
+            "width": 3,
+            "height": 40
+          },
+          "handles": [
+            {
+              "id": "right-rail",
+              "position": "left",
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "right-rail",
+              "position": "left",
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "id": "right-rail",
+            "position": "left",
+            "glbPosition": {
+              "x": 297,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "style": {
+              "top": 20,
+              "left": -3
+            }
+          },
+          "outputConnector": null,
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "variable@BLOCK_e2e-ld-ton0::PT::input",
+          "type": "variable",
+          "position": {
+            "x": 147,
+            "y": 74
+          },
+          "width": 80,
+          "height": 32,
+          "measured": {
+            "width": 80,
+            "height": 32
+          },
+          "handles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 307,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 80,
+                "y": 16
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 307,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 80,
+                "y": 16
+              }
+            }
+          ],
+          "inputConnector": null,
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 307,
+              "y": 90
+            },
+            "relPosition": {
+              "x": 80,
+              "y": 16
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "variable@BLOCK_e2e-ld-ton0::ET::output",
+          "type": "variable",
+          "position": {
+            "x": 353,
+            "y": 74
+          },
+          "width": 80,
+          "height": 32,
+          "measured": {
+            "width": 80,
+            "height": 32
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 353,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 16
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 353,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 16
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 353,
+              "y": 90
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 16
+            }
+          },
+          "outputConnector": null,
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "variable@BLOCK_e2e-ld-tof0::PT::input",
+          "type": "variable",
+          "position": {
+            "x": 453,
+            "y": 74
+          },
+          "width": 80,
+          "height": 32,
+          "measured": {
+            "width": 80,
+            "height": 32
+          },
+          "handles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 613,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 80,
+                "y": 16
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "id": "output",
+              "position": "right",
+              "glbPosition": {
+                "x": 613,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 80,
+                "y": 16
+              }
+            }
+          ],
+          "inputConnector": null,
+          "outputConnector": {
+            "id": "output",
+            "position": "right",
+            "glbPosition": {
+              "x": 613,
+              "y": 90
+            },
+            "relPosition": {
+              "x": 80,
+              "y": 16
+            }
+          },
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        },
+        {
+          "key": "variable@BLOCK_e2e-ld-tof0::ET::output",
+          "type": "variable",
+          "position": {
+            "x": 659,
+            "y": 74
+          },
+          "width": 80,
+          "height": 32,
+          "measured": {
+            "width": 80,
+            "height": 32
+          },
+          "handles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 659,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 16
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "id": "input",
+              "position": "left",
+              "glbPosition": {
+                "x": 659,
+                "y": 90
+              },
+              "relPosition": {
+                "x": 0,
+                "y": 16
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "id": "input",
+            "position": "left",
+            "glbPosition": {
+              "x": 659,
+              "y": 90
+            },
+            "relPosition": {
+              "x": 0,
+              "y": 16
+            }
+          },
+          "outputConnector": null,
+          "parallelInputConnector": null,
+          "parallelOutputConnector": null
+        }
+      ],
+      "edges": [
+        {
+          "id": "e_left-rail_CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30__left-rail_input",
+          "source": "left-rail",
+          "target": "CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30",
+          "sourceHandle": "left-rail",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30_BLOCK_e2e-ld-ton0__output_IN",
+          "source": "CONTACT_6bafec83-c7fc-4d81-86d8-bd74b8c95f30",
+          "target": "BLOCK_e2e-ld-ton0",
+          "sourceHandle": "output",
+          "targetHandle": "IN"
+        },
+        {
+          "id": "e_COIL_cd84dd40-4246-4690-bd12-a31972b3e05b_right-rail__output_right-rail",
+          "source": "COIL_cd84dd40-4246-4690-bd12-a31972b3e05b",
+          "target": "right-rail",
+          "sourceHandle": "output",
+          "targetHandle": "right-rail"
+        },
+        {
+          "id": "e_BLOCK_e2e-ld-ton0_BLOCK_e2e-ld-tof0__Q_IN",
+          "source": "BLOCK_e2e-ld-ton0",
+          "target": "BLOCK_e2e-ld-tof0",
+          "sourceHandle": "Q",
+          "targetHandle": "IN"
+        },
+        {
+          "id": "e_BLOCK_e2e-ld-tof0_COIL_cd84dd40-4246-4690-bd12-a31972b3e05b__Q_input",
+          "source": "BLOCK_e2e-ld-tof0",
+          "target": "COIL_cd84dd40-4246-4690-bd12-a31972b3e05b",
+          "sourceHandle": "Q",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_variable@BLOCK_e2e-ld-ton0::PT::input_BLOCK_e2e-ld-ton0__output_PT",
+          "source": "variable@BLOCK_e2e-ld-ton0::PT::input",
+          "target": "BLOCK_e2e-ld-ton0",
+          "sourceHandle": "output",
+          "targetHandle": "PT"
+        },
+        {
+          "id": "e_BLOCK_e2e-ld-ton0_variable@BLOCK_e2e-ld-ton0::ET::output__ET_input",
+          "source": "BLOCK_e2e-ld-ton0",
+          "target": "variable@BLOCK_e2e-ld-ton0::ET::output",
+          "sourceHandle": "ET",
+          "targetHandle": "input"
+        },
+        {
+          "id": "e_variable@BLOCK_e2e-ld-tof0::PT::input_BLOCK_e2e-ld-tof0__output_PT",
+          "source": "variable@BLOCK_e2e-ld-tof0::PT::input",
+          "target": "BLOCK_e2e-ld-tof0",
+          "sourceHandle": "output",
+          "targetHandle": "PT"
+        },
+        {
+          "id": "e_BLOCK_e2e-ld-tof0_variable@BLOCK_e2e-ld-tof0::ET::output__ET_input",
+          "source": "BLOCK_e2e-ld-tof0",
+          "target": "variable@BLOCK_e2e-ld-tof0::ET::output",
+          "sourceHandle": "ET",
+          "targetHandle": "input"
+        }
+      ]
+    }
+  }
+}

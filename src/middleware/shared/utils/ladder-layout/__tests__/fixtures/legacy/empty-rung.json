@@ -1,0 +1,393 @@
+{
+  "case": "empty-rung",
+  "source": "a new rung as startLadderRung builds it",
+  "entry": "legacyLayoutRung",
+  "input": {
+    "id": "rung_Empty_0001",
+    "comment": "",
+    "defaultBounds": [
+      300,
+      100
+    ],
+    "reactFlowViewport": [
+      300,
+      100
+    ],
+    "nodes": [
+      {
+        "id": "left-rail-rung_Empty_0001",
+        "type": "powerRail",
+        "position": {
+          "x": 0,
+          "y": 30
+        },
+        "data": {
+          "handles": [
+            {
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "id": "left-rail",
+              "position": "right",
+              "type": "source",
+              "isConnectable": false,
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "id": "left-rail",
+              "position": "right",
+              "type": "source",
+              "isConnectable": false,
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "outputConnector": {
+            "glbPosition": {
+              "x": 3,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "id": "left-rail",
+            "position": "right",
+            "type": "source",
+            "isConnectable": false,
+            "style": {
+              "top": 20,
+              "right": -3
+            }
+          },
+          "numericId": "4635617",
+          "variant": "left",
+          "variable": {
+            "name": ""
+          },
+          "executionOrder": 0,
+          "draggable": false,
+          "selectable": false,
+          "deletable": false
+        },
+        "width": 3,
+        "height": 40,
+        "measured": {
+          "width": 3,
+          "height": 40
+        },
+        "draggable": false,
+        "selectable": false,
+        "selected": false
+      },
+      {
+        "id": "right-rail-rung_Empty_0001",
+        "type": "powerRail",
+        "position": {
+          "x": 300,
+          "y": 30
+        },
+        "data": {
+          "handles": [
+            {
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "id": "right-rail",
+              "position": "left",
+              "type": "target",
+              "isConnectable": false,
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "inputHandles": [
+            {
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "id": "right-rail",
+              "position": "left",
+              "type": "target",
+              "isConnectable": false,
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "glbPosition": {
+              "x": 297,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "id": "right-rail",
+            "position": "left",
+            "type": "target",
+            "isConnectable": false,
+            "style": {
+              "top": 20,
+              "left": -3
+            }
+          },
+          "numericId": "4417758",
+          "variant": "right",
+          "variable": {
+            "name": ""
+          },
+          "executionOrder": 0,
+          "draggable": false,
+          "selectable": false,
+          "deletable": false
+        },
+        "width": 3,
+        "height": 40,
+        "measured": {
+          "width": 3,
+          "height": 40
+        },
+        "draggable": false,
+        "selectable": false,
+        "selected": false
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_left-rail-rung_Empty_0001_right-rail-rung_Empty_0001",
+        "source": "left-rail-rung_Empty_0001",
+        "target": "right-rail-rung_Empty_0001",
+        "sourceHandle": "left-rail",
+        "targetHandle": "right-rail",
+        "type": "smoothstep"
+      }
+    ],
+    "selectedNodes": []
+  },
+  "expected": {
+    "nodes": [
+      {
+        "id": "left-rail-rung_Empty_0001",
+        "type": "powerRail",
+        "position": {
+          "x": 0,
+          "y": 30
+        },
+        "data": {
+          "handles": [
+            {
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "id": "left-rail",
+              "position": "right",
+              "type": "source",
+              "isConnectable": false,
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "inputHandles": [],
+          "outputHandles": [
+            {
+              "glbPosition": {
+                "x": 3,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "id": "left-rail",
+              "position": "right",
+              "type": "source",
+              "isConnectable": false,
+              "style": {
+                "top": 20,
+                "right": -3
+              }
+            }
+          ],
+          "outputConnector": {
+            "glbPosition": {
+              "x": 3,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "id": "left-rail",
+            "position": "right",
+            "type": "source",
+            "isConnectable": false,
+            "style": {
+              "top": 20,
+              "right": -3
+            }
+          },
+          "numericId": "4635617",
+          "variant": "left",
+          "variable": {
+            "name": ""
+          },
+          "executionOrder": 0,
+          "draggable": false,
+          "selectable": false,
+          "deletable": false
+        },
+        "width": 3,
+        "height": 40,
+        "measured": {
+          "width": 3,
+          "height": 40
+        },
+        "draggable": false,
+        "selectable": false,
+        "selected": false
+      },
+      {
+        "id": "right-rail-rung_Empty_0001",
+        "type": "powerRail",
+        "position": {
+          "x": 297,
+          "y": 30
+        },
+        "data": {
+          "handles": [
+            {
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "id": "right-rail",
+              "position": "left",
+              "type": "target",
+              "isConnectable": false,
+              "style": {
+                "top": 20,
+                "left": -3
+              },
+              "x": 297
+            }
+          ],
+          "inputHandles": [
+            {
+              "glbPosition": {
+                "x": 297,
+                "y": 50
+              },
+              "relPosition": {
+                "x": 3,
+                "y": 20
+              },
+              "id": "right-rail",
+              "position": "left",
+              "type": "target",
+              "isConnectable": false,
+              "style": {
+                "top": 20,
+                "left": -3
+              }
+            }
+          ],
+          "outputHandles": [],
+          "inputConnector": {
+            "glbPosition": {
+              "x": 297,
+              "y": 50
+            },
+            "relPosition": {
+              "x": 3,
+              "y": 20
+            },
+            "id": "right-rail",
+            "position": "left",
+            "type": "target",
+            "isConnectable": false,
+            "style": {
+              "top": 20,
+              "left": -3
+            }
+          },
+          "numericId": "4417758",
+          "variant": "right",
+          "variable": {
+            "name": ""
+          },
+          "executionOrder": 0,
+          "draggable": false,
+          "selectable": false,
+          "deletable": false
+        },
+        "width": 3,
+        "height": 40,
+        "measured": {
+          "width": 3,
+          "height": 40
+        },
+        "draggable": false,
+        "selectable": false,
+        "selected": false
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_left-rail-rung_Empty_0001_right-rail-rung_Empty_0001",
+        "source": "left-rail-rung_Empty_0001",
+        "target": "right-rail-rung_Empty_0001",
+        "sourceHandle": "left-rail",
+        "targetHandle": "right-rail",
+        "type": "smoothstep"
+      }
+    ]
+  }
+}
