@@ -220,8 +220,6 @@ describe('tooltips appear only on alias locations (AC05, AC15, BDD-17, BDD-18)',
     ['a 50-character contact name', 'ld-name-long'],
     ['a 250-character contact name', 'ld-name-huge'],
     ['a literal location', 'ld-location-start'],
-    ['the block type header "TON"', 'ld-block-type-t'],
-    ['a block instance name', 'ld-block-instance-t'],
     ['a pin variable name', 'ld-name-t:PT'],
   ])('%s shows no tooltip', async (_target, id) => {
     const { container } = await openLabels()
@@ -301,5 +299,19 @@ describe('name editing keeps its behaviour as a single-line field (BDD-15)', () 
         !(field.readOnly || field.disabled),
     )
     expect(editable).toHaveLength(0)
+  })
+})
+
+describe('block help and project search', () => {
+  it('hovering a block shows its documentation', async () => {
+    const { container } = await openLabels()
+    expect(tooltipOf(getTestId(container, 'ld-block-type-t'))).toContain('INPUT:')
+  })
+
+  it('a project-search match on a ladder name is highlighted', async () => {
+    const { store, container } = await openLabels()
+    act(() => store.getState().searchActions.setSearchQuery('pump'))
+    await settle()
+    expect(container.querySelectorAll('[data-testid="ld-search-highlight"]').length).toBeGreaterThan(0)
   })
 })

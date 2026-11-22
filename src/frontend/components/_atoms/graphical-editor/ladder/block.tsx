@@ -17,7 +17,8 @@ import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]
 import { reconcileBranchesIfNeeded } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockOutputDebugBadges } from '../block-output-debug-badges'
-import { getVariableRestrictionType, inOutVariableNames } from '../utils'
+import type { BlockVariant as newBlockVariant } from '../types/block'
+import { getBlockDocumentation, getVariableRestrictionType, inOutVariableNames } from '../utils'
 import { LadderBlockVisual, standaloneBlockLayout } from './block-visual'
 import { buildBlockNode } from './buildNodes'
 import { CustomHandle, ladderHandleStyle } from './handle'
@@ -372,7 +373,7 @@ export const BlockNodeElement = <T extends object>({
 }
 
 const Block = <T extends object>(block: BlockProps<T>) => {
-  const { data, height, width, selected, id } = block
+  const { data, dragging, height, width, selected, id } = block
   const store = useOpenPLCStoreApi()
 
   const pouName = useBoundPou()
@@ -386,6 +387,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     setHandleBranches: setHandleBranchesBlock,
   } = useOpenPLCStore((state) => state.ladderFlowActions)
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const documentation = getBlockDocumentation(data.variant as newBlockVariant)
   const isDebuggerVisible = useIsDebuggerVisible()
   const powered = useLadderBlockPowered(id)
   const { palette } = useLadderNodeView(id)
@@ -886,40 +888,53 @@ const Block = <T extends object>(block: BlockProps<T>) => {
         </div>
       )}
 
-      <BlockNodeElement
-        nodeId={id}
-        data={data}
-        height={height ?? DEFAULT_BLOCK_HEIGHT}
-        width={width ?? DEFAULT_BLOCK_WIDTH}
-        selected={selected ?? false}
-        wrongVariable={wrongVariable}
-        energized={isDebuggerVisible && powered}
-        instance={
-          showsInstance
-            ? {
-                name: data.variable?.name ?? '',
-                colour: wrongVariable ? LADDER_ERROR_COLOUR : undefined,
-                slot: (label) => (
-                  <LadderNameField
-                    label={label}
-                    text={data.variable?.name ?? ''}
-                    testId={`ld-block-instance-${id}`}
-                    palette={palette}
-                    fill={wrongVariable ? LADDER_ERROR_COLOUR : palette.text}
-                    editable={!isDebuggerVisible}
-                    editing={editingInstance}
-                    onEditingChange={setEditingInstance}
-                    value={blockVariableValue}
-                    onValueChange={setBlockVariableValue}
-                    onCommit={(value) => handleSubmitBlockVariableOnTextareaBlur(value, false)}
-                    onFocus={() => setDraggable(() => false)}
-                    onBlur={() => setDraggable((nodeData) => nodeData.draggable === true)}
-                  />
-                ),
-              }
-            : undefined
-        }
-      />
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <BlockNodeElement
+                nodeId={id}
+                data={data}
+                height={height ?? DEFAULT_BLOCK_HEIGHT}
+                width={width ?? DEFAULT_BLOCK_WIDTH}
+                selected={selected ?? false}
+                wrongVariable={wrongVariable}
+                energized={isDebuggerVisible && powered}
+                instance={
+                  showsInstance
+                    ? {
+                        name: data.variable?.name ?? '',
+                        colour: wrongVariable ? LADDER_ERROR_COLOUR : undefined,
+                        slot: (label) => (
+                          <LadderNameField
+                            label={label}
+                            text={data.variable?.name ?? ''}
+                            testId={`ld-block-instance-${id}`}
+                            palette={palette}
+                            fill={wrongVariable ? LADDER_ERROR_COLOUR : palette.text}
+                            editable={!isDebuggerVisible}
+                            editing={editingInstance}
+                            onEditingChange={setEditingInstance}
+                            value={blockVariableValue}
+                            onValueChange={setBlockVariableValue}
+                            onCommit={(value) => handleSubmitBlockVariableOnTextareaBlur(value, false)}
+                            onFocus={() => setDraggable(() => false)}
+                            onBlur={() => setDraggable((nodeData) => nodeData.draggable === true)}
+                          />
+                        ),
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          </TooltipTrigger>
+          {!dragging && blockType !== 'generic' && documentation && (
+            <TooltipContent side='right' className='text-xs'>
+              <span className='whitespace-pre-line'>{documentation}</span>
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
       {data.handles.map((handle, index) => (
         <CustomHandle
           key={index}

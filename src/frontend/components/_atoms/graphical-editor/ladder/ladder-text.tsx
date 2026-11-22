@@ -57,10 +57,47 @@ export function LadderTextLayer({ children }: { children: ReactNode }) {
   )
 }
 
+/** The [start, end) code-unit ranges of every case-insensitive occurrence of `query` in `text`. */
+export function searchMatchRanges(text: string, query: string): Array<[number, number]> {
+  if (query === '') return []
+  const ranges: Array<[number, number]> = []
+  const haystack = text.toLowerCase()
+  const needle = query.toLowerCase()
+  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + needle.length)) {
+    ranges.push([at, at + needle.length])
+  }
+  return ranges
+}
+
+/** Rectangles behind the project-search matches in `text` drawn on `label`. */
+function SearchHighlights({ label, text }: { label: LabelBox; text: string }) {
+  const searchQuery = useOpenPLCStore((state) => state.searchQuery)
+  const ranges = searchMatchRanges(text, searchQuery)
+  if (ranges.length === 0) return null
+  const left = anchoredLeft(label, textWidthPx(text, label.sizePx))
+  return (
+    <>
+      {ranges.map(([start, end]) => (
+        <rect
+          key={start}
+          data-testid='ld-search-highlight'
+          className='fill-brand-light dark:fill-brand-medium-dark'
+          rx={2}
+          x={left + textWidthPx(text.slice(0, start), label.sizePx)}
+          y={label.y - label.sizePx * 0.85}
+          width={textWidthPx(text.slice(start, end), label.sizePx)}
+          height={label.sizePx * 1.1}
+        />
+      ))}
+    </>
+  )
+}
+
 /** One label drawn as SVG text content at its baseline, in node coordinates; never as markup. */
 export function LadderText({ label, text, fill, testId, fontWeight, hoverOnly = false, onClick }: LadderTextProps) {
   return (
     <LadderTextLayer>
+      {!hoverOnly && <SearchHighlights label={label} text={text ?? label.text} />}
       <text
         {...textAttributes(label, fill, fontWeight)}
         className={hoverOnly ? 'opacity-0 hover:opacity-100' : undefined}
