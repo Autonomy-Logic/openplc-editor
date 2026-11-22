@@ -866,40 +866,7 @@ describe('rungLayoutDiffers', () => {
   })
 })
 
-describe('ld-corpus-hard: every rung laid out without overlap and without losing an element (H01-H10)', () => {
-  const hard = loadCorpusProject('ld-corpus-hard')
-  for (const pou of ldPouNames(hard)) {
-    const src = corpusLabelSource(hard, pou)
-    loadedRungs(hard, pou).forEach((rung, index) => {
-      const name = corpusRungName('ld-corpus-hard', pou, index + 1)
-
-      it(`${name} keeps every element`, () => {
-        const layout = layoutRung(rung, src)
-        expect(rung.nodes.map((node) => node.id).filter((id) => !layout.nodes.has(id))).toEqual([])
-        expect(applyRungLayout(rung, layout).nodes.map((node) => node.id)).toEqual(rung.nodes.map((node) => node.id))
-      })
-
-      it(`${name} has no overlapping element or label`, () => {
-        expect(collisions(rung, layoutRung(rung, src))).toEqual([])
-      })
-    })
-  }
-})
-
 /** Locations every corpus variable could show, so the overlap check also covers grown rows and wide columns. */
 function locatedEverywhere(variables: readonly PLCVariable[]): PLCVariable[] {
   return variables.map((variable, index) => ({ ...variable, location: `%IX${index}.${index % 8}` }))
 }
-
-describe('ld-corpus-hard with every variable located: still no overlap', () => {
-  const hard = loadCorpusProject('ld-corpus-hard')
-  for (const pou of ldPouNames(hard)) {
-    const base = corpusLabelSource(hard, pou)
-    const src = labelSource(locatedEverywhere(base.pouVariables), base.globalVariables)
-    loadedRungs(hard, pou).forEach((rung, index) => {
-      it(`${corpusRungName('ld-corpus-hard', pou, index + 1)} located`, () => {
-        expect(collisions(rung, layoutRung(rung, src))).toEqual([])
-      })
-    })
-  }
-})

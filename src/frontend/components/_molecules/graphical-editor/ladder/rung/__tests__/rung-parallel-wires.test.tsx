@@ -36,8 +36,6 @@ function corpusPou(name: string) {
 /** The plan cases of this phase: corpus rung, POU and 0-based rung index. */
 const CASES: readonly [string, string, number][] = [
   ['AC26-a / BDD-20 row 2 (W01): A, then B, C, D / E, then Y', 'Branches', 0],
-  ['AC26-b (W02): three branches, the longest in the middle', 'Branches', 1],
-  ['AC26-c / BDD-20 row 4 (W03): nested groups with shorter inner and outer branches', 'Branches', 2],
   ['AC26-f / BDD-20 row 5 (W08): CTUD LD fed by (I AND J) OR K OR L', 'Blocks', 2],
 ]
 

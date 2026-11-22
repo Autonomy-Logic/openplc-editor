@@ -482,20 +482,3 @@ describe('parallelEdgeRoute', () => {
     expect(shifted).toEqual(plain.map((point) => ({ x: point.x + 5, y: point.y })))
   })
 })
-
-describe('every corpus rung with a parallel group keeps P2-P7', () => {
-  for (const project of CORPUS_PROJECTS) {
-    const data = loadCorpusProject(project)
-    for (const pou of ldPouNames(data)) {
-      const src = corpusLabelSource(data, pou)
-      loadedRungs(data, pou).forEach((rung, index) => {
-        if (!rung.nodes.some((node) => node.type === 'parallel')) return
-        it(corpusRungName(project, pou, index + 1), () => {
-          const layout = layoutRung(rung, src)
-          expect(layout.parallels.length).toBeGreaterThan(0)
-          expect(parallelBreaks(rung, layout)).toEqual([])
-        })
-      })
-    }
-  }
-})

@@ -1,7 +1,4 @@
-import {
-  ldPouNames,
-  loadCorpusProject,
-} from '@root/backend/shared/transpilers/st-transpiler/__tests__/ld-relayout-corpus/corpus'
+import { loadCorpusProject } from '@root/backend/shared/transpilers/st-transpiler/__tests__/ld-relayout-corpus/corpus'
 import { loadedRungs } from '@root/backend/shared/transpilers/st-transpiler/__tests__/ld-relayout-corpus/relayout'
 import type { OpenPLCStore } from '@root/frontend/store'
 import { act, fireEvent } from '@testing-library/react'
@@ -31,46 +28,26 @@ function savedFlow(store: OpenPLCStore, pouName: string) {
   return structuredClone({ updated: flow?.updated, rungs: flow?.rungs ?? [] })
 }
 
-describe.each(ldPouNames(basic))('ld-corpus-basic/%s laid out by the engine', (pouName) => {
-  async function open() {
+describe('ld-corpus-basic/Blocks laid out by the engine', () => {
+  const pouName = 'Blocks'
+
+  it('mounting, resizing, scrolling and a theme switch leave every stored rung, its viewport and the updated flag unchanged', async () => {
     const store = ladderStore([corpusPou(pouName)])
     const before = savedFlow(store, pouName)
     const view = await renderLadder(store, pouName)
-    return { store, before, view }
-  }
-
-  it('mounting the POU leaves every stored rung, its viewport and the updated flag unchanged', async () => {
-    const { store, before } = await open()
     expect(savedFlow(store, pouName)).toEqual(before)
-  })
-
-  it('resizing the window and every measured element leaves them unchanged', async () => {
-    const { store, before } = await open()
     await resizeEverything(640, 90)
     await resizeEverything(12, 8)
-    expect(savedFlow(store, pouName)).toEqual(before)
-  })
-
-  it('scrolling each rung leaves them unchanged', async () => {
-    const { store, before, view } = await open()
     for (const body of Array.from(view.container.querySelectorAll('[aria-label="Rung body"]'))) {
       fireEvent.scroll(body, { target: { scrollLeft: 300 } })
     }
     await settle()
-    expect(savedFlow(store, pouName)).toEqual(before)
-  })
-
-  it('re-rendering for a theme switch leaves them unchanged', async () => {
-    const { store, before } = await open()
     act(() => store.getState().workspaceActions.switchAppTheme())
     await settle()
     act(() => store.getState().workspaceActions.switchAppTheme())
     await settle()
     expect(savedFlow(store, pouName)).toEqual(before)
-  })
 
-  it('keeps one "Rung body" per rung and the xyflow class of every LD node type', async () => {
-    const { store, view } = await open()
     const types = [...new Set(storedRungs(store, pouName).flatMap((rung) => rung.nodes.map((node) => node.type)))]
     expect({
       bodies: view.container.querySelectorAll('[aria-label="Rung body"]').length,

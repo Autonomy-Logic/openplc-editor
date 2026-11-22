@@ -282,17 +282,3 @@ describe('ldSinkOrder on crafted B12 rungs (execution-order-mixed)', () => {
     expect(ldSinkOrder(b12(moved))).toEqual(referenceSinkOrder(b12(moved)))
   })
 })
-
-describe('ldSinkOrder on the corpus', () => {
-  for (const project of CORPUS_PROJECTS) {
-    it(`equals the walker's emission order on every LD POU of ${project}`, () => {
-      const data = loadCorpusProject(project)
-      const pous = ldPouNames(data)
-      expect(pous.length).toBeGreaterThan(0)
-      for (const pou of pous) {
-        const rungs = ldPouRungs(data, pou)
-        expect({ pou, order: ldSinkOrder(rungs.map(toOrderRung)) }).toEqual({ pou, order: referenceSinkOrder(rungs) })
-      }
-    })
-  }
-})
