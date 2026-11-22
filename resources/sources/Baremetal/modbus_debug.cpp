@@ -17,7 +17,6 @@ modbus_debug.cpp - OpenPLC always-on debugger function codes (0x41-0x4B)
 #include "openplc.h"
 #include "openplc_version.h"
 
-// 0x48 reports the raw ID sources (license_id_report); 0x4E provisions the generated ID.
 #include "license_platform.h"
 
 /**

@@ -67,6 +67,10 @@ function runtimeProvisioningActivity(
   return undefined
 }
 
+/**
+ * Device board configuration: board, port, pins and connection. Shows the runtime commercial licence that
+ * `useRuntimeCommercialLicenseOwner` resolves beside the runtime polling.
+ */
 const Board = memo(function () {
   const store = useOpenPLCStoreApi()
   const capabilities = useCapabilities()
@@ -102,7 +106,6 @@ const Board = memo(function () {
   } = useDeviceConnect(currentBoardInfo)
 
   const licensing = useDeviceLicense(currentBoardInfo, { ownsWatch: true })
-  // Runtime commercial licence; resolved by the owner hook beside the runtime polling.
   const runtimeLicense = useRuntimeCommercialLicense()
 
   const pinMappingEnabled = resolveTargetCapabilities(currentBoardInfo).pinMapping
