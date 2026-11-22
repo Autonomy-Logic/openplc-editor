@@ -36,6 +36,33 @@ export const LIC_PAYLOAD_SIZE = 30
  * always `4F 50 4C 43` ('OPLC'); read as an LE uint32 that is 0x434C504F.
  */
 export const LIC_MAGIC_LE = 0x434c504f
+/** Bytes covered by the crc32: `[payload || signature]`, offsets 0..93. */
+export const LIC_CRC_COVERAGE = 94
+/** Status byte of a licence FC reply that succeeded (0x4A: a blob follows). */
+export const LIC_STATUS_SUCCESS = 0x7e
+/** Status byte of a licence FC reply from a board with no licence storage. */
+export const LIC_STATUS_UNSUPPORTED = 0x85
+
+/** Lowercase hex of `bytes`. */
+export function bytesToHex(bytes: Uint8Array): string {
+  let out = ''
+  for (const byte of bytes) out += byte.toString(16).padStart(2, '0')
+  return out
+}
+
+/** Bytes of an even-length hex string. */
+export function hexToBytes(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  return out
+}
+
+/** True when `a` and `b` hold the same bytes. */
+export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
 
 // Field offsets (mirror the C struct exactly).
 const OFF_MAGIC = 0

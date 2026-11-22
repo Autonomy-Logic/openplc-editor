@@ -1,0 +1,106 @@
+import { COMMERCIAL_LICENSE_DISCLAIMER, MIT_LICENSE_NOTICE } from '@root/middleware/shared/utils/licensing'
+import { fireEvent, render, screen } from '@testing-library/react'
+
+import { RuntimeCommercialLicenseStatus } from '../runtime-commercial-license-status'
+
+const ID = `hw2:${'ab'.repeat(32)}`
+const URL = `https://edge.example.com/buy?hardwareId=${encodeURIComponent(ID)}`
+
+describe('RuntimeCommercialLicenseStatus', () => {
+  it('shows GPLv3 with the disclaimer, the hardware ID and the purchase link', () => {
+    const onBuy = jest.fn()
+    render(
+      <RuntimeCommercialLicenseStatus
+        status='unlicensed'
+        hardwareId={ID}
+        buyUrl={URL}
+        awaitingPurchase={false}
+        onBuy={onBuy}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Runtime license status' }))
+    expect(screen.getByText('GPLv3')).toBeTruthy()
+    expect(screen.getByText(COMMERCIAL_LICENSE_DISCLAIMER)).toBeTruthy()
+    expect(screen.getByText(ID)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Buy licences' }))
+    expect(onBuy).toHaveBeenCalledTimes(1)
+  })
+
+  it("labels a built-in board's ID as its device ID", () => {
+    const deviceId = 'c0'.repeat(16)
+    render(
+      <RuntimeCommercialLicenseStatus
+        status='unlicensed'
+        hardwareId={deviceId}
+        idLabel='Device ID'
+        buyUrl={`https://edge.example.com/buy?vppId=com.autonomy.openplc-runtime&deviceId=${deviceId}`}
+        awaitingPurchase={false}
+        onBuy={jest.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Runtime license status' }))
+    expect(screen.getByText('Device ID')).toBeTruthy()
+    expect(screen.queryByText('Hardware ID')).toBeNull()
+    expect(screen.getByText(deviceId)).toBeTruthy()
+  })
+
+  it('shows a commercial licence without a purchase link', () => {
+    render(
+      <RuntimeCommercialLicenseStatus
+        status='licensed'
+        hardwareId={ID}
+        buyUrl={URL}
+        awaitingPurchase={false}
+        onBuy={jest.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Runtime license status' }))
+    expect(screen.getAllByText('Commercial license').length).toBeGreaterThan(0)
+    expect(screen.queryByText(COMMERCIAL_LICENSE_DISCLAIMER)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Buy licences' })).toBeNull()
+  })
+
+  it('shows an MIT runtime without the disclaimer or a purchase link', () => {
+    render(
+      <RuntimeCommercialLicenseStatus status='mit' hardwareId={null} buyUrl={URL} awaitingPurchase onBuy={jest.fn()} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Runtime license status' }))
+    expect(screen.getAllByText('MIT license')).toHaveLength(2)
+    expect(screen.getByText(MIT_LICENSE_NOTICE)).toBeTruthy()
+    expect(screen.queryByText('GPLv3')).toBeNull()
+    expect(screen.queryByText(COMMERCIAL_LICENSE_DISCLAIMER)).toBeNull()
+    expect(screen.queryByText(/Waiting for the purchase/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Buy licences' })).toBeNull()
+  })
+
+  it('withholds the purchase link while a purchase is awaited', () => {
+    render(
+      <RuntimeCommercialLicenseStatus
+        status='unlicensed'
+        hardwareId={ID}
+        buyUrl={URL}
+        awaitingPurchase
+        onBuy={jest.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Runtime license status' }))
+    expect(screen.getByText('Waiting for purchase…')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Buy licences' })).toBeNull()
+  })
+
+  it('renders nothing when the status is unknown or a paid VPP speaks', () => {
+    for (const status of ['unknown', 'vpp-flow', null] as const) {
+      const { container, unmount } = render(
+        <RuntimeCommercialLicenseStatus
+          status={status}
+          hardwareId={ID}
+          buyUrl={URL}
+          awaitingPurchase={false}
+          onBuy={jest.fn()}
+        />,
+      )
+      expect(container.innerHTML).toBe('')
+      unmount()
+    }
+  })
+})
