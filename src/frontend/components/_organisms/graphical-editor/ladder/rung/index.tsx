@@ -118,7 +118,7 @@ const Rung = ({
   return (
     <div
       aria-label='Rung container'
-      className={cn('relative w-full border-b border-neutral-200 dark:border-neutral-800', className)}
+      className={cn('relative w-full', !isOpen && 'border-y border-neutral-200 dark:border-neutral-800', className)}
       id={id}
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}

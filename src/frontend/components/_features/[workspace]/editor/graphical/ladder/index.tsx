@@ -28,6 +28,7 @@ import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in
 import { BlockNode, BlockNodeData } from '../../../../../_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '../../../../../_atoms/graphical-editor/ladder/coil'
 import { ContactNode } from '../../../../../_atoms/graphical-editor/ladder/contact'
+import { useLadderThemePalette } from '../../../../../_atoms/graphical-editor/ladder/rung-view'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { EndRung } from '../../../../../_molecules/graphical-editor/ladder/rung/end-rung'
 import {
@@ -44,6 +45,9 @@ import { useGraphicalPlacement } from '../placement/placement-context'
 const EMPTY_DIVERGENCES: string[] = []
 
 /** The visible width of the element in `ref`, followed as it resizes; 0 until it is measured. Display only. */
+
+/** Stroke width of the POU's power rails, as each rung draws them. */
+const RAIL_STROKE = 2.5
 function useVisibleWidth(ref: RefObject<HTMLElement | null>): number {
   const [width, setWidth] = useState(0)
   useEffect(() => {
@@ -89,6 +93,7 @@ export default function LadderEditor() {
   const [selectedRungId, setSelectedRungId] = useState<string | null>(null)
   const [editingCommentRungId, setEditingCommentRungId] = useState<string | null>(null)
   const isEditingLocked = useIsEditingLocked()
+  const palette = useLadderThemePalette()
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const getIsRungOpen = useOpenPLCStore((state) => state.editorActions.getIsRungOpen)
 
@@ -312,7 +317,20 @@ export default function LadderEditor() {
       >
         <LadderPouCanvasProvider value={pouCanvas}>
           <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-            <div className='h-fit rounded-lg outline outline-1 -outline-offset-1 outline-gray-200 dark:outline-neutral-800'>
+            <div className='relative h-fit'>
+              {/* One pair of power rails for the whole POU, so the rungs read as one continuous flow. */}
+              {[0, pouCanvas.presentation.railX].map((x) => (
+                <div
+                  key={x}
+                  aria-hidden
+                  className='pointer-events-none absolute bottom-0 top-0'
+                  style={{
+                    left: LADDER_STYLE.gutter + x - RAIL_STROKE / 2,
+                    width: RAIL_STROKE,
+                    background: palette.rail,
+                  }}
+                />
+              ))}
               <SortableContext items={rungs} strategy={verticalListSortingStrategy}>
                 {rungs.map((rung, index) => (
                   <Rung

@@ -23,11 +23,6 @@ export const EndRung = ({ railX, onCreate }: EndRungProps) => {
   return (
     <div aria-label='Create new rung' className='relative w-full select-none' style={{ height: END_RUNG_HEIGHT }}>
       <RungGutter label='End' selected={false} wireTop={wireY} />
-      <div className='absolute' style={{ left: gutter, top: 0, width: 2, height: '100%', background: palette.rail }} />
-      <div
-        className='absolute'
-        style={{ left: gutter + railX, top: 0, width: 2, height: '100%', background: palette.rail }}
-      />
       <div
         className='absolute'
         style={{ left: gutter, top: wireY, width: railX, height: 1, background: palette.wire }}
