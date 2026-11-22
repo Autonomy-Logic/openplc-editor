@@ -146,6 +146,7 @@ class RungLayoutBuilder {
   private readonly blockMeasures = new Map<LdBlock, BlockMeasure>()
   private readonly groupMeasures = new Map<LdGroup, GroupMeasure>()
   private readonly endAligned = new Set<LdGroup>()
+  private readonly railStarted = new Set<LdBlock>()
   private readonly cellTop: number
   private readonly cellBottom: number
   private readonly firstRow: number
@@ -168,6 +169,41 @@ class RungLayoutBuilder {
     if (coils.length < 2) return
     const widest = Math.max(...coils.map((coil) => this.cell(coil).w))
     for (const coil of coils) this.cellExtents.set(coil, { ...this.cell(coil), w: widest })
+    this.groupMeasures.clear()
+  }
+
+  /**
+   * Starts the input networks of every block of the main series at the left rail, and gives each column of contacts
+   * they share with the main series before the block one width, so those contacts line up.
+   */
+  alignInputNetworks(main: readonly LdElement[]): void {
+    const columns: LdCell[][] = []
+    main.forEach((element, index) => {
+      if (element.kind !== 'block') return
+      this.railStarted.add(element)
+      for (const row of element.rows) {
+        const elements = row.input?.network?.elements ?? []
+        for (let column = 0; column < Math.min(index, elements.length); column++) {
+          const before = main[column]
+          const below = elements[column]
+          if (before.kind !== 'cell' || below.kind !== 'cell') break
+          columns.push([before, below])
+        }
+      }
+    })
+    for (let pass = 0; pass <= columns.length; pass++) {
+      let widened = false
+      for (const column of columns) {
+        const widest = Math.max(...column.map((cell) => this.cell(cell).w))
+        for (const cell of column) {
+          if (this.cell(cell).w >= widest) continue
+          this.cellExtents.set(cell, { ...this.cell(cell), w: widest })
+          widened = true
+        }
+      }
+      if (!widened) break
+    }
+    this.blockMeasures.clear()
     this.groupMeasures.clear()
   }
 
@@ -498,7 +534,8 @@ class RungLayoutBuilder {
           role: 'pinFormal',
         })
       }
-      nodeIds.push(...this.placeSide(m.left[index], 'left', x0, pinY, m.sideL, depth))
+      const railStart = this.railStarted.has(block) ? 0 : undefined
+      nodeIds.push(...this.placeSide(m.left[index], 'left', x0, pinY, m.sideL, depth, railStart))
       nodeIds.push(...this.placeSide(m.right[index], 'right', x1, pinY, m.sideR, depth))
     })
     return { entryX: x0, exitX: x1, nodeIds }
@@ -512,13 +549,14 @@ class RungLayoutBuilder {
     pinY: number,
     sideWidth: number,
     depth: number,
+    railStart?: number,
   ): string[] {
     const s = this.s
     switch (content.kind) {
       case 'none':
         return []
       case 'network': {
-        const startX = side === 'left' ? edgeX - s.stub - content.extent.w : edgeX + s.stub
+        const startX = side === 'right' ? edgeX + s.stub : (railStart ?? edgeX - s.stub - content.extent.w)
         const placed = this.placeSeries(content.network.elements, startX, pinY, depth)
         if (content.network.railHandleId !== undefined) this.railHandleY.set(content.network.railHandleId, pinY)
         return placed.nodeIds
@@ -672,6 +710,7 @@ export function layoutRung(
   let trailingFrom = main.length
   while (trailingFrom > 0 && isTrailingOutput(main[trailingFrom - 1])) trailingFrom--
   for (const element of main.slice(trailingFrom)) if (element.kind === 'group') builder.alignToEnd(element)
+  builder.alignInputNetworks(main)
 
   const extent = builder.series(main)
   const mainWireY = style.padT + extent.top

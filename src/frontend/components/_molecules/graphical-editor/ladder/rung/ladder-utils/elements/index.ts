@@ -190,7 +190,7 @@ export const addNewElement = <T>(
   const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = relayoutRung(
     {
       ...rung,
-      nodes: newNodes,
+      nodes: removePlaceholderElements(newNodes),
       edges: newEdges,
       ...(handleBranches && { handleBranches }),
     },

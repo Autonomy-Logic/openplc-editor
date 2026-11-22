@@ -66,6 +66,7 @@ export {
   type LegacyNodeStyle,
 } from './legacy-style'
 export { isWideCodePoint, JETBRAINS_MONO_ADVANCE_EM, textCells, textWidthPx } from './measure'
+export { type LadderMigration, migrateLadderRungs } from './migrate'
 export {
   blockInputVariables,
   blockOutputVariables,
@@ -88,7 +89,8 @@ export {
   toCanonicalPosition,
   toDisplayNodes,
 } from './presentation'
-export { relayoutRung } from './relayout'
+export { relayoutRung, withLaidOutGeometry } from './relayout'
+export { commentFirstLine, rungSummary, type SummaryNode } from './rung-summary'
 export {
   compareLdNodePosition,
   isLdVariableNode,
@@ -124,5 +126,3 @@ export type {
 } from './types'
 export { WIDE_CODE_POINT_RANGES } from './wide-ranges'
 export { type LdEdgeEnds, parallelEdgeRoute, type WirePoint } from './wires'
-export { commentFirstLine, rungSummary, type SummaryNode } from './rung-summary'
-export { type LadderMigration, migrateLadderRungs } from './migrate'

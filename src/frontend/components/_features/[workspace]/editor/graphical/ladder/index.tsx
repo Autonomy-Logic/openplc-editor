@@ -10,8 +10,17 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { LADDER_STYLE } from '@root/middleware/shared/utils/ladder-layout'
-import { type KeyboardEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { LADDER_STYLE, withLaidOutGeometry } from '@root/middleware/shared/utils/ladder-layout'
+import {
+  type KeyboardEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -173,6 +182,13 @@ export default function LadderEditor() {
   const scrollableRef = useRef<HTMLDivElement>(null)
   const viewportWidth = useVisibleWidth(scrollableRef)
   const pouCanvas = useLadderPouCanvasValue(pouName, rungs, viewportWidth)
+
+  // Stored coordinates are engine output: a rename, an instance name or a changed location re-lays the rung out.
+  useLayoutEffect(() => {
+    if (isDebuggerVisible) return
+    const laidOut = withLaidOutGeometry(rungs, pouCanvas.layouts)
+    if (laidOut !== rungs) ladderFlowActions.setRungs({ editorName: pouName, rungs: [...laidOut] })
+  }, [rungs, pouCanvas.layouts, isDebuggerVisible, ladderFlowActions, pouName])
 
   useEffect(() => {
     if (scrollableRef.current) {

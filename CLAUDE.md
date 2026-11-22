@@ -398,7 +398,8 @@ coordinate is engine output: `layoutRung(rung, labelSource)` computes the geomet
 locations, a location line reserved on every contact and coil, block header band and pin rows) and
 `applyRungLayout` stores it, with the natural size as `defaultBounds` and `reactFlowViewport`. Editing paths call
 `relayoutRung(rung, labelSource)`, which also rebuilds the pin variable boxes. Every layout caller passes a
-`LadderLabelSource` (`pouLabelSource(project, pou)`); a caller without one passes `EMPTY_LABEL_SOURCE`. In a parallel
+`LadderLabelSource` (`pouLabelSource(project, pou)`); a caller without one passes `EMPTY_LABEL_SOURCE`. The input pin networks of a main-series
+block start at the left rail, each column sharing one width with the main series before the block. In a parallel
 group every branch spans the longest branch: a shorter branch ends in a straight branch filler to one vertical
 closing junction (before the coils in a trailing coil group). Branch fillers and junction lines are derived from the
 layout (`RungLayout.branchFillers`, `parallelEdgeRoute`) and never stored. Geometry decides the order of the
@@ -411,8 +412,9 @@ the theme palette (`LADDER_PALETTE`) to the node atoms through `LadderRungViewPr
 (`_atoms/graphical-editor/ladder/rung-view.tsx`). The atoms draw the layout's labels as SVG text in JetBrains Mono,
 never as HTML; a name becomes a one-line `<input>` when clicked or when its element is placed. Every edge
 `parallelEdgeRoute` routes is drawn as the straight polyline of the `ladderRoute` edge type (`route-edge.tsx`); other
-edges stay xyflow `smoothstep`. Rendering never writes geometry to the store: the panel size comes from the layout,
-and xyflow's measurements stay local. The LD diff view lays both sides out the same way with the project's current
+edges stay xyflow `smoothstep`. Rendering itself writes no geometry: the panel size comes from the layout, and xyflow's
+measurements stay local; the LD editor stores the layout on any rung whose stored geometry drifted from it (a
+rename, an instance name, a changed location, a new rung: `withLaidOutGeometry`). The LD diff view lays both sides out the same way with the project's current
 variables, and marks an element whose position or size alone changed only in a rung pair that is a pure re-layout
 (`graphical-diff.ts`).
 

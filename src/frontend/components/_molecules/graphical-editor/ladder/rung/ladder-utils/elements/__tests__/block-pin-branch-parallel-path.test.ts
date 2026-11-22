@@ -1,5 +1,6 @@
 import { emitLdBody } from '@root/backend/shared/transpilers/st-transpiler/walker/ld'
 import type { RFEdge, RFNode } from '@root/backend/shared/transpilers/st-transpiler/walker/types'
+import { EMPTY_LABEL_SOURCE, layoutRung } from '@root/middleware/shared/utils/ladder-layout'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
@@ -218,6 +219,29 @@ describe('Ladder: contacts added on the parallel path of a block pin branch', ()
     store = createTestStore()
     expect(store.getState().pouActions.create({ type: 'program', name: POU, language: 'ld' }).ok).toBe(true)
     store.getState().ladderFlowActions.startLadderRung({ editorName: POU, rungId: RUNG, defaultBounds: [1500, 200] })
+  })
+
+  it('leaves no drop marker on the rung after a drop on a pin', () => {
+    blockRung('CTU', 'CTU0')
+    drop(pinOf('CTU0', 'R'), contact, 'r')
+
+    expect(
+      rung()
+        .nodes.filter(isPlaceholder)
+        .map((node) => node.id),
+    ).toEqual([])
+  })
+
+  it('starts a pin contact at the rail, in one column with the contact before the block', () => {
+    blockRung('CTU', 'CTU0')
+    drop(pinOf('CTU0', 'R'), contact, 'reset_counter')
+
+    const layout = layoutRung(rung(), EMPTY_LABEL_SOURCE)
+    const centre = (name: string) => {
+      const geometry = layout.nodes.get(nodeNamed(name).id)
+      return geometry === undefined ? Number.NaN : geometry.position.x + geometry.width / 2
+    }
+    expect(centre('reset_counter')).toBeCloseTo(centre('a'), 6)
   })
 
   it('builds (i AND j) OR k on CTUD.LD (H02 steps 1-6)', () => {
