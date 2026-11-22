@@ -42,6 +42,7 @@
     "src/frontend/components/_organisms/modals/__tests__/confirm-plcopen-import-modal.test.tsx",
     "src/backend/shared/library/__tests__/build-pipeline-real-strucpp.test.ts",
     "src/backend/shared/print/__tests__/fixtures/",
+    "src/backend/shared/transpilers/st-transpiler/__tests__/ld-relayout-corpus/",
     "src/backend/shared/ethercat/__tests__/fixtures/",
     "src/backend/shared/runtime-provisioning/__tests__/fixtures/",
     "src/backend/editor/runtime-provisioning/__tests__/fixtures/",
