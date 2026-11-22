@@ -1,5 +1,5 @@
 /**
- * Builds the LD re-layout regression corpus through the editor's UI: three projects, several LD programs each, rungs
+ * Builds the LD re-layout regression corpus through the editor's UI: four projects, several LD programs each, rungs
  * built the way users build them, saved by the editor and copied to
  * `src/backend/shared/transpilers/st-transpiler/__tests__/fixtures/ld-relayout-corpus/<project>/project/`.
  *
@@ -52,7 +52,7 @@ const CORPUS = join(
   'ld-relayout-corpus',
 )
 
-type ProjectName = 'ld-corpus-basic' | 'ld-corpus-hard' | 'ld-corpus-imported'
+type ProjectName = 'ld-corpus-basic' | 'ld-corpus-hard' | 'ld-corpus-imported' | 'ld-corpus-parallel-width'
 
 /** The corpus coverage table: scenario, name, project, POU and the 1-based rungs it covers. */
 const SCENARIOS: readonly [string, string, ProjectName, string, readonly number[]][] = [
@@ -77,6 +77,14 @@ const SCENARIOS: readonly [string, string, ProjectName, string, readonly number[
   ['H07', 'block-feeds-block', 'ld-corpus-hard', 'Chains', [1]],
   ['H08', 'block-chain-three', 'ld-corpus-hard', 'Chains', [2]],
   ['H10', 'multi-pou-hard-mix', 'ld-corpus-hard', 'Mixed', [1, 2, 3]],
+  ['W01', 'unequal-two-branches', 'ld-corpus-parallel-width', 'Branches', [1]],
+  ['W02', 'longest-branch-in-middle', 'ld-corpus-parallel-width', 'Branches', [2]],
+  ['W03', 'nested-unequal-groups', 'ld-corpus-parallel-width', 'Branches', [3]],
+  ['W04', 'name-width-decides', 'ld-corpus-parallel-width', 'Branches', [4]],
+  ['W05', 'trailing-coils-unequal-names', 'ld-corpus-parallel-width', 'Branches', [5]],
+  ['W06', 'block-branch-vs-contact-branch', 'ld-corpus-parallel-width', 'Blocks', [1]],
+  ['W07', 'pin-network-unequal', 'ld-corpus-parallel-width', 'Blocks', [2]],
+  ['W08', 'pin-network-three-branches', 'ld-corpus-parallel-width', 'Blocks', [3]],
 ]
 
 /** A rung's comment: each scenario covering it as `<ID> <name>`, joined with `; ` (as the corpus test expects). */
@@ -411,9 +419,83 @@ const HARD: readonly PouScript[] = [
   },
 ]
 
+const PARALLEL_WIDTH: readonly PouScript[] = [
+  {
+    name: 'Branches',
+    rungs: rungs('ld-corpus-parallel-width', 'Branches', [
+      [
+        contact('a', rail, 'w01_a'),
+        coil('y', right('a'), 'w01_y'),
+        contact('b', right('a'), 'w01_b'),
+        contact('e', below('b'), 'w01_e'),
+        contact('c', right('b'), 'w01_c'),
+        contact('d', right('c'), 'w01_d'),
+      ],
+      [
+        contact('f', rail, 'w02_f'),
+        coil('y', right('f'), 'w02_y'),
+        contact('g', below('f'), 'w02_g'),
+        contact('j', below('g'), 'w02_j'),
+        contact('h', right('g'), 'w02_h'),
+        contact('i', right('h'), 'w02_i'),
+        contact('k', right('j'), 'w02_k'),
+      ],
+      [
+        contact('e', rail, 'w03_e'),
+        coil('y', right('e'), 'w03_y'),
+        contact('a', below('e'), 'w03_a'),
+        contact('b', right('a'), 'w03_b'),
+        contact('d', below('b'), 'w03_d'),
+        contact('c', right('b'), 'w03_c'),
+      ],
+      [
+        contact('a', rail, 'w04_a'),
+        coil('y', right('a'), 'w04_y'),
+        contact('l', below('a'), 'w04_conveyor_infeed_photoeye_blocked_longer_than_limit'),
+        contact('b', right('a'), 'w04_b'),
+      ],
+      [
+        contact('a', rail, 'w05_a'),
+        coil('k', right('a'), 'w05_k'),
+        coil('l', below('k'), 'w05_conveyor_reject_gate_solenoid_output_main'),
+      ],
+    ]),
+  },
+  {
+    name: 'Blocks',
+    rungs: rungs('ld-corpus-parallel-width', 'Blocks', [
+      [
+        block('t', 'TON', rail),
+        coil('y', right('t'), 'w06_y'),
+        contact('b', below('t'), 'w06_b'),
+        contact('a', left('t'), 'w06_a'),
+        pin('t', 'PT', 'T#1s'),
+      ],
+      [
+        contact('c', rail, 'w07_c'),
+        block('ctu', 'CTU', right('c')),
+        coil('y', right('ctu'), 'w07_y'),
+        contact('i', handle('ctu', 'R'), 'w07_i'),
+        contact('k', below('i'), 'w07_k'),
+        contact('j', right('i'), 'w07_j'),
+      ],
+      [
+        contact('c', rail, 'w08_c'),
+        block('ctud', 'CTUD', right('c')),
+        coil('y', right('ctud'), 'w08_y'),
+        contact('i', handle('ctud', 'LD'), 'w08_i'),
+        contact('k', below('i'), 'w08_k'),
+        contact('l', below('k'), 'w08_l'),
+        contact('j', right('i'), 'w08_j'),
+      ],
+    ]),
+  },
+]
+
 const BUILT: readonly { name: ProjectName; pous: readonly PouScript[] }[] = [
   { name: 'ld-corpus-basic', pous: BASIC },
   { name: 'ld-corpus-hard', pous: HARD },
+  { name: 'ld-corpus-parallel-width', pous: PARALLEL_WIDTH },
 ]
 
 const IMPORTED: readonly { file: string; from: string; pou: string; language: 'ld' | 'fbd' }[] = [

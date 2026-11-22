@@ -36,6 +36,7 @@ const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..', '..')
 const EXPECTED_IDS = [
   ...Array.from({ length: 14 }, (_, index) => `B${String(index + 1).padStart(2, '0')}`).filter((id) => id !== 'B12'),
   ...Array.from({ length: 10 }, (_, index) => `H${String(index + 1).padStart(2, '0')}`),
+  ...Array.from({ length: 8 }, (_, index) => `W${String(index + 1).padStart(2, '0')}`),
 ]
 
 /**
@@ -74,7 +75,7 @@ function readmeCoverageRows(): string[][] {
   const readme = readFileSync(join(CORPUS_ROOT, 'README.md'), 'utf8')
   return readme
     .split('\n')
-    .filter((line) => /^\|\s*[BH]\d{2}\s*\|/.test(line))
+    .filter((line) => /^\|\s*[BHW]\d{2}\s*\|/.test(line))
     .map((line) =>
       line
         .split('|')
@@ -128,7 +129,7 @@ describe('LD re-layout corpus: frozen Structured Text', () => {
 })
 
 describe('LD re-layout corpus: coverage table', () => {
-  it('CORPUS_COVERAGE holds exactly B01-B11, B13, B14 and H01-H10', () => {
+  it('CORPUS_COVERAGE holds exactly B01-B11, B13, B14, H01-H10 and W01-W08', () => {
     const ids = CORPUS_COVERAGE.map((s) => s.id)
     expect(new Set(ids).size).toBe(ids.length)
     expect([...ids].sort()).toEqual(EXPECTED_IDS)

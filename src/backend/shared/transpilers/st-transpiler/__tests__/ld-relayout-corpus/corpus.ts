@@ -9,7 +9,7 @@ import { type ParsedProjectData, parseProjectFiles } from '@root/backend/shared/
 import type { RawProjectFile } from '@root/middleware/shared/ports/project-port'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 
-export type CorpusProjectName = 'ld-corpus-basic' | 'ld-corpus-hard' | 'ld-corpus-imported'
+export type CorpusProjectName = 'ld-corpus-basic' | 'ld-corpus-hard' | 'ld-corpus-imported' | 'ld-corpus-parallel-width'
 
 export interface CorpusScenario {
   id: string
@@ -19,10 +19,19 @@ export interface CorpusScenario {
   rungs: readonly number[] | 'all'
 }
 
-export const CORPUS_PROJECTS: readonly CorpusProjectName[] = ['ld-corpus-basic', 'ld-corpus-hard', 'ld-corpus-imported']
+export const CORPUS_PROJECTS: readonly CorpusProjectName[] = [
+  'ld-corpus-basic',
+  'ld-corpus-hard',
+  'ld-corpus-imported',
+  'ld-corpus-parallel-width',
+]
 
 /** Projects whose POUs were built rung by rung through the editor's UI; their rung comments name the scenarios. */
-export const UI_BUILT_PROJECTS: readonly CorpusProjectName[] = ['ld-corpus-basic', 'ld-corpus-hard']
+export const UI_BUILT_PROJECTS: readonly CorpusProjectName[] = [
+  'ld-corpus-basic',
+  'ld-corpus-hard',
+  'ld-corpus-parallel-width',
+]
 
 /**
  * The coverage table of the corpus README, row for row: scenario, project, POU and 1-based rungs in display order.
@@ -52,6 +61,14 @@ export const CORPUS_COVERAGE: readonly CorpusScenario[] = [
   { id: 'H10', name: 'multi-pou-hard-mix', project: 'ld-corpus-hard', pou: 'Mixed', rungs: [1, 2, 3] },
   { id: 'B13', name: 'motor-ladder', project: 'ld-corpus-imported', pou: 'motor_ladder', rungs: 'all' },
   { id: 'B14', name: 'function-block-instance-ld', project: 'ld-corpus-imported', pou: 'main_ld', rungs: 'all' },
+  { id: 'W01', name: 'unequal-two-branches', project: 'ld-corpus-parallel-width', pou: 'Branches', rungs: [1] },
+  { id: 'W02', name: 'longest-branch-in-middle', project: 'ld-corpus-parallel-width', pou: 'Branches', rungs: [2] },
+  { id: 'W03', name: 'nested-unequal-groups', project: 'ld-corpus-parallel-width', pou: 'Branches', rungs: [3] },
+  { id: 'W04', name: 'name-width-decides', project: 'ld-corpus-parallel-width', pou: 'Branches', rungs: [4] },
+  { id: 'W05', name: 'trailing-coils-unequal-names', project: 'ld-corpus-parallel-width', pou: 'Branches', rungs: [5] },
+  { id: 'W06', name: 'block-branch-vs-contact-branch', project: 'ld-corpus-parallel-width', pou: 'Blocks', rungs: [1] },
+  { id: 'W07', name: 'pin-network-unequal', project: 'ld-corpus-parallel-width', pou: 'Blocks', rungs: [2] },
+  { id: 'W08', name: 'pin-network-three-branches', project: 'ld-corpus-parallel-width', pou: 'Blocks', rungs: [3] },
 ]
 
 /** The folder that holds the corpus projects, their expected Structured Text and the README. */

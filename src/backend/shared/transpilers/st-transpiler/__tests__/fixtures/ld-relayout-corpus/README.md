@@ -1,6 +1,6 @@
 # LD re-layout regression corpus
 
-Three Ladder Diagram projects built through the editor's UI, the way users build rungs, and saved by the editor. Their
+Four Ladder Diagram projects built through the editor's UI, the way users build rungs, and saved by the editor. Their
 Structured Text is frozen per POU and per rung from the transpiler of the same commit. The re-layout of LD rungs
 changes geometry only: these files guard the generated Structured Text and the compiled statement order against it.
 
@@ -39,6 +39,18 @@ mkdir -p release/app/configs/dll
 cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
 npx playwright test e2e/build-ld-relayout-corpus.spec.ts --workers=1 --global-timeout=3600000 --reporter=line
 ```
+
+`ld-corpus-parallel-width` (Branches, Blocks) was built later, before the parallel-branch-width layout. Starting code:
+openplc-editor `e10d5c1fa` (same branch), the commit the app was built from; the builder selected only this project:
+
+```bash
+npx playwright test e2e/build-ld-relayout-corpus.spec.ts --workers=1 --grep "ld-corpus-parallel-width/" \
+  --global-timeout=3600000 --reporter=line
+```
+
+W03 is built mirrored: the outer group's top branch is contact E and its bottom branch is contact A followed by the
+inner group. The editor offers no parallel marker below an element in the top branch of a parallel group, so an inner
+group cannot be nested in that branch; the mirrored rung has the same Boolean expression.
 
 ## Freezing the expected Structured Text
 
@@ -83,6 +95,14 @@ scenario: each pin's Boolean expression, the block call order and the sink order
 | H10 | multi-pou-hard-mix | ld-corpus-hard | Mixed | 1-3 | hard topologies combined over three rungs with sinks near the rung boundaries (execution order 0 throughout) | CTU0 with an R network, TON0 with an OR network and three trailing coils, SR0 with an R network |
 | B13 | motor-ladder | ld-corpus-imported | motor_ladder | all | `e2e/fixtures/project-search/motor_ladder.ld`, opened and saved by the editor (which adds its `PROGRAM` header) | `Lamp := Motor` |
 | B14 | function-block-instance-ld | ld-corpus-imported | main_ld | all | `e2e/fixtures/function-block-instance/main_ld.ld` (with its companion `main_fbd.fbd`) | three rungs: `run_valve` assignment, TON0 -> TOF0 -> `timeout`, CTU0 with `R := NOT(man_mode)` |
+| W01 | unequal-two-branches | ld-corpus-parallel-width | Branches | 1 | contact A, then a group of B, C and D in series / E, then coil Y | `w01_y := (w01_e OR w01_d AND w01_c AND w01_b) AND w01_a`: `A AND ((B AND C AND D) OR E)` |
+| W02 | longest-branch-in-middle | ld-corpus-parallel-width | Branches | 2 | three branches (a stack of pairs): F / G, H and I / J and K, then coil Y | `w02_y := w02_f OR w02_i AND w02_h AND w02_g OR w02_k AND w02_j`: `F OR (G AND H AND I) OR (J AND K)` |
+| W03 | nested-unequal-groups | ld-corpus-parallel-width | Branches | 3 | outer group E / (A then an inner group of B and C / D), then coil Y (built mirrored, see above) | `w03_y := w03_e OR (w03_d OR w03_c AND w03_b) AND w03_a`: `(A AND ((B AND C) OR D)) OR E` |
+| W04 | name-width-decides | ld-corpus-parallel-width | Branches | 4 | A and B in series / one contact with a 54-character name, then coil Y | `w04_y := w04_conveyor_infeed_photoeye_blocked_longer_than_limit OR w04_b AND w04_a`: `(A AND B) OR <long name>` |
+| W05 | trailing-coils-unequal-names | ld-corpus-parallel-width | Branches | 5 | contact A, then a trailing group of coil w05_k / a coil with a 45-character name | both coils `:= w05_a`, in display order |
+| W06 | block-branch-vs-contact-branch | ld-corpus-parallel-width | Blocks | 1 | contact A then TON (PT a literal) / contact B, then coil Y | `TON0(IN := w06_a, PT := T#1s)`; `w06_y := TON0.Q OR w06_b` |
+| W07 | pin-network-unequal | ld-corpus-parallel-width | Blocks | 2 | contact C into CTU.CU; CTU.R fed by `(I AND J) OR K` on its pin branch; Q to coil Y | `CTU0(CU := w07_c, R := w07_k OR w07_j AND w07_i)`; `w07_y := CTU0.Q` |
+| W08 | pin-network-three-branches | ld-corpus-parallel-width | Blocks | 3 | contact C into CTUD.CU; CTUD.LD fed by `(I AND J) OR K OR L` on its pin branch; QU to coil Y | `CTUD0(CU := w08_c, LD := w08_k OR w08_l OR w08_j AND w08_i)`; `w08_y := CTUD0.QU` |
 
 Every element of the corpus has execution order 0: the ladder Block Properties dialog cannot set another value.
 
