@@ -41,6 +41,10 @@ describe('POU screen: variables first', () => {
     const row = screen.getByLabelText('Return type row')
     expect(row.textContent).toContain('ScaleRaw')
     expect(within(row).getByLabelText('Return type')).toBeTruthy()
+    // Only the Type cell can be edited: no other field, checkbox or button in the row.
+    expect(row.querySelectorAll('input, textarea, button, [role="checkbox"]').length).toBe(
+      row.querySelectorAll('[aria-label="Return type"]').length,
+    )
 
     expect(store.getState().pouActions.create({ type: 'program', name: 'Main2', language: 'st' }).ok).toBe(true)
     const program = rtlRender(<VariablesEditor name='Main2' />, { wrapper: createStoreWrapper(store) })
