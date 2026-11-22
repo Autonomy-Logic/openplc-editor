@@ -39,6 +39,8 @@ export interface HmiBlockModel {
   bindings: readonly HmiBinding[]
   /** Every `A.B` read or written anywhere in the block, upper-case, where A is not a variable of the block. */
   references: ReadonlySet<string>
+  /** Every `Element.Member` the block's body or methods assign, upper-case, where Element is a variable of the block. */
+  assigned: ReadonlySet<string>
   /** Upper-case names of the block's methods. */
   methods: ReadonlySet<string>
   /** Offset where generated methods are inserted: after the declarations, before methods and body. */
@@ -58,6 +60,23 @@ function variableExpressions(node: unknown, out: VariableExpression[] = []): Var
   } else if (typeof node === 'object' && node !== null) {
     if (isVariableExpression(node)) out.push(node)
     for (const value of Object.values(node)) variableExpressions(value, out)
+  }
+  return out
+}
+
+type AssignmentStatement = Extract<Statement, { kind: 'AssignmentStatement' }>
+
+function isAssignment(node: object): node is AssignmentStatement {
+  return 'kind' in node && node.kind === 'AssignmentStatement'
+}
+
+/** Every assignment statement under a node, nested statements included. */
+function assignmentStatements(node: unknown, out: AssignmentStatement[] = []): AssignmentStatement[] {
+  if (Array.isArray(node)) {
+    for (const item of node) assignmentStatements(item, out)
+  } else if (typeof node === 'object' && node !== null) {
+    if (isAssignment(node)) out.push(node)
+    for (const value of Object.values(node)) assignmentStatements(value, out)
   }
   return out
 }
@@ -136,6 +155,11 @@ function modelOf(
     if (locals.has(v.name) || v.fieldAccess.length === 0) continue
     references.add(`${v.name}.${v.fieldAccess[0]}`)
   }
+  const assigned = new Set<string>()
+  for (const { target } of assignmentStatements([fb.body, fb.methods, fb.properties])) {
+    if (isVariableExpression(target) && locals.has(target.name) && target.fieldAccess.length > 0)
+      assigned.add(`${target.name}.${target.fieldAccess[0]}`.toUpperCase())
+  }
   const bindings = fb.body.flatMap((s) => {
     const b = bindingOf(s, text)
     return b ? [b] : []
@@ -151,6 +175,7 @@ function modelOf(
     elements,
     bindings,
     references,
+    assigned,
     methods: new Set(fb.methods.map((m) => m.name.toUpperCase())),
     insertAt: lastVar ? text.end(lastVar.sourceSpan) : (firstAfter ?? end),
   }

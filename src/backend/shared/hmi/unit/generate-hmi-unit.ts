@@ -13,7 +13,12 @@ import {
   type HmiCheckBlock,
   hmiTextLiteral as textLiteral,
 } from '@root/middleware/shared/utils/hmi/block-checks'
-import { HMI_FEED_METHODS, type HmiSourceKind, hmiSourceKind } from '@root/middleware/shared/utils/hmi/data-sources'
+import {
+  HMI_FEED_METHODS,
+  HMI_FEED_SLOTS,
+  type HmiSourceKind,
+  hmiSourceKind,
+} from '@root/middleware/shared/utils/hmi/data-sources'
 import { isContainerType, widgetIsA as isA } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import { HMI_ARRAY_ELEMENTS_MAX, HMI_NESTING_MAX } from '@root/middleware/shared/utils/hmi/plc-variables'
 import { maskStComments } from '@root/middleware/shared/utils/hmi/references'
@@ -528,9 +533,18 @@ function feeds(
   for (const element of plan.model.elements) {
     const widget = catalog.widgets.get(element.type.toUpperCase())
     for (const source of widget?.sources ?? []) {
+      const where = `${element.name}.${source.name}`
+      if (plan.model.assigned.has(`${element.name}.${source.name}`.toUpperCase()))
+        d.error(plan.file.name, `${where} is set in code; a data source is set in the declaration, as a literal`)
       const name = textLiteral(element.props.get(source.name.toUpperCase()))
       if (name === undefined || name.trim() === '') continue
-      const where = `${element.name}.${source.name}`
+      if (source.slot >= HMI_FEED_SLOTS) {
+        d.error(
+          plan.file.name,
+          `${where}: ${widget?.name ?? element.type} has more than ${HMI_FEED_SLOTS} data sources; only the first ${HMI_FEED_SLOTS} can be fed`,
+        )
+        continue
+      }
       const kind = hmiSourceKind(source.type)
       if (kind === null) {
         d.error(plan.file.name, `${where}: ${source.type} is not data the HMI build can feed`)
@@ -562,14 +576,22 @@ function feeds(
         bind: `${element.name}.SetFeed(${source.slot}, ADR(${instance}));`,
       })
       const output = (out: string): boolean => (widget?.outputs ?? []).some((o) => o.name.toUpperCase() === out)
-      if (kind === 'alarms' && output('ACKROW'))
+      if (kind === 'alarms' && output('ACKROW')) {
+        const seq = output('ACKROWSEQ')
+        const ack = (at: string): string =>
+          `${seq ? `${at}.AckSeq := ${element.name}.AckRowSeq; ` : ''}${at}.AckReq := TRUE;`
         plan.writeBacks.push(
-          `CASE ${element.name}.AckRow OF ${indexes.map((index, row) => `${row}: ${variable.path}[${index}].AckReq := TRUE;`).join(' ')} END_CASE;`,
+          `CASE ${element.name}.AckRow OF ${indexes.map((index, row) => `${row}: ${ack(`${variable.path}[${index}]`)}`).join(' ')} END_CASE;`,
         )
-      if (kind === 'summary')
-        for (const request of ['AckTop', 'AckAll'])
-          if (output(request.toUpperCase()))
-            plan.writeBacks.push(`IF ${element.name}.${request} THEN ${variable.path}.${request} := TRUE; END_IF;`)
+      }
+      if (kind === 'summary') {
+        if (output('ACKTOP'))
+          plan.writeBacks.push(
+            `IF ${element.name}.AckTop THEN ${output('ACKTOPSEQ') ? `${variable.path}.AckTopSeq := ${element.name}.AckTopSeq; ` : ''}${variable.path}.AckTop := TRUE; END_IF;`,
+          )
+        if (output('ACKALL'))
+          plan.writeBacks.push(`IF ${element.name}.AckAll THEN ${variable.path}.AckAll := TRUE; END_IF;`)
+      }
     }
   }
 }

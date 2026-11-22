@@ -51,13 +51,14 @@ function makePort(source: string): jest.Mocked<CompilerPlatformPort> {
   } as jest.Mocked<CompilerPlatformPort>
 }
 
-const projectData = {
+const projectData: PLCProjectData = {
   pous: [],
   dataTypes: [],
   configuration: { resource: { tasks: [], instances: [], globalVariables: [] } },
   servers: [],
   remoteDevices: [],
-} as unknown as PLCProjectData
+  libraries: [],
+}
 
 const deviceContext: PlatformDeviceContext = { kind: 'editor-https', ip: '192.168.1.10', jwt: 'jwt-token' }
 
