@@ -98,6 +98,11 @@ const titlebarOptionsMap: Record<string, OptTitlebar> = {
     titlebarOverlay: false,
     frame: false,
   },
+  linux: {
+    titleBarStyle: 'hidden',
+    titlebarOverlay: false,
+    frame: false,
+  },
   default: {
     titleBarStyle: 'default',
     titlebarOverlay: true,
