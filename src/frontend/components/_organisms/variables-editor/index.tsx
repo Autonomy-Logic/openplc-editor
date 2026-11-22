@@ -1,6 +1,8 @@
 import * as Popover from '@radix-ui/react-popover'
 import { ColumnFiltersState } from '@tanstack/react-table'
 import {
+  type ComponentPropsWithoutRef,
+  forwardRef,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   useCallback,
@@ -92,13 +94,48 @@ function useEditorActionsSlot(): HTMLElement | null {
   return slot
 }
 
-/** One button of the tab-bar segmented group, and its selected state. */
-const SEGMENT =
-  'grid w-7 place-items-center text-neutral-500 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-neutral-900'
-const SEGMENT_ON =
-  'bg-brand-light text-brand hover:bg-brand-light dark:bg-brand-medium-dark dark:hover:bg-brand-medium-dark'
-const SEGMENT_ICON =
-  'h-4 w-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.6]'
+type ActionTileProps = ComponentPropsWithoutRef<'button'> & {
+  label: string
+  path: string
+  on?: boolean
+}
+
+/** A tab-bar action in the style of the Table/Code switch: a filled tile, brand blue with a white icon when on. */
+const ActionTile = forwardRef<HTMLButtonElement, ActionTileProps>(
+  ({ label, path, on = false, className, ...rest }, ref) => (
+    <button
+      ref={ref}
+      type='button'
+      aria-label={label}
+      aria-pressed={on}
+      className={cn(
+        'flex hover:cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40',
+        className,
+      )}
+      {...rest}
+    >
+      <svg
+        viewBox='0 0 30 28'
+        fill='none'
+        className={cn(
+          'h-8 w-8 transition-colors ease-in-out',
+          on ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+          className,
+        )}
+      >
+        <rect width='30' height='28' fill='inherit' />
+        <path
+          d={path}
+          stroke={on ? 'white' : '#C8D0D9'}
+          strokeWidth='1.5'
+          strokeLinecap='round'
+          strokeLinejoin='round'
+        />
+      </svg>
+    </button>
+  ),
+)
+ActionTile.displayName = 'ActionTile'
 
 const POU_TYPE_LABEL: Record<string, string> = {
   program: 'Program',
@@ -1240,60 +1277,38 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
         {_isActive &&
           actionsSlot &&
           createPortal(
-            <div
-              aria-label='Editor actions'
-              className='flex h-[26px] items-stretch overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-800 [&>*+*]:border-l [&>*+*]:border-neutral-300 dark:[&>*+*]:border-neutral-800'
-            >
-              <button
-                aria-label='Column filters'
-                aria-pressed={filtersOn}
+            <div role='group' aria-label='Editor actions' className='flex h-fit w-fit items-center rounded-md'>
+              <ActionTile
+                label='Column filters'
                 title='Column filters'
+                on={filtersOn}
                 disabled={editorVariables.display !== 'table'}
                 onClick={toggleColumnFilters}
-                className={cn(SEGMENT, filtersOn && SEGMENT_ON)}
-              >
-                <svg viewBox='0 0 16 16' className={SEGMENT_ICON}>
-                  <path d='M2 3h12L9.5 8.5V12l-3 1.5V8.5z' />
-                </svg>
-              </button>
-              <button
-                aria-label='Variables table visualization'
-                aria-pressed={editorVariables.display === 'table'}
+                path='M10 9h10l-3.8 4.6V18l-2.4 1.2v-5.6z'
+                className='rounded-l-md'
+              />
+              <ActionTile
+                label='Variables table visualization'
                 title='Table'
+                on={editorVariables.display === 'table'}
                 onClick={() => void handleVisualizationTypeChange('table')}
-                className={cn(SEGMENT, editorVariables.display === 'table' && SEGMENT_ON)}
-              >
-                <svg viewBox='0 0 16 16' className={SEGMENT_ICON}>
-                  <rect x='2' y='2.5' width='12' height='11' rx='1.5' />
-                  <path d='M2 6.5h12M6.5 6.5V13.5' />
-                </svg>
-              </button>
-              <button
-                aria-label='Variables code visualization'
-                aria-pressed={editorVariables.display === 'code'}
+                path='M9 12H21M9 16H21M15 8V20M12.2 8H17.8C18.9 8 19.5 8 19.9 8.2C20.3 8.4 20.6 8.7 20.8 9.1C21 9.5 21 10.1 21 11.2V16.8C21 17.9 21 18.5 20.8 18.9C20.6 19.3 20.3 19.6 19.9 19.8C19.5 20 18.9 20 17.8 20H12.2C11.1 20 10.5 20 10.1 19.8C9.7 19.6 9.4 19.3 9.2 18.9C9 18.5 9 17.9 9 16.8V11.2C9 10.1 9 9.5 9.2 9.1C9.4 8.7 9.7 8.4 10.1 8.2C10.5 8 11.1 8 12.2 8Z'
+              />
+              <ActionTile
+                label='Variables code visualization'
                 title='Code'
+                on={editorVariables.display === 'code'}
                 onClick={() => void handleVisualizationTypeChange('code')}
-                className={cn(SEGMENT, editorVariables.display === 'code' && SEGMENT_ON)}
-              >
-                <svg viewBox='0 0 16 16' className={SEGMENT_ICON}>
-                  <path d='M5.5 4 2 8l3.5 4M10.5 4 14 8l-3.5 4' />
-                </svg>
-              </button>
+                path='M18.3333 17.3333L21.6667 14L18.3333 10.6667M11.6667 10.6667L8.33333 14L11.6667 17.3333M16.3333 8L13.6667 20'
+              />
               <Popover.Root>
                 <Popover.Trigger asChild>
-                  <button
-                    aria-label='POU properties'
+                  <ActionTile
+                    label='POU properties'
                     title='POU properties'
-                    className={cn(
-                      SEGMENT,
-                      'data-[state=open]:bg-brand-light data-[state=open]:text-brand dark:data-[state=open]:bg-brand-medium-dark',
-                    )}
-                  >
-                    <svg viewBox='0 0 16 16' className={SEGMENT_ICON}>
-                      <circle cx='8' cy='8' r='6' />
-                      <path d='M8 7.2V11.2M8 5v.1' />
-                    </svg>
-                  </button>
+                    path='M15 13.2V18M15 10.4v.1M21 14a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z'
+                    className='rounded-r-md'
+                  />
                 </Popover.Trigger>
                 <Popover.Portal>
                   <Popover.Content
