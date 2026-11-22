@@ -1,4 +1,5 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import { useHoldHmiToolchain } from '@root/frontend/hooks/use-hold-hmi-toolchain'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 import { useShallow } from 'zustand/react/shallow'
@@ -28,6 +29,7 @@ import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/d
 import { DiagnosticsEditor } from '../components/_features/[workspace]/editor/diagnostics'
 import { DiffViewerEditor } from '../components/_features/[workspace]/editor/diff-viewer'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
+import { HmiScreenDesigner, HmiSettingsEditor, HmiWidgetEditor } from '../components/_features/[workspace]/editor/hmi'
 import { LibraryManagerEditor } from '../components/_features/[workspace]/editor/library-manager'
 import { LibraryManifestEditor } from '../components/_features/[workspace]/editor/library-manifest'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
@@ -198,6 +200,7 @@ const WorkspaceScreen = () => {
   }, [projectPath, rawLoadedContent, loadedSerialized, initBaseline, store])
 
   useRuntimePolling()
+  useHoldHmiToolchain()
   useRuntimeCommercialLicenseOwner()
   useRestoreProjectTargetDevice()
   // Mirrors a baremetal target's run/stop state from the held device link's existing liveness tick (no timer of its own).
@@ -696,6 +699,17 @@ const WorkspaceScreen = () => {
                           </HostLockBoundary>
                         )}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
+                        {editor['type'] === 'plc-hmi' &&
+                          (editor.meta.kind === 'screen' ? (
+                            <HmiScreenDesigner key={`screen-${editor.meta.name}`} name={editor.meta.name} />
+                          ) : (
+                            <HmiWidgetEditor key={`widget-${editor.meta.name}`} name={editor.meta.name} />
+                          ))}
+                        {editor['type'] === 'plc-hmi-settings' && (
+                          <HostLockBoundary type={editor['type']}>
+                            <HmiSettingsEditor />
+                          </HostLockBoundary>
+                        )}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 
                         <VendorScreenTabs />

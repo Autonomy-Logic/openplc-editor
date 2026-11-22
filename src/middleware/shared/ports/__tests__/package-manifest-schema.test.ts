@@ -283,6 +283,83 @@ describe('PackageManifestSchema — target.uploadMethod', () => {
   })
 })
 
+describe('PackageManifestSchema — capabilities.hmi', () => {
+  const PANEL = { width: 800, height: 480, density: 1, touch: true, colorFormat: 'rgb565' }
+  const withHmi = (hmi: unknown) => ({
+    formatVersion: '1.0',
+    package: { id: 'vendor.board', name: 'Vendor Board', version: '1.0.0' },
+    devices: [{ id: 'panel', name: 'Panel', capabilities: { vppIo: true, hmi } }],
+  })
+
+  it('accepts a device with no hmi block, or hmi: null', () => {
+    expect(
+      PackageManifestSchema.safeParse({ ...withHmi(null), devices: [{ id: 'd', name: 'D', capabilities: {} }] })
+        .success,
+    ).toBe(true)
+    expect(PackageManifestSchema.safeParse(withHmi(null)).success).toBe(true)
+  })
+
+  it('accepts a panel with and without its buffer sizes', () => {
+    expect(PackageManifestSchema.safeParse(withHmi(PANEL)).success).toBe(true)
+    const sized = {
+      ...PANEL,
+      colorFormat: 'rgb888',
+      displayListBytes: 1024,
+      glyphCacheBytes: 1048576,
+      bandBytes: 20480,
+    }
+    expect(PackageManifestSchema.safeParse(withHmi(sized)).success).toBe(true)
+  })
+
+  it.each<[string, unknown, string]>([
+    ['a width over 4096', { ...PANEL, width: 4097 }, 'width'],
+    ['a zero height', { ...PANEL, height: 0 }, 'height'],
+    ['a density of 9', { ...PANEL, density: 9 }, 'density'],
+    ['a fractional density', { ...PANEL, density: 1.5 }, 'density'],
+    ['a non-boolean touch', { ...PANEL, touch: 'yes' }, 'touch'],
+    ['an unknown color format', { ...PANEL, colorFormat: 'mono' }, 'colorFormat'],
+    ['a display list under 1024 bytes', { ...PANEL, displayListBytes: 1000 }, 'displayListBytes'],
+    ['a band buffer over 1 MiB', { ...PANEL, bandBytes: 2097152 }, 'bandBytes'],
+  ])('refuses a panel with %s, naming the field', (_case, hmi, field) => {
+    const result = PackageManifestSchema.safeParse(withHmi(hmi))
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error.issues[0].path).toEqual(['devices', 0, 'capabilities', 'hmi', field])
+  })
+
+  it('refuses a panel missing a required field or carrying an unknown one', () => {
+    expect(PackageManifestSchema.safeParse(withHmi({ ...PANEL, width: undefined })).success).toBe(false)
+    expect(PackageManifestSchema.safeParse(withHmi({ ...PANEL, bandByte: 4096 })).success).toBe(false)
+  })
+
+  it('still passes the other capability keys through untouched', () => {
+    const parsed = PackageManifestSchema.safeParse(withHmi(PANEL))
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.devices[0].capabilities?.vppIo).toBe(true)
+  })
+})
+
+describe('PackageManifestSchema — capabilities.hmiDataWidgets', () => {
+  const withFlag = (hmiDataWidgets: unknown) => ({
+    formatVersion: '1.0',
+    package: { id: 'vendor.board', name: 'Vendor Board', version: '1.0.0' },
+    devices: [{ id: 'panel', name: 'Panel', capabilities: { vppIo: true, hmiDataWidgets } }],
+  })
+
+  it('accepts a device that declares it on or off, or not at all', () => {
+    expect(PackageManifestSchema.safeParse(withFlag(true)).success).toBe(true)
+    expect(PackageManifestSchema.safeParse(withFlag(false)).success).toBe(true)
+    expect(PackageManifestSchema.safeParse(withFlag(undefined)).success).toBe(true)
+  })
+
+  it('refuses a value that is not a boolean, naming the field', () => {
+    const result = PackageManifestSchema.safeParse(withFlag('yes'))
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error.issues[0].path).toEqual(['devices', 0, 'capabilities', 'hmiDataWidgets'])
+  })
+})
+
 describe('PackageManifestSchema — runtimeLicense', () => {
   it('accepts a manifest that declares none', () => {
     expect(PackageManifestSchema.safeParse(manifest()).success).toBe(true)

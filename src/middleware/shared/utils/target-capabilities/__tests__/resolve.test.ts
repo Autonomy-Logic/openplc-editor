@@ -294,3 +294,25 @@ describe('the S7 profile', () => {
     expect(caps.s7?.maxClients).toBe(2)
   })
 })
+
+describe('hmiDataWidgets', () => {
+  it('is on for plain Runtime v4 and off for the simulator, Arduino, Runtime v3 and an unknown board', () => {
+    expect(RUNTIME_V4_CAPABILITIES.hmiDataWidgets).toBe(true)
+    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler' }).hmiDataWidgets).toBe(true)
+    expect(resolveTargetCapabilities({ compiler: 'simulator' }).hmiDataWidgets).toBe(false)
+    expect(resolveTargetCapabilities({ compiler: 'arduino-cli' }).hmiDataWidgets).toBe(false)
+    expect(RUNTIME_V3_CAPABILITIES.hmiDataWidgets).toBe(false)
+    expect(resolveTargetCapabilities(undefined).hmiDataWidgets).toBe(false)
+  })
+
+  it('is inherited by a Runtime v4 package device, which can turn it off, and declared by any other board', () => {
+    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler', vpp: true }).hmiDataWidgets).toBe(true)
+    expect(
+      resolveTargetCapabilities({ compiler: 'openplc-compiler', vpp: true, capabilities: { hmiDataWidgets: false } })
+        .hmiDataWidgets,
+    ).toBe(false)
+    expect(
+      resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { hmiDataWidgets: true } }).hmiDataWidgets,
+    ).toBe(true)
+  })
+})

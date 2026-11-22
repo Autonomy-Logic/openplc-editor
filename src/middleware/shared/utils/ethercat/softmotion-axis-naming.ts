@@ -68,7 +68,7 @@ export interface AxisPlan {
 }
 
 /** Collect every opted-in, resolvable CiA 402 axis in the project. */
-export function collectAxes(project: PLCProjectData): AxisPlan[] {
+export function collectAxes(project: Pick<PLCProjectData, 'remoteDevices'>): AxisPlan[] {
   const plans: AxisPlan[] = []
   const seen = new Set<string>()
   for (const rd of project.remoteDevices ?? []) {
@@ -105,7 +105,7 @@ export function collectAxes(project: PLCProjectData): AxisPlan[] {
 }
 
 /** Sanitized names of every enabled, resolvable CiA 402 axis in the project. */
-export function softMotionAxisNames(project: PLCProjectData): string[] {
+export function softMotionAxisNames(project: Pick<PLCProjectData, 'remoteDevices'>): string[] {
   return collectAxes(project).map((a) => a.axisName)
 }
 
@@ -130,7 +130,7 @@ export function softMotionAxisNames(project: PLCProjectData): string[] {
  * document (line 0 is `VAR_GLOBAL`) is axis N — the go-to-definition redirect
  * relies on that to map a click back to its drive.
  */
-export function serializeSoftMotionAxisGlobalsToST(project: PLCProjectData): string {
+export function serializeSoftMotionAxisGlobalsToST(project: Pick<PLCProjectData, 'remoteDevices'>): string {
   const axes = collectAxes(project)
   if (axes.length === 0) return ''
 

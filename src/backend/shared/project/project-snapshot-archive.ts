@@ -32,6 +32,7 @@
 import JSZip from 'jszip'
 
 import type { RawProjectFile, WriteProjectFiles } from '../../../middleware/shared/ports/project-port'
+import { classifyHmiPath } from '../../../middleware/shared/utils/hmi/project-files'
 
 /**
  * Bumped when the archive layout changes in a way an older reader would
@@ -256,7 +257,13 @@ export function writeProjectFilesToMap(files: WriteProjectFiles): Map<string, st
   if (files.deviceConfig !== undefined) map.set('devices/configuration.json', files.deviceConfig)
   if (files.pinMapping !== undefined) map.set('devices/pin-mapping.json', files.pinMapping)
   if (files.libraryManifest !== undefined) map.set('library.json', files.libraryManifest)
-  for (const group of [files.pouFiles, files.serverFiles, files.remoteDeviceFiles, files.dataTypeFiles]) {
+  for (const group of [
+    files.pouFiles,
+    files.serverFiles,
+    files.remoteDeviceFiles,
+    files.dataTypeFiles,
+    files.hmiFiles,
+  ]) {
     for (const file of group) map.set(file.relativePath, file.content)
   }
   return map
@@ -448,6 +455,7 @@ export function toWriteProjectFiles(parsed: ParsedProjectSnapshot, projectPath: 
   const serverFiles: RawProjectFile[] = []
   const remoteDeviceFiles: RawProjectFile[] = []
   const dataTypeFiles: RawProjectFile[] = []
+  const hmiFiles: RawProjectFile[] = []
 
   let projectJson = ''
   let deviceConfig: string | undefined
@@ -471,6 +479,8 @@ export function toWriteProjectFiles(parsed: ParsedProjectSnapshot, projectPath: 
       remoteDeviceFiles.push({ relativePath, content })
     } else if (relativePath.startsWith('datatypes/')) {
       dataTypeFiles.push({ relativePath, content })
+    } else if (classifyHmiPath(relativePath)) {
+      hmiFiles.push({ relativePath, content })
     }
   }
 
@@ -484,6 +494,7 @@ export function toWriteProjectFiles(parsed: ParsedProjectSnapshot, projectPath: 
     serverFiles,
     remoteDeviceFiles,
     dataTypeFiles,
+    hmiFiles,
     // A retrieved project is written into an empty destination, so there is
     // nothing to delete. Carrying deletions from the archive would let a
     // hostile device name files to remove on the opening machine.

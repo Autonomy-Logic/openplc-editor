@@ -53,6 +53,7 @@ External contributors without Jira access follow CONTRIBUTING.md; GitHub Issues 
 ```bash
 npm install              # Install deps + download binaries + Python runtime + build DLL cache
 npm run setup:python     # Fetch the pinned Python runtime into vendor/python-runtime/ (python-runtime.json)
+npm run setup:hmi-widgets # Fetch the pinned HMI widget libraries into vendor/hmi-widgets/ (binary-versions.json)
 npm run dev              # Full dev mode (main + renderer + Electron, port 1313)
 npm run build            # Production build (main + renderer)
 npm run build:main       # Electron main process only
@@ -68,6 +69,10 @@ npm run format           # Prettier formatting
 npm run test             # Jest with coverage (enforced thresholds)
 npm run test:watch       # Jest watch mode (no coverage)
 npm run test:e2e         # Playwright E2E tests
+npm run test:hmi-core    # HMI C core: golden scenes (gcc, clang, WebAssembly), unit tests, sanitized fuzzing
+npm run test:hmi-unit    # HMI unit generator: a sample project's unit run by a C host (gcc, clang, sanitizers)
+npm run test:hmi-baremetal # HMI baremetal host in simulated time and the readout's Modbus side (gcc, clang, sanitizers)
+npm run test:hmi-client  # Runtime v4 HMI artefact: hmi.wasm driven as the browser does, same pixels as a native build
 
 npm run validate:arch    # Architecture layer dependency validation
 ```
@@ -84,6 +89,7 @@ so it must be installed first or they fail with `TS2307: Cannot find module
 ```bash
 npm ci --ignore-scripts && npm run setup:strucpp   # required first, or tsc/jest can't resolve 'strucpp'
 npm run setup:python                               # the pinned Python runtime (vendor/python-runtime/), skipped by --ignore-scripts
+npm run setup:hmi-widgets                          # the pinned HMI widget libraries (vendor/hmi-widgets/), which the HMI suites build with
 npx tsc --noEmit                                   # ci-build:       Build Check
 npx prettier --check "./src/**/*.{ts,tsx}"         # ci-format:      Format Check
 npx eslint "./src/**/*.{ts,tsx}"                   # ci-lint:        Lint Check
@@ -446,11 +452,49 @@ as diagnostics too, never as a rejection. The logic is shared and byte-identical
 `src/backend/shared/wasm-toolchain/`: compile and link, the clang worker's runner, the worker host, and the check of requests
 that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its runtime headers.
 
-- **Object cache:** per unit, for the session (256 MB, least recently used first). Each object is kept with the
-  request files clang says it read (`-MD`), and reused while they are unchanged and no file was added or removed.
-- **Clang worker:** at most one (`ClangWorkerPool`), running one job at a time. A build starts it, and it ends once no
-  build is running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds
-  that overlap share it. A worker counts from its start until it has exited, and a new one starts only after the
+- **Object cache:** per unit, for the session (256 MB, least recently used first), up to four objects per unit key
+  (compiler, flags, source path), one per content: the gallery, the preview and a widget preview
+  build the same paths from different headers and no longer evict each other. Each object is kept with the SHA-256 of
+  every request file clang says it read (`-MD`) and the names of all its dependencies, toolchain headers included. It
+  is reused while those files are unchanged and no file carrying one of those names was added or removed; other added
+  or removed files leave it valid. A request equal to one already linked (every file, unit, flag and the output)
+  returns the kept module with no compile and no link.
+- **Objects across sessions:** when the toolchain is prepared (editor start, page load), or at the first build if that
+  comes first, the cache is filled from a store (desktop: `userData/User/WasmObjects/`, web: IndexedDB
+  `openplc-wasm-objects`; one record per object, named by its content digest) and every new object or linked module
+  is written through, at most 192 MB, oldest first. Records of another toolchain or damaged ones are removed. The
+  toolchain's identity is the pinned version (`toolchain-identity.ts`), not a `clang --version` run. Builds wait for
+  the store to load; a store that cannot be read only costs the reuse.
+- **Shipped objects:** `npm run build:hmi-objects` (`scripts/build-hmi-objects.ts`, part of `npm run build`) compiles
+  the objects no project changes (HMI core, font tables, hosts, the widget library units and their factory tables, built
+  from the pinned `vendor/hmi-widgets/` archives, and the OpenPLC Simulator units of the bundled PLC libraries;
+  `hmi/lib-object/fixed-objects.ts`, 23 objects, about 2.7 MB) from reference builds into `release/hmi-objects/` (not committed);
+  packaging ships it as the extra resource `hmi-objects` and refuses to run without it (`before-pack-debug-seam.js`).
+  The compile service reads them into the session cache at toolchain start, only from the installation (or the
+  repository's folder in development; `desktop-shipped-objects.ts` refuses links and paths out of it), never from a
+  project and never into the user's store; each is used, like any cached object, only while every file it was built
+  from is unchanged.
+- **Objects next to a library:** a library's own unit (HMI widget library, its factory table, a simulator library
+  unit) carries a tag (`WasmCompileUnit.library`: name, kind, key). The key (`wasm-toolchain/library-objects.ts`) is a
+  digest of the archive, its dependencies' archives, the kind, the unit's flags and the provided header versions (the
+  HMI core API). Before compiling, the service reads the library's file of that kind (`WasmLibraryObjectStore`) and
+  offers its object to the session cache when the key and toolchain match; the cache still uses it only while every
+  file it was built from is unchanged. After a build, the object each tagged unit used is written back when it is not
+  the one already there. Desktop: `<userData>/libraries/<name>/<name>.<kind>.wasm-object` next to a user-installed
+  library's `.stlib` (`LibraryManagerModule.readLibraryObject`), removed with the library; bundled libraries keep
+  nothing there and use the shipped objects. A read or write that fails only costs the reuse.
+- **No precompiled headers:** every unit includes its headers directly. A clang worker's reply leaves out the binary
+  inputs it gets back unchanged, such as the objects of a link; text inputs come back from YoWASP as bytes and are
+  still sent.
+- **Clang worker:** one (`ClangWorkerPool`), running one job at a time, started by a build and ended once no build is
+  running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds that overlap
+  share it. While an HMI tab is open (screen, widget block or HMI Settings), the workspace holds the toolchain
+  (`useHoldHmiToolchain` -> `HmiPreviewPort.holdToolchain` -> `WasmCompileService.setHeld`): the workers stay loaded
+  between builds, and the pool grows, one loading at a time while jobs wait, to `clangWorkerLimit`
+  (`worker-limit.ts`): one more per 640 MB of available memory beyond a 1 GB reserve, at most four and one less than
+  the processors, and one when the platform cannot tell its memory. Available memory is `vm_stat` on macOS,
+  `MemAvailable` on Linux, `os.freemem()` on Windows and a quarter of `navigator.deviceMemory` on the web (none on
+  Safari and iOS, so one worker there). The hold ends when the last HMI tab closes. A worker counts from its start until it has exited, and a new one starts only after the
   previous one exited. A toolchain whose files cannot be got ready, a worker that cannot be started, or a worker that
   fails or does not load within 120 s before it reports ready, fails the build with
   `The WebAssembly compiler could not be loaded: <reason>`. Once a worker has loaded, one that fails or runs a job past
@@ -484,8 +528,10 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   (`The toolchain's loader is not patched: <path>`).
 - **Packaging:** the prepared copy (`release/yowasp-clang`) ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
-- **Running a module** happens in main-process worker threads (the simulator, Python), never in the renderer: the
-  renderer CSP (`src/index.ejs`) has no `'wasm-unsafe-eval'`.
+- **Running a module** happens in main-process worker threads (the simulator, Python), or, for the HMI preview, in a
+  Worker started from its own renderer bundle (`hmi-preview-worker.js`, a second entry of the renderer webpack
+  configs), which compiles WebAssembly with the page CSP unchanged; `e2e/hmi-preview-worker.spec.ts` checks it. Never
+  on the page itself: the renderer CSP (`src/index.ejs`) has no `'wasm-unsafe-eval'`.
 
 **Simulator build.** The OpenPLC Simulator target builds with this toolchain, not arduino-cli: the pipeline's
 simulator branch (`compileSimulatorModule` in `src/backend/shared/compile/pipeline.ts`) turns the composed firmware
@@ -499,9 +545,17 @@ ArduinoCore-API (LGPL-2.1, commit `0f4e57ea`, licence in `wasm-sim/core/`). The 
 none and `resources/sources/hal/simulator.cpp` does no I/O. No Arduino core is installed for it.
 The desktop writes the module to `<build>/OpenPLC Simulator/simulator.wasm`. The editor builds the simulator only
 from Play; `e2e/wasm-simulator-build.spec.ts` builds through `openplc-cli compile`.
+Only this branch asks STruC++ for separate library files (`runProgramBuildPipeline({ separateLibraryFiles })`, giving
+`lib_<library>.cpp` and `generated_libraries.hpp`); every other target keeps its output. `steps/simulator-library-units.ts`
+takes those `lib_*.cpp` out and compiles each reached library, and the libraries it depends on, from a whole unit
+generated from its archive alone (`library/library-unit.ts`, under `simlib/<library>/`, dependencies passed to STruC++
+first), so a library's object is the same in every project and a program edit compiles no library unit. A rebuild
+after a body edit still compiles the program's units and every runtime unit that includes `defines.h`, which carries
+the program's MD5.
 
 **Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
-lockfiles, `pnpm-lock.yaml` included on the web), then run `yowasp-loader-patch.test.ts`
+lockfiles, `pnpm-lock.yaml` included on the web) and `WASM_TOOLCHAIN_VERSION` in
+`src/backend/shared/wasm-toolchain/toolchain-identity.ts` (its test compares them), then run `yowasp-loader-patch.test.ts`
 (`src/backend/shared/wasm-toolchain/__tests__/`) in both repos, which fails when the new `bundle.js` drops or moves the
 patched line (re-check the patch then, in both repos), and `e2e/wasm-toolchain.spec.ts` in both repos, including the
 packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
@@ -538,7 +592,7 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
 
 ### Debugging
 
-- **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4E for status, version, licensing, run/stop state, bootloader reboot, lock state and board ID provisioning (0x4E) (`resources/sources/Baremetal/modbus_types.h`); 0x48 reports the board's raw ID sources
+- **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4E for status, version, licensing, run/stop state, bootloader reboot, lock state and board ID provisioning (0x4E) (`resources/sources/Baremetal/modbus_types.h`); 0x48 reports the board's raw ID sources. A firmware built with `openplc-cli compile --hmi-test-readout` also answers the test-only HMI codes 0x4F and 0x50 (`resources/sources/hmi/README.md`)
 - **Transports:** Modbus TCP, Modbus RTU, WebSocket, or virtual serial (simulator)
 - **Simulator:** the project's WebAssembly module (`src/backend/shared/simulator/`): `WasmSimulatorModule` runs it
   with simulated time (one scan period per scan, never ahead of the wall clock, in steps of at most 10 ms so the
@@ -557,6 +611,85 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
   per-file isolation, where such a mock would leak).
 - **Coverage:** per-directory floors are in `jest.config.json` (`coverageThreshold`).
 - **End-to-end:** Playwright specs in `e2e/` drive the built Electron app through `_electron.launch`; run them as described in "Electron e2e (Playwright)" above. CI runs the `debug-*` specs only.
+- **HMI C core:** `resources/sources/hmi/` (mirrored to openplc-web `src/assets/firmware/hmi/`) is tested by
+  `tests/hmi-core/run.mjs` (`npm run test:hmi-core`, CI job `ci-hmi-core.yml`), not by Jest; see
+  `resources/sources/hmi/README.md`.
+- **HMI widget libraries:** the ST libraries of the HMI live in their own repository,
+  [openplc-hmi-widgets](https://github.com/Autonomy-Logic/openplc-hmi-widgets), released as plain STruC++ `.stlib`
+  archives: `standard-widgets` (element base, widgets, keyboard, screen base, runtime) and `hmi-alarms` (the PLC side
+  of the alarm and event widgets), with `LICENSE`, `LICENSING.md` and `SHA256SUMS`, the release's only index.
+  `binary-versions.json` pins the release (`hmi-widgets`: tag, repository, `sumsSha256` = SHA-256 of `SHA256SUMS`)
+  and `npm run setup:hmi-widgets` (part of `postinstall`; `scripts/download-binaries.ts` over the shared
+  `widgets-release-setup.ts`) installs every file `SHA256SUMS` lists into `vendor/hmi-widgets/` after checking it
+  against the pin and each file against it. It fails, saying so, when the release is not published;
+  `OPENPLC_HMI_WIDGETS_DIR=<openplc-hmi-widgets>/dist` installs a local build instead. Packaged builds ship the
+  directory as the extra resource `hmi-widgets`, listed by the library manager as bundled: always on, not removable.
+- **One kind of library, requirements per POU:** every `.stlib` is the same thing. STruC++ records on each chunk the
+  headers its `{external}` code needs, transitively (callees, bases, other archives), with the API version, and each
+  archive's `dependencies`. A build states what it provides: every PLC build (program, debug, simulator, Runtime v4,
+  baremetal, CLI) passes `providedHeaders: PLC_PROVIDED_HEADERS` (`[]`), every HMI build (preview, thumbnails, Runtime
+  v4 `hmi.wasm`, panel firmware) `HMI_PROVIDED_HEADERS` (`hmi_core.h` at `HMI_CORE_API_VERSION`), and STruC++ fails a
+  POU the unit uses whose requirements are not met, naming it.
+- **Library selection:** a project uses the bundled libraries and the libraries it lists (`project.json`
+  `libraries`), never another installed library; a listed library that is not installed shows the missing-libraries
+  warning. Builds take `selectBuildLibraryArchives` (PLC, HMI and library-project builds); the HMI preview, palette,
+  thumbnails and HMI code view take the names from `projectLibraryNames` and `selectProjectLibraryArchives`
+  (`src/middleware/shared/utils/library/project-libraries.ts`). The PLC library tree, block pickers and PLC
+  completions list only POUs a PLC build of the project can use, over those libraries (`plcUnusablePous`,
+  `useProjectPlcLibraries`, `projectPlcUnusablePous`). A widget is a function block whose EXTENDS chain, by STruC++'s
+  `functionBlockLineage`, reaches `HMIELEMENT` (`buildWidgetCatalog`, with its `hmi_*` pragmas); there is no
+  library-level classification. `HMI_CORE_API_VERSION` (`src/middleware/shared/utils/hmi/widget-libraries.ts`) equals the
+  `HMI_CORE_API_VERSION` macro of `hmi_core.h` (a Jest test ties them); a library whose chunks need another version is
+  left out of HMI builds with one warning (library manager and Console), and setup refuses such a release.
+- **Library projects** build against the bundled libraries and those they list, declare only the headers their own
+  `{external}` code includes (`library.json` `headers`), and author HMI widget blocks: the + menu's Widget creates one
+  under `hmi/widgets/` extending `HmiElement`, and the library build compiles it into the archive, where it needs the
+  HMI core through that base (STruC++ records it on the chunk) while the library's plain blocks stay usable in PLC
+  builds. `e2e/hmi-widget-libraries.spec.ts` and `e2e/library-widget.spec.ts` cover installed and authored widget
+  libraries end to end.
+- **HMI unit generator:** `src/backend/shared/hmi/unit/` turns screens, widget blocks and HMI Settings
+  (`src/middleware/shared/utils/hmi/settings.ts`) into the HMI unit: C++ in namespace `hmi` plus the C glue hosts
+  link (`resources/sources/hmi/unit/hmi_unit.h`; preview setters in `hmi_preview.h`). `tests/hmi-unit/run.mjs`
+  (`npm run test:hmi-unit`, same CI job) builds a sample project's unit and runs it from a C host.
+- **HMI preview:** `src/backend/shared/hmi/preview/` builds screens and widget blocks with the WebAssembly toolchain
+  and runs them in a Worker (`createHmiPreviewPort`; host `resources/sources/hmi/preview/`). Each screen compiles
+  against its own copy of the unit header (`split-screen-headers.ts`), so an edit of one screen recompiles that screen
+  and the glue only. The running module also follows structural edits without a build: the preview-only
+  factory table (`hmi_preview_factory.cpp`, generated for preview builds only, with `hmi_preview_live.cpp`) creates any
+  widget type, and any element, compiled or made, can be taken off its container and the drawing list and put back
+  elsewhere. `designer-live.ts` diffs the screen the module shows against the source (`planLiveSync`): removed elements
+  are taken off, moved ones (another container, another place among their siblings) are taken off and put back, new
+  ones are made, and changed values go through the live setters, so add, remove, move, reorder, diagram moves, value
+  edits and their undo and redo are drawn at once, exactly as the build will; the build that follows replaces the
+  module with the same pixels. Code and theme changes, pipes put back or chained anew, references to removed
+  elements and values that cannot be set live wait for the build; code that still names a removed element does not
+  (the build reports it). Such a build shows its progress over the last frame, dimmed, after 300 ms; a build after a
+  live edit shows none and waits 1.5 s for the next edit. `tests/hmi-preview/run.ts` (`npm run test:hmi-preview`, same
+  CI job) does it with the real toolchain, checks rebuild times and that every live step, undone and redone, has the
+  rebuilt module's frame and bounds, and prints each build's breakdown. The port also draws the palette's thumbnails from a generated gallery screen
+  (`hmi-thumbnails.ts`). Units include their headers directly; there is no precompiled header.
+- **Widget library units:** the preview and the Runtime v4 build compile each widget library from its archive alone
+  (`hmi/lib-object/library-unit.ts`: STruC++ on the archive and its dependencies, whole, in namespace `hmi`, with
+  `HMI_LIBRARY_CXX_FLAGS` in both builds) and take STruC++'s `lib_<name>.cpp` out of the generated unit, whose
+  libraries header would make it depend on the project's PLC libraries and widget blocks. One library is one object
+  in every project, preview or `hmi.wasm`. For the preview each library also gets its own factory table
+  (`hmilib/<library>/<library>_factory.cpp`, `unit/preview-factory.ts`), generated from the library alone; the
+  unit's `hmi_preview_factory.cpp` holds only a table of the project's widget blocks and the dispatcher that numbers
+  the tables one after another. The live elements' code (`hmi_preview_live.cpp`) compiles on its own against the
+  library that declares `HmiScreen` (`hmilib/<library>/hmi_preview_widgets.hpp`), so it is shipped too; without such a
+  library it falls back to the unit's libraries header.
+- **HMI on Runtime v4:** the browser runs the screens. `src/backend/shared/hmi/artefact/` builds the upload's `hmi/`:
+  `client/hmi.wasm` (unit, core, fonts and `resources/sources/hmi/client/hmi_browser_host.cpp`) and, for the device,
+  only the data manifest `src/hmi_access.c` (`resources/sources/hmi/unit/hmi_access.h`): each screen's read and write
+  tag lists (`unit/page-access.ts`) and roles, which the runtime's host enforces. `tests/hmi-client/run.ts`
+  (`npm run test:hmi-client`) builds it with the real toolchain.
+- **HMI designer:** `src/frontend/components/_features/[workspace]/editor/hmi/designer/` edits a screen's ST as text
+  patches (`src/middleware/shared/utils/hmi/designer/`), with undo in the `hmiDesigner` store slice. In a diagram it
+  places symbols on the grid, draws pipes from port to port and edits their bends (`designer-diagram.ts`), from the
+  ports, diagram frames and pipe routes a design-mode frame records. `e2e/hmi-designer.spec.ts` and
+  `e2e/hmi-diagram.spec.ts` drive it on the real preview; `e2e/hmi-live-add.spec.ts` holds every compile back and
+  checks that dropped, pasted, removed, reordered, moved and edited widgets, undone and redone, show at once and
+  survive the build that replaces the module, and that only edits that wait for a build show its progress.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style

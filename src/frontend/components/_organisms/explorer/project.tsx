@@ -7,7 +7,11 @@ import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
-import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
+import {
+  CreateEditorObjectFromTab,
+  HMI_SETTINGS_TAB_NAME,
+  LIBRARY_MANIFEST_TAB_NAME,
+} from '../../../store/slices/tabs/utils'
 import { isUserManagementCapableRuntime } from '../../../utils/device'
 import { isNativeScreenAvailable } from '../../../utils/native-screens'
 import { useToast } from '../../_features/[app]/toast/use-toast'
@@ -45,13 +49,14 @@ const Project = () => {
   const { toast } = useToast()
   const {
     project: {
-      data: { pous, dataTypes, globalVariableLists, configurations, servers, remoteDevices },
+      data: { pous, dataTypes, globalVariableLists, configurations, servers, remoteDevices, hmi },
       meta: { name, type: projectType, path: projectPath },
     },
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors, removeModel },
     workspaceActions: { setSelectedProjectTreeLeaf },
+    hmiActions: { openSettings: openHmiSettings },
     searchQuery,
   } = useOpenPLCStore()
 
@@ -517,6 +522,51 @@ const Project = () => {
                     }
                   />
                 ))}
+            </ProjectTreeBranch>
+          )}
+
+          {(projectCaps.hasHmi || projectCaps.hasHmiWidgets) && hmi && (
+            <ProjectTreeBranch branchTarget='hmi'>
+              {projectCaps.hasHmi && (
+                <ProjectTreeLeaf
+                  leafLang='hmiSettings'
+                  leafType='hmi-settings'
+                  label={HMI_SETTINGS_TAB_NAME}
+                  onClick={() => openHmiSettings()}
+                />
+              )}
+              {(projectCaps.hasHmi ? hmi.screens : []).map((screen) => (
+                <ProjectTreeLeaf
+                  key={`screen-${screen.name}`}
+                  leafLang='hmiScreen'
+                  leafType='hmi-screen'
+                  label={screen.name}
+                  highlightQuery={searchQuery}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: screen.name,
+                      path: `/hmi/${screen.name}`,
+                      elementType: { type: 'hmi-screen' },
+                    })
+                  }
+                />
+              ))}
+              {hmi.widgets.map((widget) => (
+                <ProjectTreeLeaf
+                  key={`widget-${widget.name}`}
+                  leafLang='hmiWidget'
+                  leafType='hmi-widget'
+                  label={widget.name}
+                  highlightQuery={searchQuery}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: widget.name,
+                      path: `/hmi/widgets/${widget.name}`,
+                      elementType: { type: 'hmi-widget' },
+                    })
+                  }
+                />
+              ))}
             </ProjectTreeBranch>
           )}
 

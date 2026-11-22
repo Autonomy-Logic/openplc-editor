@@ -13,6 +13,7 @@ import {
   envelopeFromWriteProjectFiles,
   getInEnvelope,
   type IncomingApiProjectFiles,
+  mergeEnvelopeOverExisting,
   setInEnvelope,
 } from '../api-envelope'
 
@@ -370,6 +371,7 @@ describe('envelopeFromWriteProjectFiles', () => {
       pouFiles: [],
       serverFiles: [],
       remoteDeviceFiles: [],
+      hmiFiles: [],
       dataTypeFiles: [],
       deletions: [],
       ...overrides,
@@ -430,6 +432,7 @@ describe('envelopeFromWriteProjectFiles', () => {
   it('slots data type files under envelope.datatypes and omits the container when empty', () => {
     const env = envelopeFromWriteProjectFiles(
       makeWriteFiles({
+        hmiFiles: [],
         dataTypeFiles: [
           { relativePath: 'datatypes/Motor.dt', content: 'TYPE\n  Motor : STRUCT\n  END_STRUCT;\nEND_TYPE\n' },
           { relativePath: 'datatypes/Color.dt', content: 'TYPE\n  Color : (Red);\nEND_TYPE\n' },
@@ -583,6 +586,7 @@ describe('apiFilesToRaw', () => {
       pouFiles: [],
       serverFiles: [],
       remoteDeviceFiles: [],
+      hmiFiles: [],
       dataTypeFiles: [],
       pendingPlcopenSource: undefined,
     })
@@ -610,7 +614,94 @@ describe('apiFilesToRaw', () => {
       pinMapping: 'PM',
       remoteDeviceFiles: [{ relativePath: 'devices/remote/bus.json', content: 'RD' }],
       pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'PG' }],
+      hmiFiles: [],
       dataTypeFiles: [{ relativePath: 'datatypes/Motor.dt', content: 'DT' }],
     })
+  })
+})
+
+describe('HMI files in the envelope', () => {
+  it('keeps screens and settings under hmi and widget blocks under hmi.widgets', () => {
+    const env: IncomingApiProjectFiles = {}
+    setInEnvelope(env, 'hmi/Overview.st', 'S')
+    setInEnvelope(env, 'hmi/settings.json', '{}')
+    setInEnvelope(env, 'hmi/widgets/Badge.st', 'W')
+    expect(env.hmi).toEqual({ 'Overview.st': 'S', 'settings.json': '{}', widgets: { 'Badge.st': 'W' } })
+    expect(getInEnvelope(env, 'hmi/Overview.st')).toBe('S')
+    expect(getInEnvelope(env, 'hmi/widgets/Badge.st')).toBe('W')
+    expect(getInEnvelope(env, 'hmi/widgets')).toBeUndefined()
+    expect(ApiProjectFilesSchema.safeParse(env).success).toBe(true)
+  })
+
+  it('reads them back as the raw files a project opens with', () => {
+    const env: IncomingApiProjectFiles = { 'project.json': '{}' }
+    setInEnvelope(env, 'hmi/Main.st', 'S')
+    setInEnvelope(env, 'hmi/settings.json', '{}')
+    setInEnvelope(env, 'hmi/widgets/W.st', 'X')
+    const raw = apiFilesToRaw('id', env)
+    expect(raw.hmiFiles).toEqual([
+      { relativePath: 'hmi/Main.st', content: 'S' },
+      { relativePath: 'hmi/settings.json', content: '{}' },
+      { relativePath: 'hmi/widgets/W.st', content: 'X' },
+    ])
+    expect(apiFilesToRaw('id', { 'project.json': '{}' }).hmiFiles).toEqual([])
+  })
+
+  it('models the hmi container, so a save replaces it instead of carrying stale files', () => {
+    const existing: IncomingApiProjectFiles & Record<string, unknown> = {
+      'project.json': '{}',
+      hmi: { 'Old.st': 'O' },
+      'README.md': 'r',
+    }
+    const merged = mergeEnvelopeOverExisting(existing, {
+      'project.json': '{}',
+      devices: {},
+      pous: {},
+      hmi: { 'New.st': 'N' },
+    })
+    expect(merged.hmi).toEqual({ 'New.st': 'N' })
+    expect(Object.entries(merged)).toContainEqual(['README.md', 'r'])
+  })
+
+  it('keeps the hmi files the project model does not hold, and drops the ones it removed', () => {
+    const existing: IncomingApiProjectFiles = {
+      'project.json': '{"meta":{"name":"p","type":"plc-project"}}',
+      hmi: {
+        'Main.st': 'M',
+        'Gone.st': 'G',
+        'notes.json': 'n',
+        '1st.st': 'x',
+        'settings.json': '{}',
+        widgets: { 'W.st': 'w', 'Old.st': 'o', 'readme.txt': 'r' },
+      },
+    }
+    const generated: ApiProjectFiles = {
+      'project.json': '{"meta":{"name":"p","type":"plc-project"}}',
+      devices: {},
+      pous: {},
+      hmi: { 'Main.st': 'M2', 'settings.json': '{"a":1}', widgets: { 'W.st': 'w2' } },
+    }
+    expect(mergeEnvelopeOverExisting(existing, generated).hmi).toEqual({
+      'Main.st': 'M2',
+      'notes.json': 'n',
+      '1st.st': 'x',
+      'settings.json': '{"a":1}',
+      widgets: { 'W.st': 'w2', 'readme.txt': 'r' },
+    })
+    const emptied = mergeEnvelopeOverExisting({ hmi: { 'Main.st': 'M' } }, { ...generated, hmi: undefined })
+    expect(emptied.hmi).toBeUndefined()
+  })
+
+  it("keeps a library project's hmi folder as it is, since a library does not model it", () => {
+    const hmi = { 'Main.st': 'M', widgets: { 'W.st': 'w' } }
+    const merged = mergeEnvelopeOverExisting(
+      { 'project.json': '{"meta":{"name":"l","type":"plc-library"}}', hmi },
+      { 'project.json': '{"meta":{"name":"l","type":"plc-library"}}', devices: {}, pous: {} },
+    )
+    expect(merged.hmi).toEqual(hmi)
+  })
+
+  it('refuses an hmi container whose files are not text', () => {
+    expect(ApiProjectFilesSchema.safeParse({ hmi: { 'Main.st': 1 } }).success).toBe(false)
   })
 })

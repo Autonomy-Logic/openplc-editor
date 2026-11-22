@@ -41,5 +41,11 @@ void rebootToBootloader(const uint8_t *magic);
 void getLockState(void);
 // FC 0x4E -- store a generated board ID once. `id` points at the 16 payload bytes; the frame carries a CRC on RTU.
 void debugProvisionBoardId(const uint8_t *id);
+#ifdef HMI_TEST_READOUT
+// FC 0x4F / 0x50 -- test-only HMI readout, compiled in by `openplc-cli compile
+// --hmi-test-readout`: the current display list in chunks, and the HMI task's counters.
+void hmiGetDisplayList(uint32_t offset, uint8_t max_len);
+void hmiGetStats(void);
+#endif
 
 #endif

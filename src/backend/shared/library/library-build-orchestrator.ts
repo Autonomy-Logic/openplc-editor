@@ -91,6 +91,23 @@ export interface LibraryBuildArgs {
 const LIBRARY_MANIFEST_REL_PATH = 'library.json'
 const STLIB_OUT_DIR = 'build'
 
+/** The HMI widget blocks the project data carries (`hmi.widgets`), each a name and its whole source. */
+function hmiWidgetSources(projectData: object): Array<{ name: string; source: string }> {
+  const hmi = 'hmi' in projectData ? projectData.hmi : undefined
+  const widgets = typeof hmi === 'object' && hmi !== null && 'widgets' in hmi ? hmi.widgets : undefined
+  if (!Array.isArray(widgets)) return []
+  return widgets.flatMap((w: unknown) =>
+    typeof w === 'object' &&
+    w !== null &&
+    'name' in w &&
+    'source' in w &&
+    typeof w.name === 'string' &&
+    typeof w.source === 'string'
+      ? [{ name: w.name, source: w.source }]
+      : [],
+  )
+}
+
 /**
  * Run the full library-build pipeline.  Pure with respect to its
  * arguments — every side effect funnels through `port` or `emit`.
@@ -247,7 +264,7 @@ export async function runLibraryBuildPipeline(
   const stage5 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
     pouDocs,
     dependencyArchives: depArchives,
-    dependencyRefs: enabledLibraryRefs,
+    widgetSources: hmiWidgetSources(projectData),
     nativeSources,
     declaredGlobals,
   })

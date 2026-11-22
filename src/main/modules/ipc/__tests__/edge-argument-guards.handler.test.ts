@@ -76,6 +76,7 @@ const VALID_SAVE: WriteProjectFiles = {
   serverFiles: [],
   remoteDeviceFiles: [],
   dataTypeFiles: [],
+  hmiFiles: [],
   deletions: [],
 }
 

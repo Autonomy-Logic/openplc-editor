@@ -191,6 +191,8 @@ const rendererProcessBridge = {
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
   loadAllLibraries: (): Promise<unknown[]> => ipcRenderer.invoke('libraries:load-all'),
+  loadBuildLibraries: (listedNames: string[]): Promise<{ archives: unknown[]; missing: string[] }> =>
+    ipcRenderer.invoke('libraries:load-build', listedNames),
   listInstalledLibraries: (): Promise<
     Array<{
       name: string
@@ -572,6 +574,15 @@ const rendererProcessBridge = {
 
   wasmToolchainCompile: (request: WasmCompileRequest): Promise<WasmCompileResult> =>
     ipcRenderer.invoke('wasm-toolchain:compile', request),
+  wasmToolchainHold: (holder: string, held: boolean): Promise<void> =>
+    ipcRenderer.invoke('wasm-toolchain:hold', holder, held),
+
+  hmiPreviewReadSources: (): Promise<{ root: string; files: Record<string, Uint8Array> }> =>
+    ipcRenderer.invoke('hmi-preview:read-sources'),
+  hmiPreviewReadRuntimeHeaders: (): Promise<Record<string, string>> =>
+    ipcRenderer.invoke('hmi-preview:read-runtime-headers'),
+  hmiPreviewReadShipped: (name: string): Promise<Uint8Array | null> =>
+    ipcRenderer.invoke('hmi-preview:read-shipped', name),
 
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
     ipcRenderer.invoke('util:get-preview-image', image, packagePath),

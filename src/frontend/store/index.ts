@@ -19,6 +19,8 @@ import type { FileSlice } from './slices/file'
 import { createFileSlice } from './slices/file'
 import type { HistorySlice } from './slices/history'
 import { createHistorySlice } from './slices/history'
+import type { HmiDesignerSlice } from './slices/hmi-designer'
+import { createHmiDesignerSlice } from './slices/hmi-designer'
 import type { LadderFlowSlice } from './slices/ladder'
 import { createLadderFlowSlice } from './slices/ladder'
 import type { LibrarySlice } from './slices/library'
@@ -53,6 +55,7 @@ export type RootState = AISlice &
   FBDFlowSlice &
   FileSlice &
   HistorySlice &
+  HmiDesignerSlice &
   LadderFlowSlice &
   LibrarySlice &
   ModalSlice &
@@ -86,6 +89,7 @@ export function createOpenPLCStore(config: StoreConfig = {}) {
       ...createFBDFlowSlice(...a),
       ...createFileSlice(...a),
       ...createHistorySlice(...a),
+      ...createHmiDesignerSlice(...a),
       ...createLadderFlowSlice(...a),
       ...createLibrarySlice(...a),
       ...createModalSlice(...a),

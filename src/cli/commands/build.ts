@@ -71,6 +71,8 @@ export interface BuildRequest {
   compileOnly?: boolean
   cleanBuild: boolean
   autoApprove: boolean
+  /** `--hmi-test-readout`: board firmware with HMI screens answers the test-only display-list readout. */
+  hmiTestReadout?: boolean
 }
 
 /** The command line's entry: parse argv into a `BuildRequest`, then run it. */
@@ -110,6 +112,7 @@ export async function runBuild(
       withUpload: options.withUpload,
       cleanBuild: boolFlag(args, 'clean'),
       autoApprove: boolFlag(args, 'yes'),
+      hmiTestReadout: boolFlag(args, 'hmi-test-readout'),
     },
     reporter,
   )
@@ -337,7 +340,7 @@ export async function compileProject(
       communicationPort: currentCommunicationPort(store) || undefined,
       vendorScreenData: project.vendorScreenData,
     },
-    createCliCompileTransport(runtime),
+    createCliCompileTransport(runtime, { hmiTestReadout: request.hmiTestReadout ?? false }),
     (event: CompileProgressEvent) => {
       if (event.stage === 'upload') reachedUpload = true
       if (event.level === 'warning' && event.message) warnings.push(event.message)

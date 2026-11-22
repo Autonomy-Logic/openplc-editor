@@ -55,6 +55,7 @@ import { mapStDefinitionLocation } from './definition-locations'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
 import { redirectNavTargetToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
+import { plcCompletionItems, projectPlcUnusablePous } from './plc-completions'
 import { diagnosticsInVarBlocks, pouVarsTokenViewport } from './pouvars-context'
 import { type PrintSemanticTokens, registerPrintSemanticTokensApi } from './print-tokens-api'
 import { getSyncedDocumentText } from './project-sync'
@@ -155,7 +156,7 @@ function applyPouVarsDiagnostics(
 }
 
 export function startStLsp(opts: StLspStartOptions): StLspService {
-  const { store, stlibSource, monaco: monacoApi, workerUrlOverride, onCrash } = opts
+  const { store, stlibSource, monaco: monacoApi, workerUrlOverride, onCrash, extraStlibs } = opts
 
   // Resolve the worker URL.  The require lives inside the function
   // so the bundler probe never runs under test (jsdom test envs
@@ -187,6 +188,8 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     signatureHelpTriggerCharacters: ['(', ','],
     resolveLspContext: (modelUri) => resolveStLspContext(store, modelUri),
     getLspDocumentText: getSyncedDocumentText,
+    filterCompletionItems: (lspUri, items) =>
+      plcCompletionItems(lspUri, items, projectPlcUnusablePous(store.getState())),
     mapDefinitionLocation: mapStDefinitionLocation,
     navigateOutline: navigateToStore,
 
@@ -505,8 +508,10 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     // starve the LSP of every standard symbol.
     const state = store.getState()
     const allowed = new Set([...state.enabledLibraries, ...state.bundledLibraryNames])
+    const pushed = new Set<string>()
     for (const source of sources) {
       if (!allowed.has(source.name)) continue
+      pushed.add(source.name)
       try {
         const payload = await stlibSource.readStlib(source.sourceLabel)
         await connection.sendRequest(LOAD_STLIB_BUFFER, {
@@ -519,6 +524,14 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
         // that did load.
         console.warn(`[strucpp-lsp] failed to load stlib "${source.sourceLabel}":`, err)
       }
+    }
+    if (!extraStlibs) return
+    try {
+      for (const extra of await extraStlibs())
+        if (!pushed.has(extra.sourceLabel))
+          await connection.sendRequest(LOAD_STLIB_BUFFER, extra satisfies LoadStlibBufferParams)
+    } catch (err) {
+      console.warn('[strucpp-lsp] failed to load the extra stlibs:', err)
     }
   }
 

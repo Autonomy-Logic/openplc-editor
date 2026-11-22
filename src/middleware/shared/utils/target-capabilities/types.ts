@@ -146,6 +146,33 @@ export interface S7TargetProfile {
   buffers: readonly string[]
 }
 
+/**
+ * A display the board drives itself. Buffer sizes left out take the defaults in `hmi-panel.ts`, which
+ * `resolveTargetCapabilities` fills in.
+ */
+export interface HmiPanelCapability {
+  /** Panel width in pixels. */
+  width: number
+  /** Panel height in pixels. */
+  height: number
+  /** Integer UI scale, at least 1. */
+  density: number
+  touch: boolean
+  /** Pixel format the panel takes; the board's HAL converts the RGBA bands to it. */
+  colorFormat: 'rgb565' | 'rgb666' | 'rgb888'
+  /**
+   * The touch panel reports raw readings that need calibrating (resistive panels): the HAL implements
+   * `hmi_panel_read_touch_raw` and `hmi_panel_store_read`/`_write`, and the core's calibration screen maps them.
+   */
+  touchCalibration?: boolean
+  /** Static display-list capacity in bytes. */
+  displayListBytes?: number
+  /** Static glyph cache in bytes. */
+  glyphCacheBytes?: number
+  /** Static band buffer in bytes. */
+  bandBytes?: number
+}
+
 export interface TargetCapabilities {
   /* ---------------------------------------------------------------
    * Address producers — sources that allocate IEC addresses and
@@ -205,6 +232,13 @@ export interface TargetCapabilities {
    *  declares only what it overrides; `resolveTargetCapabilities` fills the rest
    *  from `DEFAULT_S7_PROFILE`. */
   s7?: S7TargetProfile
+
+  /** The board's local display, or null when it has none. Absent reads as none. */
+  hmi?: HmiPanelCapability | null
+
+  /** The target serves the HMI's heavy data widgets (alarm list, event log): offered in the designer's palette and
+   *  accepted by the HMI build. Declared per device by a VPP; on in the plain Runtime v4 preset. */
+  hmiDataWidgets: boolean
 
   /* ---------------------------------------------------------------
    * Build / runtime behavior

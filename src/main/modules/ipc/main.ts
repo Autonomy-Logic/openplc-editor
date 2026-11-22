@@ -52,6 +52,7 @@ import {
   switchBranch,
 } from '@root/backend/editor/edge-version-control'
 import { EsiProjectFiles } from '@root/backend/editor/ethercat'
+import { readFolderBytes, readFolderText } from '@root/backend/editor/hmi/hmi-preview-files'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
@@ -179,7 +180,10 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import { getDesktopWasmCompileService } from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
+import {
+  getDesktopShippedObjects,
+  getDesktopWasmCompileService,
+} from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
 import {
   armBoardLicenceBackup,
   BoardBackupHolder,
@@ -915,6 +919,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('open-external-link', this.handleOpenExternalLink)
     this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
     this.registerHandle('libraries:load-all', this.handleLibrariesLoadAll)
+    this.registerHandle('libraries:load-build', this.handleLibrariesLoadBuild)
     this.registerHandle('libraries:list-installed', this.handleLibrariesListInstalled)
     this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
     this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
@@ -1012,6 +1017,10 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('util:read-debug-file', this.handleReadDebugFile)
 
     this.registerHandle('wasm-toolchain:compile', this.handleWasmToolchainCompile)
+    this.registerHandle('wasm-toolchain:hold', this.handleWasmToolchainHold)
+    this.registerHandle('hmi-preview:read-sources', this.handleHmiPreviewReadSources)
+    this.registerHandle('hmi-preview:read-runtime-headers', this.handleHmiPreviewReadRuntimeHeaders)
+    this.registerHandle('hmi-preview:read-shipped', this.handleHmiPreviewReadShipped)
 
     this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
     this.registerHandle('debugger:plc-control', this.handleDebuggerPlcControl)
@@ -1321,6 +1330,15 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Loads bundled .stlib archives from `<resources>/strucpp/libs/`, alphabetically. Errors propagate. */
   handleLibrariesLoadAll = async (): Promise<unknown[]> => this.libraryManagerModule.loadAll()
+  /** The archives a build of a project listing `listedNames` compiles against (`loadEnabledArchives`). */
+  handleLibrariesLoadBuild = (
+    _event: IpcMainInvokeEvent,
+    listedNames: unknown,
+  ): { archives: unknown[]; missing: string[] } => {
+    if (!Array.isArray(listedNames) || !listedNames.every((name): name is string => typeof name === 'string'))
+      throw new Error('libraries:load-build expects a list of library names')
+    return this.libraryManagerModule.loadEnabledArchives(listedNames)
+  }
   handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
   handleLibrariesInstallFromFile = async () => {
     if (!this.mainWindow) return { success: false, error: 'No main window' }
@@ -2275,6 +2293,49 @@ class MainProcessBridge implements MainIpcModule {
 
   handleWasmToolchainCompile = (_event: IpcMainInvokeEvent, request: unknown): Promise<WasmCompileResult> =>
     getDesktopWasmCompileService().compileRequest(request)
+
+  handleWasmToolchainHold = (event: IpcMainInvokeEvent, holder: unknown, held: unknown): Promise<void> => {
+    if (typeof holder !== 'string' || typeof held !== 'boolean')
+      return Promise.reject(new Error('wasm-toolchain:hold takes a holder name and a boolean'))
+    const owner = `renderer-${event.sender.id}`
+    this.releaseHoldsWhenPageEnds(event.sender, owner)
+    return getDesktopWasmCompileService().setHeld(holder, held, owner)
+  }
+
+  /** Pages whose toolchain holds are let go when the page navigates, reloads, crashes or closes. */
+  private readonly holdOwnerPages = new Set<number>()
+
+  /** Lets go of a page's toolchain holds when it navigates, reloads, crashes or closes, which runs none of its cleanup. */
+  private releaseHoldsWhenPageEnds(contents: WebContents, owner: string): void {
+    if (this.holdOwnerPages.has(contents.id)) return
+    this.holdOwnerPages.add(contents.id)
+    const release = () => {
+      getDesktopWasmCompileService()
+        .releaseOwner(owner)
+        .catch(() => undefined)
+    }
+    contents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) release()
+    })
+    contents.on('render-process-gone', release)
+    contents.once('destroyed', () => {
+      this.holdOwnerPages.delete(contents.id)
+      release()
+    })
+  }
+
+  handleHmiPreviewReadSources = async (): Promise<{ root: string; files: Record<string, Uint8Array> }> => ({
+    root: '',
+    files: await readFolderBytes(join(this.compilerModule.sourceDirectoryPath, 'hmi')),
+  })
+
+  handleHmiPreviewReadRuntimeHeaders = (): Promise<Record<string, string>> =>
+    readFolderText(this.compilerModule.strucppRuntimeDir)
+
+  handleHmiPreviewReadShipped = (_event: IpcMainInvokeEvent, name: unknown): Promise<Uint8Array | null> =>
+    typeof name === 'string'
+      ? getDesktopShippedObjects().read(name)
+      : Promise.reject(new Error('hmi-preview:read-shipped takes a file name'))
 
   handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
     this.hardwareModule.getBoardImagePreview(image, packagePath)

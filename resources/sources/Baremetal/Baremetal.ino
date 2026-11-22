@@ -30,6 +30,7 @@
 
 #include "openplc.h"
 #include "defines.h"
+#include "program_md5.h"
 #include "arduino_runtime_glue.h"
 #include "license_gate.h"
 #include "license_store.h"   // license_store_read + LIC_BLOB_SIZE (via license_blob.h)
@@ -45,6 +46,21 @@
 #include "opcua_server.h"
 #include "opcua_log.h"
 #include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
+
+// HMI host on the board's panel, present when the build adds it to the library.
+#if defined(__has_include)
+#if __has_include(<hmi_baremetal.h>)
+#include <hmi_baremetal.h>
+#define HMI_ENABLED 1
+#endif
+#endif
+#ifndef HMI_ENABLED
+#define HMI_ENABLED 0
+#endif
+#if HMI_ENABLED && defined(ESP_PLATFORM)
+// Stack of the loop() task, which runs the screens.
+SET_LOOP_TASK_STACK_SIZE(HMI_BM_LOOP_STACK_BYTES);
+#endif
 
 // Network device-discovery responder ("Search" in the editor). Feature-gated so
 // only targets declaring SUPPORTS_UDP_SCAN pull it in; unrelated to Modbus.
@@ -105,6 +121,14 @@ unsigned long scan_cycle;
 unsigned long last_run = 0;
 bool first_cycle = false;
 
+#if HMI_ENABLED
+// Microsecond clock the HMI schedules its work and raster deadlines with.
+static uint32_t hmi_clock_us(void)
+{
+    return (uint32_t)micros();
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // External sketch support
 // ---------------------------------------------------------------------------
@@ -150,8 +174,8 @@ void setup()
     // follow runtime_bind_located_vars(), because a retained variable may also
     // be located and its storage has to be bound before anything writes to it.
     //
-    // PROGRAM_MD5 is passed from here because the sketch is on defines.h's one
-    // legitimate include path and the glue is not.
+    // PROGRAM_MD5 comes from program_md5.h, which the sketch includes and the
+    // glue does not.
     runtime_retain_init(PROGRAM_MD5);
     runtime_retain_load();
 
@@ -307,6 +331,10 @@ void setup()
     (*(volatile uint32_t *)0xE000E010u) = 0x00000007U;           /* SYST_CSR: CLK|TICKINT|EN */
 #endif
 
+    #if HMI_ENABLED
+        hmi_bm_init(hmi_clock_us);
+    #endif
+
     setupCycleDelay(base_tick_ns);
 
     #ifdef USE_ARDUINO_SKETCH
@@ -449,6 +477,10 @@ void scheduler()
         s7commtask(cycle_slack_us());
     #endif
 
+    #if HMI_ENABLED
+        hmi_bm_task(cycle_slack_us());
+    #endif
+
     // Protocol writes go to located storage raw, bypassing IECVar::set() and so
     // clobbering a force. Re-impose after ALL of them, not just Modbus.
     runtime_apply_located_forces();
@@ -502,6 +534,9 @@ void loop()
     #endif
     #if S7COMM_ENABLED
         s7commtask(cycle_slack_us());
+    #endif
+    #if HMI_ENABLED
+        hmi_bm_task(cycle_slack_us());
     #endif
 
     // Same repair as in scheduler(): the inter-cycle service writes raw too.

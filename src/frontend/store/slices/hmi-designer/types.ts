@@ -1,0 +1,58 @@
+import type { HmiElementKind } from '../../../../middleware/shared/utils/hmi/references'
+import type { HmiSettings } from '../../../../middleware/shared/utils/hmi/settings'
+import type { HistoryMerge, SourceHistory } from '../../../../middleware/shared/utils/hmi/source-history'
+
+export type HmiDesignerView = 'design' | 'code'
+
+/** What the designer keeps for one screen or widget block while the project is open. */
+export interface HmiDesignerEntry {
+  history: SourceHistory
+  view: HmiDesignerView
+  /** Device preset id (`HMI_DEVICE_PRESETS`). */
+  device: string
+  /** Canvas zoom; null fits the device to the canvas. */
+  zoom: number | null
+  /** Selected elements, by name. */
+  selection: string[]
+  /** The last source that parsed, shown while the code does not. */
+  lastValidSource: string | null
+  /** Containers collapsed in the Layers panel, by upper-case name. */
+  collapsedLayers: string[]
+}
+
+export type HmiDesignerState = Record<string, HmiDesignerEntry>
+
+export interface HmiDesignerActions {
+  /**
+   * Puts an edited source in place: records the step for undo (merged with the previous one of the same key), updates
+   * the project and marks the element unsaved.
+   */
+  applySource: (kind: HmiElementKind, name: string, source: string, merge?: HistoryMerge) => void
+  /** Returns false when there is nothing to undo. */
+  undo: (kind: HmiElementKind, name: string) => boolean
+  redo: (kind: HmiElementKind, name: string) => boolean
+  setView: (kind: HmiElementKind, name: string, view: HmiDesignerView) => void
+  setDevice: (kind: HmiElementKind, name: string, device: string) => void
+  setZoom: (kind: HmiElementKind, name: string, zoom: number | null) => void
+  select: (kind: HmiElementKind, name: string, selection: string[]) => void
+  setLastValidSource: (kind: HmiElementKind, name: string, source: string) => void
+  /** Puts edited HMI Settings in place and marks them unsaved. */
+  applySettings: (settings: HmiSettings) => void
+  /** Follows a renamed screen or widget block. */
+  renameEntry: (kind: HmiElementKind, oldName: string, newName: string) => void
+  forgetEntry: (kind: HmiElementKind, name: string) => void
+  /** Collapses or expands a container's children in the Layers panel. */
+  toggleLayer: (kind: HmiElementKind, name: string, element: string) => void
+  /** Opens or closes a branch of the Variables tab. */
+  toggleVariableNode: (key: string) => void
+  /** Expands these containers in the Layers panel. */
+  expandLayers: (kind: HmiElementKind, name: string, elements: readonly string[]) => void
+  clear: () => void
+}
+
+export interface HmiDesignerSlice {
+  hmiDesigner: HmiDesignerState
+  /** Branches of the Variables tab the user closed, for the session; shared by every screen. */
+  hmiVariablesCollapsed: string[]
+  hmiDesignerActions: HmiDesignerActions
+}

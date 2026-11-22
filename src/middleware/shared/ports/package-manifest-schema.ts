@@ -35,6 +35,7 @@
 import { z } from 'zod'
 
 import { isValidVersion } from '../../../frontend/utils/semver'
+import { hmiPanelCapabilitySchema } from '../utils/target-capabilities/hmi-panel'
 import type { PackageManifest, RuntimeLicenseMode } from './types'
 
 /**
@@ -128,9 +129,9 @@ export const PackageManifestSchema = z
       .array(
         z
           .object({
-            // Only `boardManagerUrl` and `uploadMethod` are declared; everything
-            // else on a device — and on `target` itself — still flows through
-            // untouched.
+            // Only `boardManagerUrl`, `uploadMethod`, `capabilities.hmi` and `capabilities.hmiDataWidgets` are
+            // declared; everything else on a device, on `target` and on
+            // `capabilities` still flows through untouched.
             //
             // `uploadMethod` is constrained rather than passed through because
             // it ROUTES: it is typed `'serial' | 'ethernet'` downstream, and
@@ -145,6 +146,10 @@ export const PackageManifestSchema = z
                 boardManagerUrl: boardManagerUrl.optional(),
                 uploadMethod: z.enum(['serial', 'ethernet']).optional(),
               })
+              .passthrough()
+              .optional(),
+            capabilities: z
+              .object({ hmi: hmiPanelCapabilitySchema.nullable().optional(), hmiDataWidgets: z.boolean().optional() })
               .passthrough()
               .optional(),
           })

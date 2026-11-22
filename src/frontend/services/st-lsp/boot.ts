@@ -19,6 +19,8 @@
 import type { PlatformPorts } from '../../../middleware/shared/providers/types'
 import type { OpenPLCStore } from '../../store'
 import { toast } from '../../utils/toast'
+import { attachHmiCodeAssist } from '../hmi-code/assist'
+import { attachHmiSync, type HmiSyncHandle } from './hmi-sync'
 import { startStLsp } from './index'
 import { attachMonacoModelSync, type MonacoModelSyncHandle } from './monaco-model-sync'
 import {
@@ -73,6 +75,7 @@ export function bootStLsp(
     stlibSource: ports.stlibSource,
     monaco,
     ...(workerUrl ? { workerUrlOverride: workerUrl } : {}),
+    extraStlibs: () => hmiSync?.libraries() ?? Promise.resolve([]),
     onCrash: (err) => {
       if (crashToastShown) return
       crashToastShown = true
@@ -91,6 +94,16 @@ export function bootStLsp(
   // opens a project, the subscribe fires and the worker sees a
   // didOpen wave for every POU.
   const projectSync = attachProjectSync(store, service)
+  // Screens and widget blocks are ST documents of the same server, with the HMI libraries loaded once the project
+  // has an HMI file; the code view adds the HMI rules and completions on top.
+  const hmiPreview = ports.hmiPreview
+  const hmiSync: HmiSyncHandle | null = hmiPreview
+    ? attachHmiSync(store, service, hmiPreview, () => service.refreshStlibs().then(() => projectSync.forceResync()))
+    : null
+  const hmiAssist =
+    hmiPreview && hmiSync
+      ? attachHmiCodeAssist({ store, preview: hmiPreview, monaco, screenMembers: () => hmiSync.screenMembers() })
+      : null
   // Both library-sync layers force a document re-publish after the
   // stlib cache settles.  The worker doesn't re-run analysis on
   // cache mutations, so without this nudge documents keep their
@@ -122,6 +135,8 @@ export function bootStLsp(
       unsubscribeBundledLibrariesSync()
       unsubscribeEnabledLibrariesSync()
       unsubscribeLibrarySync()
+      hmiAssist?.dispose()
+      hmiSync?.dispose()
       projectSync.dispose()
       modelSync?.dispose()
       service.dispose()

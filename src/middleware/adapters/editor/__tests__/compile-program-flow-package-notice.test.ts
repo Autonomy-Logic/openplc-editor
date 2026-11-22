@@ -51,7 +51,7 @@ async function build(board: BoardInfo, findPackageUpdateNotice?: CompileProgramT
   const events: CompileProgressEvent[] = []
   const transport: CompileProgramTransport = {
     getAvailableBoards: async () => new Map([['Board', board]]),
-    loadAllLibraries: async () => [],
+    loadBuildLibraries: async () => [],
     runCompileProgram: (_args, onMessage) => onMessage({ closePort: true, success: true }),
     findPackageUpdateNotice,
   }

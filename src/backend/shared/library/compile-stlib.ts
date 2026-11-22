@@ -9,6 +9,9 @@
  * past it.
  */
 
+import type { StlibCompileResult } from 'strucpp'
+
+import { isStrucppArchive } from './stlib-archive-json'
 import { loadStrucpp } from './strucpp-runtime'
 
 export interface CompileStlibSource {
@@ -30,6 +33,10 @@ export interface CompileStlibOptions {
   /** Mark as a built-in runtime library (strucpp's bundled libs). */
   builtin?: boolean
   globalConstants?: Record<string, number>
+  /** Headers the library's `{external}` code may need from a build, with their API versions; tags each chunk. */
+  headers?: ReadonlyArray<{ name: string; version?: string }>
+  /** Library archives the sources compile against, verbatim. */
+  dependencies?: readonly unknown[]
 }
 
 export interface CompileStlibError {
@@ -58,5 +65,11 @@ export interface CompileStlibResult {
  */
 export function compileStlib(sources: CompileStlibSource[], options: CompileStlibOptions): CompileStlibResult {
   const strucpp = loadStrucpp()
-  return strucpp.compileStlib(sources, options) as CompileStlibResult
+  const { headers, dependencies, ...rest } = options
+  const result: StlibCompileResult = strucpp.compileStlib(sources, {
+    ...rest,
+    ...(headers ? { headers: [...headers] } : {}),
+    ...(dependencies ? { dependencies: dependencies.filter(isStrucppArchive) } : {}),
+  })
+  return result
 }

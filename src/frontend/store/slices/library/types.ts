@@ -8,7 +8,9 @@ export type {
   UserLibrary,
 } from '../../../../middleware/shared/ports/library-types'
 
+import type { StlibArchiveDTO } from '../../../../middleware/shared/ports/library-port'
 import type { SystemLibrary } from '../../../../middleware/shared/ports/library-types'
+import type { LibraryPouRequirements } from '../../../../middleware/shared/utils/library/pou-requirements'
 
 /**
  * Project-side reference to a system library.  Mirrors
@@ -73,6 +75,15 @@ export type LibraryActions = {
    * slice has to be told separately.
    */
   setBundledLibraryNames: (names: string[]) => void
+  setPouRequirements: (requirements: LibraryPouRequirements[]) => void
+  /**
+   * Stores the installed libraries: the library tree and each POU's requirements from `archives`, and the pre-installed
+   * names from the library manager's `installed` rows.
+   */
+  applyInstalledLibraries: (
+    archives: StlibArchiveDTO[],
+    installed: ReadonlyArray<{ name: string; bundled: boolean }>,
+  ) => void
 }
 
 export type LibrarySliceExtra = {
@@ -88,6 +99,8 @@ export type LibrarySliceExtra = {
   /** Project-referenced libraries the system pool currently can't
    *  resolve.  Drives the missing-libraries modal post-project-open. */
   missingLibraries: MissingLibrary[]
+  /** Every installed library's POUs with their requirements (`libraryPouRequirements`); decides what a build can use. */
+  pouRequirements: LibraryPouRequirements[]
 }
 
 export type LibrarySlice = import('../../../../middleware/shared/ports/library-types').LibraryState &

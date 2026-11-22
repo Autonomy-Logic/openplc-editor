@@ -28,6 +28,7 @@ const project = (overrides: Partial<CloudProjectFiles> = {}): CloudProjectFiles 
   pouFiles: [{ relativePath: 'pous/programs/main.ld', content: 'PROGRAM main' }],
   serverFiles: [{ relativePath: 'devices/servers/modbus.json', content: '{}' }],
   remoteDeviceFiles: [{ relativePath: 'devices/remote/io.json', content: '{}' }],
+  hmiFiles: [],
   dataTypeFiles: [{ relativePath: 'datatypes/TANK.dt', content: 'TYPE TANK' }],
   ...overrides,
 })
@@ -159,6 +160,7 @@ describe('applyCloudProjectSave', () => {
     pouFiles: [{ relativePath: 'pous/programs/main.ld', content: 'PROGRAM main (edited)' }],
     serverFiles: [],
     remoteDeviceFiles: [],
+    hmiFiles: [],
     dataTypeFiles: [],
     deletions: ['datatypes/TANK.dt'],
     ...overrides,
@@ -190,6 +192,7 @@ describe('applyCloudProjectSave', () => {
       applyCloudProjectSave(
         save({
           deletions: [],
+          hmiFiles: [],
           dataTypeFiles: [{ relativePath: 'datatypes/../../escaped.dt', content: 'x' }],
         }),
       ),

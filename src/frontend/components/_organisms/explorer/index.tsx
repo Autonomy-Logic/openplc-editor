@@ -1,5 +1,6 @@
 import { ReactElement, useMemo, useState } from 'react'
 
+import { useProjectPlcLibraries } from '../../../hooks/use-project-libraries'
 import { useOpenPLCStore } from '../../../store'
 import type { BlockVariant } from '../../_atoms/graphical-editor/types/block'
 import { getBlockDocumentation } from '../../_atoms/graphical-editor/utils'
@@ -16,12 +17,8 @@ const Explorer = (): ReactElement => {
     },
     libraries: { system, user },
   } = useOpenPLCStore()
-  // Project enablement: bundled libs (canonical) are always-on; opt-in
-  // libs only surface when the project enables them.  Joined here so
-  // every consumer below (the filtered list, the documentation
-  // lookup) sees the same scoped pool.
-  const enabledLibraryNames = useOpenPLCStore((s) => s.enabledLibraries)
-  const bundledLibraryNames = useOpenPLCStore((s) => s.bundledLibraryNames)
+  // Bundled libraries and the ones the project lists, without POUs a PLC build cannot use.
+  const visiblePool = useProjectPlcLibraries()
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [filterText, setFilterText] = useState<string>('')
@@ -51,9 +48,6 @@ const Explorer = (): ReactElement => {
   // System Libraries filtering — restrict to bundled (canonical) +
   // project-enabled, then apply the text/POU-type filter.  Bundled
   // libs are always-on regardless of project enablement.
-  const visiblePool = system.filter(
-    (library) => bundledLibraryNames.includes(library.name) || enabledLibraryNames.includes(library.name),
-  )
   const filteredLibraries = visiblePool.filter((library) =>
     pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')

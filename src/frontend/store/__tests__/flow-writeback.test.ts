@@ -7,6 +7,7 @@ import { createEditorSlice } from '../slices/editor/slice'
 import { createFBDFlowSlice } from '../slices/fbd/slice'
 import { createFileSlice } from '../slices/file/slice'
 import { createHistorySlice } from '../slices/history/slice'
+import { createHmiDesignerSlice } from '../slices/hmi-designer/slice'
 import type { LadderFlowType } from '../slices/ladder'
 import { createLadderFlowSlice } from '../slices/ladder/slice'
 import { createLibrarySlice } from '../slices/library/slice'
@@ -43,6 +44,7 @@ function makeStore() {
     ...createHistorySlice(...args),
     ...createVersionControlSlice(...args),
     ...createAISlice(...args),
+    ...createHmiDesignerSlice(...args),
     ...createRuntimeProvisioningSlice(...args),
     ...createSharedSlice(...args),
   }))

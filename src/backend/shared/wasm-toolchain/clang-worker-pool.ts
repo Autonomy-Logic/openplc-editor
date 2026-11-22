@@ -7,6 +7,8 @@ import type {
   WasmToolchainTree,
 } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 
+import { clangWorkerLimit } from './worker-limit'
+
 /** What a clang worker sends back: ready once loaded, then one result or error per job. */
 export type ClangWorkerReply =
   | { type: 'ready' }
@@ -100,25 +102,32 @@ const reasonOf = (error: unknown): string => (error instanceof Error ? error.mes
 
 const ignore = (): void => undefined
 
+/** How long a worker limit read from the platform's free memory is reused before it is read again. */
+const LIMIT_TTL_MS = 1000
+
 /**
- * Runs clang jobs on one worker, one job at a time; jobs wait in a queue. The worker starts with the first job and
- * ends on `release()`. A worker counts from its spawn until its termination has settled, and a new one starts only
- * after the previous one exited. A worker that fails or runs a job past its deadline is terminated and its job fails;
- * one that cannot be started, or fails before it is ready, fails every job with `WasmToolchainLoadError` until the
- * next `release()`. A worker error before it is ready also discards the toolchain's stored files and clears the kept
- * `prepare()`, so the next load runs again.
+ * Runs clang jobs on one worker, one job at a time each; jobs wait in a queue. A worker starts with the first job and
+ * workers end on `release()`. While held (`setHeld`), the pool grows to more workers, each started when every worker
+ * is busy and jobs wait, as many as `clangWorkerLimit` allows from the platform's free memory at that moment, one
+ * loading at a time. A worker counts from its spawn until its termination has settled, and no worker starts while one
+ * is stopping. A worker that fails or runs a job past its deadline is terminated and its job fails. When the only
+ * worker cannot be started, or fails before it is ready, every job fails with `WasmToolchainLoadError` until the next
+ * `release()` or `retry()`, and after an error the toolchain's stored files are discarded and the kept `prepare()` is
+ * cleared; a further worker that fails that way only stops the pool growing until then.
  */
 export class ClangWorkerPool implements WasmClangRunner {
-  readonly concurrency = 1
   private readonly loadDeadlineMs: number
   private readonly jobDeadlineMs: number
-  private worker: LiveWorker | null = null
-  private stopping: Promise<void> | null = null
+  private workers: LiveWorker[] = []
+  private stops = new Set<Promise<void>>()
   private queue: Queued[] = []
   private prepared: Promise<void> | null = null
   private loadFailure: WasmToolchainLoadError | null = null
   private discarding: Promise<void> | null = null
   private nextId = 1
+  private held = false
+  private growthFailed = false
+  private limitCache: { at: number; value: number } | null = null
 
   constructor(
     private readonly mechanism: ClangWorkerMechanism,
@@ -126,6 +135,18 @@ export class ClangWorkerPool implements WasmClangRunner {
   ) {
     this.loadDeadlineMs = options.loadDeadlineMs ?? WORKER_LOAD_DEADLINE_MS
     this.jobDeadlineMs = options.jobDeadlineMs ?? JOB_DEADLINE_MS
+  }
+
+  /** Jobs that may run at once: the worker limit while held, else 1. */
+  get concurrency(): number {
+    return this.limit()
+  }
+
+  /** Allows more than one worker while held; dropping the hold stops the growth but ends no worker. */
+  setHeld(held: boolean): void {
+    this.held = held
+    this.limitCache = null
+    if (held) this.dispatch()
   }
 
   /** Gets the toolchain's files ready through the mechanism, starting no worker. A failure is not kept. */
@@ -137,7 +158,7 @@ export class ClangWorkerPool implements WasmClangRunner {
     return this.prepared
   }
 
-  /** Runs one job on the worker. A toolchain that cannot load rejects with `WasmToolchainLoadError`. */
+  /** Runs one job on a worker. A toolchain that cannot load rejects with `WasmToolchainLoadError`. */
   async run(job: WasmClangJob): Promise<WasmClangJobResult> {
     if (this.loadFailure) throw this.loadFailure
     try {
@@ -151,20 +172,39 @@ export class ClangWorkerPool implements WasmClangRunner {
     })
   }
 
+  /** Forgets a load failure when no job is running or queued, so the next job starts a worker again; ends none. */
+  retry(): void {
+    if (this.queue.length > 0 || this.workers.some((w) => w.state.kind === 'busy')) return
+    this.loadFailure = null
+    this.growthFailed = false
+  }
+
   /**
-   * Ends the worker when no job is running or queued, and forgets a load failure; resolves once the worker has
-   * exited. While jobs remain it ends nothing.
+   * Ends every worker when no job is running or queued, and forgets a load failure; resolves once they have exited.
+   * While jobs remain it ends nothing.
    */
   async release(): Promise<void> {
-    const worker = this.worker
-    if (this.queue.length > 0 || worker?.state.kind === 'busy') return
+    if (this.queue.length > 0 || this.workers.some((w) => w.state.kind === 'busy')) return
     this.loadFailure = null
-    if (worker) {
-      this.worker = null
+    this.growthFailed = false
+    for (const worker of this.workers.splice(0)) {
       if (worker.state.kind === 'loading') clearTimeout(worker.state.loadTimer)
       this.stop(worker.handle)
     }
-    await this.stopping
+    await Promise.all([...this.stops])
+  }
+
+  /** Workers allowed now: 1 unless held, else the limit from the platform's free memory, read at most once a second. */
+  private limit(): number {
+    if (!this.held || this.growthFailed) return 1
+    const now = Date.now()
+    if (!this.limitCache || now - this.limitCache.at > LIMIT_TTL_MS) {
+      this.limitCache = {
+        at: now,
+        value: clangWorkerLimit(this.mechanism.availableMemoryBytes?.(), this.mechanism.cores?.()),
+      }
+    }
+    return this.limitCache.value
   }
 
   /** Waits for a discard of the stored files to settle, whatever its outcome, then gets the files ready. */
@@ -190,8 +230,8 @@ export class ClangWorkerPool implements WasmClangRunner {
   }
 
   /**
-   * Hands the next job to the idle worker, starting one when none is alive and none is stopping. After a load failure
-   * the waiting jobs fail with it.
+   * Hands waiting jobs to idle workers, then starts a worker when jobs still wait, none is loading or stopping, and the
+   * limit allows another. After a load failure the waiting jobs fail with it.
    */
   private dispatch(): void {
     if (this.queue.length === 0) return
@@ -200,29 +240,37 @@ export class ClangWorkerPool implements WasmClangRunner {
       for (const waiting of this.queue.splice(0)) waiting.reject(failure)
       return
     }
-    if (this.stopping) return
-    const worker = this.worker ?? this.start()
-    if (worker?.state.kind !== 'idle') return
-    const next = this.queue.shift()
-    if (next) this.hand(worker, next)
+    for (const worker of this.workers) {
+      if (worker.state.kind !== 'idle') continue
+      const next = this.queue.shift()
+      if (!next) return
+      this.hand(worker, next)
+    }
+    if (this.queue.length === 0 || this.stops.size > 0) return
+    if (this.workers.some((w) => w.state.kind === 'loading')) return
+    if (this.workers.length === 0 || this.workers.length < this.limit()) this.start()
   }
 
   /**
-   * Starts the worker. One that cannot be started is a load failure: the waiting jobs fail with
-   * `WasmToolchainLoadError`, and so does every job until the next `release()`.
+   * Starts a worker. When the pool has none, one that cannot be started is a load failure: the waiting jobs fail with
+   * `WasmToolchainLoadError`, and so does every job until the next `release()`. A further worker that cannot be
+   * started only stops the pool growing.
    */
-  private start(): LiveWorker | null {
+  private start(): void {
     try {
-      return this.spawn()
+      this.spawn()
     } catch (error) {
+      if (this.workers.length > 0) {
+        this.growthFailed = true
+        return
+      }
       const failure = new WasmToolchainLoadError(`the compiler worker could not be started (${reasonOf(error)})`)
       this.loadFailure = failure
       for (const waiting of this.queue.splice(0)) waiting.reject(failure)
-      return null
     }
   }
 
-  /** Gives a job to the idle worker. If the job cannot be posted, only that job fails and the worker stays. */
+  /** Gives a job to an idle worker. If the job cannot be posted, only that job fails and the worker stays. */
   private hand(worker: LiveWorker, queued: Queued): void {
     const id = this.nextId++
     const timer = setTimeout(
@@ -250,16 +298,16 @@ export class ClangWorkerPool implements WasmClangRunner {
       this.loadDeadlineMs,
     )
     const worker: LiveWorker = { handle, state: { kind: 'loading', loadTimer } }
-    this.worker = worker
+    this.workers.push(worker)
     handle.onMessage((raw) => this.receive(worker, raw))
     handle.onFailure((reason) => this.fail(worker, reason, 'error'))
     handle.setBusy?.(false)
     return worker
   }
 
-  /** Handles a reply of the current worker; replies of a worker no longer current are ignored. */
+  /** Handles a reply of a current worker; replies of a worker no longer in the pool are ignored. */
   private receive(worker: LiveWorker, raw: unknown): void {
-    if (worker !== this.worker) return
+    if (!this.workers.includes(worker)) return
     const reply = parseClangWorkerReply(raw)
     if (!reply) return
     if (reply.type === 'ready') {
@@ -280,17 +328,22 @@ export class ClangWorkerPool implements WasmClangRunner {
   }
 
   /**
-   * Terminates the current worker after a failure. The job it ran fails with the reason; when it never became ready,
-   * the toolchain counts as not loadable until the next `release()`, and after an error its stored files are discarded
-   * and the kept `prepare()` is cleared.
+   * Terminates a worker after a failure. The job it ran fails with the reason. When it never became ready and no other
+   * worker is alive, the toolchain counts as not loadable until the next `release()`, and after an error its stored
+   * files are discarded and the kept `prepare()` is cleared; with other workers alive the pool only stops growing.
    */
   private fail(worker: LiveWorker, reason: string, cause: FailureCause): void {
-    if (worker !== this.worker) return
-    this.worker = null
+    const index = this.workers.indexOf(worker)
+    if (index < 0) return
+    this.workers.splice(index, 1)
     const state = worker.state
     switch (state.kind) {
       case 'loading':
         clearTimeout(state.loadTimer)
+        if (this.workers.length > 0) {
+          this.growthFailed = true
+          break
+        }
         this.loadFailure = new WasmToolchainLoadError(reason)
         if (cause === 'error') {
           this.prepared = null
@@ -321,9 +374,9 @@ export class ClangWorkerPool implements WasmClangRunner {
       exit = Promise.resolve()
     }
     const stopping: Promise<void> = exit.then(ignore, ignore).then(() => {
-      if (this.stopping === stopping) this.stopping = null
+      this.stops.delete(stopping)
       this.dispatch()
     })
-    this.stopping = stopping
+    this.stops.add(stopping)
   }
 }
