@@ -33,7 +33,7 @@ import { join } from 'path'
  * The other three files exist for licensing, so every message in them does.
  */
 const SOURCES: { rel: string; scope?: RegExp }[] = [
-  { rel: 'src/backend/editor/license/license-flow.ts' },
+  { rel: 'src/backend/shared/license/license-flow.ts' },
   { rel: 'src/backend/editor/license/license-activation-client.ts' },
   { rel: 'src/main/modules/ipc/main.ts', scope: /checkFailed(Terminal)?\(|state: 'check-failed'/ },
   { rel: 'src/frontend/hooks/use-device-license.ts' },

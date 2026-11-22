@@ -106,6 +106,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     connectionStatus: 'disconnected',
     plcStatus: null,
     switchPosition: null,
+    license: null,
     ipAddress: null,
     runtimeUpdateInProgress: false,
     runtimeVersion: null,
@@ -128,6 +129,17 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     phase: 'idle',
     report: null,
     awaitingPurchaseUntil: null,
+  },
+
+  runtimeCommercialLicense: {
+    hardwareId: null,
+    hardwareElements: [],
+    boardDeviceId: null,
+    boardLicense: null,
+    status: null,
+    awaitingPurchaseUntil: null,
+    checking: false,
+    dismissedDisclaimers: [],
   },
 
   deviceActions: {
@@ -589,6 +601,65 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
           runtimeConnection.switchPosition = position
+        }),
+      )
+    },
+    setRuntimeLicense: (license): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.license = license
+        }),
+      )
+    },
+    setRuntimeHardwareId: (hardwareId): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          runtimeCommercialLicense.hardwareId = hardwareId
+        }),
+      )
+    },
+    setRuntimeHardwareElements: (elements): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          runtimeCommercialLicense.hardwareElements = elements
+        }),
+      )
+    },
+    setBoardRuntimeLicense: ({ deviceId, license }): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          runtimeCommercialLicense.boardDeviceId = deviceId
+          runtimeCommercialLicense.boardLicense = license
+        }),
+      )
+    },
+    setRuntimeCommercialLicenseStatus: (status): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          runtimeCommercialLicense.status = status
+        }),
+      )
+    },
+    setRuntimeLicensePurchaseWatch: (until): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          runtimeCommercialLicense.awaitingPurchaseUntil = until
+        }),
+      )
+    },
+    setRuntimeLicenseChecking: (checking): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          runtimeCommercialLicense.checking = checking
+        }),
+      )
+    },
+    dismissRuntimeLicenseDisclaimer: (hardwareId): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          if (!runtimeCommercialLicense.dismissedDisclaimers.includes(hardwareId)) {
+            runtimeCommercialLicense.dismissedDisclaimers.push(hardwareId)
+          }
         }),
       )
     },

@@ -205,11 +205,29 @@ export class RuntimeApiClient {
   }
 
   /**
+   * Authenticated request with the raw status and body, refreshing the token on 401/403.
+   * Throws on a transport failure.
+   */
+  async runtimeApiExchange(
+    method: 'GET' | 'POST' | 'DELETE',
+    ipAddress: string,
+    endpoint: string,
+    body?: string,
+  ): Promise<{ status: number; body: string }> {
+    const url = this.runtimeUrl(ipAddress, endpoint)
+    const res = await this.tokens.withAuth(
+      (token) => this.httpRequest({ method, url, body, headers: { Authorization: `Bearer ${token}` } }),
+      (r) => r.statusCode === 401 || r.statusCode === 403,
+    )
+    return { status: res.statusCode, body: res.data }
+  }
+
+  /**
    * Low-level HTTP helper that handles data accumulation, timeout, and error handling.
    * Returns the raw status code, response body, and headers for the caller to interpret.
    */
   private httpRequest(options: {
-    method: 'GET' | 'POST'
+    method: 'GET' | 'POST' | 'DELETE'
     url: string
     body?: string
     headers?: Record<string, string>

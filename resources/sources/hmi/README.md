@@ -116,7 +116,7 @@ PLC variables are read and written (soft write, no force) through the firmware's
 A board without a panel driver links against weak defaults and the HMI stays off.
 
 `openplc-cli compile --hmi-test-readout` (tests only) also defines `HMI_TEST_READOUT`: the firmware then answers the
-debugger function codes 0x4E (the current display list in chunks) and 0x4F (frames drawn, bands pushed, scan overruns,
+debugger function codes 0x4F (the current display list in chunks) and 0x50 (frames drawn, bands pushed, scan overruns,
 last logic frame and worst band in microseconds, the least free stack of the loop task in bytes, 0xFFFFFFFF where
 the platform cannot tell, why the HMI is off (`hmi_bm_off_reason_t`, 0 while it runs) and touch reads postponed).
 Product builds contain neither.
@@ -270,7 +270,7 @@ the core's full render of each frame, unchanged bands are not pushed, no call ru
 read and costly first frames after unlocking and on a page change), the PIN, relock and touch work, a panel of another
 size leaves the HMI off, product objects of the host and core reference no heap and carry no test readout, and a board
 without a panel driver links with the HMI off. It also builds the firmware's Modbus PDU sources natively against the
-simulator's Arduino stub and checks the framing, routing and answers of the readout codes 0x4E and 0x4F. The test
+simulator's Arduino stub and checks the framing, routing and answers of the readout codes 0x4F and 0x50. The test
 programs are sanitized (ASan, UBSan); CI runs it in `ci-hmi-core.yml`.
 
 `npm run test:hmi-client` (`tests/hmi-client/run.ts`) composes the sample project's Runtime v4 artefact with the real

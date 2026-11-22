@@ -1,0 +1,375 @@
+/**
+ * Commercial licence of the connected target: a runtime, or a built-in board.
+ *
+ * `useRuntimeCommercialLicenseOwner` is mounted ONCE, next to the runtime
+ * polling. On every runtime connect it verifies the stored licence, confirms it
+ * against Edge (removing a revoked one, installing a missing one) and keeps the
+ * runtime's hardware elements for the purchase link. On every board connect (simulator excluded) whose VPP is `user`
+ * it runs the board licence flow for the baremetal runtime product: read the board ID and
+ * the stored licence, verify it, and recover it from Edge when missing. It
+ * resolves the status from the board's `runtimeLicense`, the VPP licence state
+ * and the runtime licence found, stores it, and opens the disclaimer dialog for
+ * an unlicensed target. A runtime older than `DUAL_LICENSE_MIN_RUNTIME_VERSION`
+ * resolves to `mit` with no licence check.
+ *
+ * `useRuntimeCommercialLicense` is what the views read: the stored status and
+ * the buy action. Nothing here blocks build, upload, start or debug.
+ */
+import type { DeviceLicenseState } from '@root/middleware/shared/ports/device-port'
+import type { RuntimeLicenseMode } from '@root/middleware/shared/ports/types'
+import { useDevice, usePackages, useRuntime, useSystem } from '@root/middleware/shared/providers/platform-context'
+import {
+  BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
+  buildRuntimeLicenseBuyUrl,
+  COMMERCIAL_LICENSE_DISCLAIMER,
+  isMitLicensedRuntime,
+  resolveTargetCommercialLicense,
+  type RuntimeCommercialLicense,
+  type TargetCommercialLicenseStatus,
+} from '@root/middleware/shared/utils/licensing'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../store'
+import { isOpenPLCRuntimeTarget, isSimulatorTarget } from '../utils/device'
+import { getErrorMessage } from '../utils/get-error-message'
+import { buildLicenseBuyUrl } from '../utils/license-buy-url'
+
+/** How often a purchase started here is checked for, and for how long. */
+const PURCHASE_POLL_INTERVAL_MS = 20_000
+const PURCHASE_WATCH_WINDOW_MS = 10 * 60_000
+
+/** Runtime licence a built-in board holds, from the board licence flow's outcome; null when not known. */
+export function boardRuntimeLicense(outcome: DeviceLicenseState): RuntimeCommercialLicense | null {
+  if (outcome.state === 'licensed') return 'commercial'
+  if (outcome.state === 'unlicensed' || outcome.state === 'unsupported') return 'gpl'
+  return null
+}
+
+/** Logs a licence delivery that rejected as a skipped check. */
+function logSkippedCheck(store: OpenPLCStore, error: unknown): void {
+  store.getState().consoleActions.addLog({
+    level: 'debug',
+    message: `Runtime license check skipped: ${getErrorMessage(error)}`,
+  })
+}
+
+export interface RuntimeCommercialLicenseView {
+  /** Null while no runtime target or built-in board is connected. */
+  status: TargetCommercialLicenseStatus | null
+  /** Hardware ID of a connected runtime, else the device ID of a connected built-in board. */
+  hardwareId: string | null
+  /** Label for `hardwareId`. */
+  idLabel: 'Hardware ID' | 'Device ID'
+  /** Purchase page for this ID, or null when the ID is unknown. */
+  buyUrl: string | null
+  /** Opens the purchase page and watches for the licence to arrive. */
+  buy: () => Promise<void>
+  awaitingPurchase: boolean
+  /** True while the licence check that runs on connect has not finished. */
+  checking: boolean
+}
+
+/**
+ * Commercial licence status of the connected runtime or built-in board. A board's delivery waits for its
+ * VPP manifest; the no-licence dialog shows once per runtime connection and once per board until restart;
+ * a purchase is watched until the licence reaches the target.
+ */
+export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
+  const system = useSystem()
+  const status = useOpenPLCStore((state) => state.runtimeCommercialLicense.status)
+  const runtimeHardwareId = useOpenPLCStore((state) => state.runtimeCommercialLicense.hardwareId)
+  const runtimeElements = useOpenPLCStore((state) => state.runtimeCommercialLicense.hardwareElements)
+  const boardDeviceId = useOpenPLCStore((state) => state.runtimeCommercialLicense.boardDeviceId)
+  const awaitingPurchaseUntil = useOpenPLCStore((state) => state.runtimeCommercialLicense.awaitingPurchaseUntil)
+  const checking = useOpenPLCStore((state) => state.runtimeCommercialLicense.checking)
+  const setPurchaseWatch = useOpenPLCStore((state) => state.deviceActions.setRuntimeLicensePurchaseWatch)
+
+  const hardwareId = runtimeHardwareId ?? boardDeviceId
+  const idLabel = runtimeHardwareId === null && boardDeviceId !== null ? 'Device ID' : 'Hardware ID'
+  const buyUrl = useMemo(() => {
+    if (status === 'mit') return null
+    const baseUrl = system.getEdgeFrontendUrl()
+    if (runtimeHardwareId) return buildRuntimeLicenseBuyUrl(baseUrl, runtimeHardwareId, runtimeElements)
+    if (boardDeviceId)
+      return buildLicenseBuyUrl({ baseUrl, vppId: BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID, deviceId: boardDeviceId })
+    return null
+  }, [status, system, runtimeHardwareId, runtimeElements, boardDeviceId])
+
+  const buy = useCallback(async () => {
+    if (!buyUrl) return
+    const { success } = await system.openExternalLink(buyUrl)
+    if (success) setPurchaseWatch(Date.now() + PURCHASE_WATCH_WINDOW_MS)
+  }, [buyUrl, setPurchaseWatch, system])
+
+  return useMemo(
+    () => ({ status, hardwareId, idLabel, buyUrl, buy, awaitingPurchase: awaitingPurchaseUntil !== null, checking }),
+    [status, hardwareId, idLabel, buyUrl, buy, awaitingPurchaseUntil, checking],
+  )
+}
+
+/**
+ * Runs the licence delivery of the connected target and keeps the resolved status in the store. The VPP
+ * licence mode is null while the manifest is read, so a vendor board never shows as unlicensed. A failed
+ * runtime check keeps what the last successful one found. The no-licence dialog waits for this
+ * connection's delivery, so a licence still on its way never shows as GPLv3. A delivery that rejects is
+ * logged at debug level as a skipped check.
+ */
+export function useRuntimeCommercialLicenseOwner(): void {
+  const store = useOpenPLCStoreApi()
+  const runtime = useRuntime()
+  const device = useDevice()
+  const packages = usePackages()
+  const { buy } = useRuntimeCommercialLicense()
+
+  const runtimeConnected = useOpenPLCStore(
+    (state) => state.runtimeConnection.connectionStatus === 'connected' && state.runtimeConnection.jwtToken !== null,
+  )
+  const boardInfo = useOpenPLCStore((state) =>
+    state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard),
+  )
+  const isBoardTarget = !!boardInfo && !isOpenPLCRuntimeTarget(boardInfo) && !isSimulatorTarget(boardInfo)
+  const linkConnected = useOpenPLCStore(
+    (state) => state.deviceConnection.status === 'connected' && state.deviceConnection.transport !== null,
+  )
+  const target: 'runtime' | 'board' | null = runtimeConnected
+    ? 'runtime'
+    : linkConnected && isBoardTarget
+      ? 'board'
+      : null
+  const connected = target !== null
+  const runtimeLicense = useOpenPLCStore((state) => state.runtimeConnection.license)
+  const runtimeVersion = useOpenPLCStore((state) => state.runtimeConnection.runtimeVersion)
+  const mitRuntime = target === 'runtime' && isMitLicensedRuntime(runtimeVersion)
+  const boardLicense = useOpenPLCStore((state) => state.runtimeCommercialLicense.boardLicense)
+  const packageId = boardInfo?.vpp?.packageId
+  const vppLicense = useOpenPLCStore((state) => state.deviceLicense.report?.outcome ?? null)
+  const runtimeHardwareId = useOpenPLCStore((state) => state.runtimeCommercialLicense.hardwareId)
+  const boardDeviceId = useOpenPLCStore((state) => state.runtimeCommercialLicense.boardDeviceId)
+  const hardwareId = target === 'board' ? boardDeviceId : runtimeHardwareId
+  const status = useOpenPLCStore((state) => state.runtimeCommercialLicense.status)
+  const awaitingPurchaseUntil = useOpenPLCStore((state) => state.runtimeCommercialLicense.awaitingPurchaseUntil)
+
+  const [mode, setMode] = useState<RuntimeLicenseMode | null>(null)
+  useEffect(() => {
+    if (!packageId || !packages) {
+      setMode('user')
+      return
+    }
+    let cancelled = false
+    setMode(null)
+    packages
+      .getManifest(packageId)
+      .then((manifest) => {
+        if (!cancelled) setMode(manifest?.package.runtimeLicense ?? 'user')
+      })
+      .catch(() => {
+        if (!cancelled) setMode('user')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [packageId, packages])
+
+  const deliverToBoard = useCallback(
+    async (isCurrent: () => boolean) => {
+      const { deviceActions, consoleActions } = store.getState()
+      if (mode !== 'user' || !device.refreshLicense) {
+        deviceActions.setBoardRuntimeLicense({ deviceId: null, license: null })
+        return
+      }
+      const report = await device.refreshLicense({ packageId: BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID })
+      if (!isCurrent()) return
+      const { outcome } = report
+      deviceActions.setBoardRuntimeLicense({ deviceId: report.deviceId ?? null, license: boardRuntimeLicense(outcome) })
+      if (outcome.state === 'check-failed') {
+        consoleActions.addLog({ level: 'debug', message: `Runtime license check skipped: ${outcome.error}` })
+      } else if (outcome.state === 'unlicensed' && outcome.detail) {
+        consoleActions.addLog({ level: 'debug', message: `Runtime license not confirmed: ${outcome.detail}` })
+      } else if (outcome.state === 'licensed' && outcome.how === 'activated') {
+        consoleActions.addLog({ level: 'info', message: 'Commercial runtime license installed on the board.' })
+      }
+    },
+    [device, mode, store],
+  )
+
+  const deliverToRuntime = useCallback(
+    async (isCurrent: () => boolean) => {
+      const { deviceActions, consoleActions } = store.getState()
+      if (mitRuntime) {
+        deviceActions.setRuntimeHardwareId(null)
+        deviceActions.setRuntimeHardwareElements([])
+        return
+      }
+      const result = await runtime.syncRuntimeLicenses?.()
+      if (!isCurrent()) return
+      if (!result) {
+        const id = await runtime.getHardwareId?.()
+        if (!isCurrent()) return
+        deviceActions.setRuntimeHardwareId(id?.success ? id.hardwareId : null)
+        deviceActions.setRuntimeHardwareElements(id?.success ? id.elements : [])
+        return
+      }
+      if (result.status === 'failed') {
+        consoleActions.addLog({ level: 'debug', message: `Runtime license check skipped: ${result.error}` })
+        return
+      }
+      if (result.status === 'no-hardware-id') {
+        deviceActions.setRuntimeHardwareId(null)
+        deviceActions.setRuntimeHardwareElements([])
+        deviceActions.setRuntimeLicense('gpl')
+        consoleActions.addLog({
+          level: 'debug',
+          message: 'Runtime license not confirmed: the runtime reports no hardware ID.',
+        })
+        return
+      }
+      deviceActions.setRuntimeHardwareId(result.hardwareId)
+      deviceActions.setRuntimeHardwareElements(result.elements)
+      deviceActions.setRuntimeLicense(result.license)
+      if (result.revoked) {
+        consoleActions.addLog({
+          level: 'warning',
+          message: result.revoked.removed
+            ? `Runtime license ${result.revoked.orderId} was revoked and removed from the target.`
+            : `Runtime license ${result.revoked.orderId} was revoked; removing it failed: ${result.revoked.error ?? 'refused'}`,
+        })
+      }
+      if (result.detail) {
+        consoleActions.addLog({ level: 'debug', message: `Runtime license not confirmed: ${result.detail}` })
+      }
+      for (const upload of result.uploads) {
+        consoleActions.addLog(
+          upload.stored
+            ? { level: 'info', message: `Commercial runtime license ${upload.orderId} installed on the target.` }
+            : {
+                level: 'debug',
+                message: `Runtime license ${upload.orderId} not installed: ${upload.error ?? 'refused'}`,
+              },
+        )
+      }
+    },
+    [mitRuntime, runtime, store],
+  )
+
+  const deliverRef = useRef(deliverToRuntime)
+  deliverRef.current = target === 'board' ? deliverToBoard : deliverToRuntime
+
+  const deliveryKey =
+    target === 'runtime'
+      ? mitRuntime
+        ? 'runtime:mit'
+        : 'runtime'
+      : target === 'board' && mode !== null
+        ? `board:${packageId ?? ''}:${mode}`
+        : null
+
+  const [delivered, setDelivered] = useState(false)
+  useEffect(() => {
+    const { deviceActions } = store.getState()
+    setDelivered(false)
+    if (deliveryKey === null) {
+      deviceActions.setRuntimeHardwareId(null)
+      deviceActions.setRuntimeHardwareElements([])
+      deviceActions.setRuntimeLicense(null)
+      deviceActions.setBoardRuntimeLicense({ deviceId: null, license: null })
+      deviceActions.setRuntimeLicenseChecking(false)
+      return
+    }
+    let cancelled = false
+    if (deliveryKey.startsWith('runtime')) {
+      deviceActions.setRuntimeLicense(null)
+      deviceActions.setBoardRuntimeLicense({ deviceId: null, license: null })
+    } else {
+      deviceActions.setRuntimeHardwareId(null)
+      deviceActions.setRuntimeHardwareElements([])
+    }
+    deviceActions.setRuntimeLicenseChecking(true)
+    void deliverRef
+      .current(() => !cancelled)
+      .catch((error: unknown) => {
+        if (cancelled) return
+        logSkippedCheck(store, error)
+      })
+      .finally(() => {
+        if (cancelled) return
+        setDelivered(true)
+        store.getState().deviceActions.setRuntimeLicenseChecking(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [deliveryKey, store])
+
+  const resolved =
+    connected && mode !== null
+      ? resolveTargetCommercialLicense({
+          mode,
+          vppLicense,
+          runtimeLicense: target === 'board' ? boardLicense : runtimeLicense,
+          runtimeVersion: target === 'runtime' ? runtimeVersion : null,
+        })
+      : null
+  useEffect(() => {
+    if (store.getState().runtimeCommercialLicense.status !== resolved) {
+      store.getState().deviceActions.setRuntimeCommercialLicenseStatus(resolved)
+    }
+  }, [resolved, store])
+
+  const shownForRef = useRef<string | null>(null)
+  const boardsShownRef = useRef(new Set<string>())
+  useEffect(() => {
+    if (!runtimeConnected) shownForRef.current = null
+  }, [runtimeConnected])
+  useEffect(() => {
+    if (!delivered || status !== 'unlicensed' || !hardwareId) return
+    if (target === 'board' ? boardsShownRef.current.has(hardwareId) : shownForRef.current === hardwareId) return
+    const { runtimeCommercialLicense, modalActions, deviceActions } = store.getState()
+    if (runtimeCommercialLicense.dismissedDisclaimers.includes(hardwareId)) return
+    if (target === 'board') boardsShownRef.current.add(hardwareId)
+    else shownForRef.current = hardwareId
+    modalActions.openModal('debugger-message', {
+      type: 'warning',
+      title: 'No commercial license',
+      message: COMMERCIAL_LICENSE_DISCLAIMER,
+      buttons: ['Buy licences', 'Dismiss'],
+      primaryButtonIndex: 0,
+      dismissButtonIndex: 1,
+      onResponse: (index: number) => {
+        if (index === 0) void buy()
+        else deviceActions.dismissRuntimeLicenseDisclaimer(hardwareId)
+      },
+    })
+  }, [delivered, status, hardwareId, target, buy, store])
+
+  useEffect(() => {
+    if (awaitingPurchaseUntil === null) return
+    if (status === 'licensed' || status === 'mit' || !connected) {
+      store.getState().deviceActions.setRuntimeLicensePurchaseWatch(null)
+      return
+    }
+    let stopped = false
+    let inFlight = false
+    const tick = () => {
+      if (Date.now() >= awaitingPurchaseUntil) {
+        store.getState().deviceActions.setRuntimeLicensePurchaseWatch(null)
+        return
+      }
+      if (inFlight) return
+      inFlight = true
+      void deliverRef
+        .current(() => !stopped)
+        .catch((error: unknown) => {
+          if (stopped) return
+          logSkippedCheck(store, error)
+        })
+        .finally(() => {
+          inFlight = false
+        })
+    }
+    const timer = setInterval(tick, PURCHASE_POLL_INTERVAL_MS)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
+  }, [awaitingPurchaseUntil, status, connected, store])
+}
