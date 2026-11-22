@@ -93,8 +93,6 @@ interface BlockMeasure extends Extent {
 interface GroupMeasure extends Extent {
   branches: Extent[]
   offsets: number[]
-  /** Pad before the closing junction: only when a branch ends in a nested group, so their junctions stay apart. */
-  closePad: number
 }
 
 interface Placed {
@@ -223,11 +221,9 @@ class RungLayoutBuilder {
     }
     const widest = Math.max(0, ...branches.map((branch) => branch.w))
     const last = branches.length - 1
-    const closePad = group.branches.some((branch) => branch[branch.length - 1]?.kind === 'group') ? this.s.parPad : 0
     const measure: GroupMeasure = {
-      // The closing junction sits at the end of the widest branch, unless a nested group closes there.
-      w: widest + this.s.parPad + closePad,
-      closePad,
+      // One pad at the opening junction only: the closing junction sits at the end of the widest branch.
+      w: widest + this.s.parPad,
       top: branches[0]?.top ?? 0,
       bot: (offsets[last] ?? 0) + (branches[last]?.bot ?? 0),
       branches,
@@ -596,7 +592,7 @@ class RungLayoutBuilder {
     group.opens.forEach((node, index) => this.placeJunction(node, openX, branchY[index]))
     group.closes.forEach((node, index) => this.placeJunction(node, closeX, branchY[index]))
     group.branches.forEach((branch, index) => {
-      const startX = alignment === 'end' ? closeX - m.closePad - m.branches[index].w : openX + s.parPad
+      const startX = alignment === 'end' ? closeX - m.branches[index].w : openX + s.parPad
       const placed = this.placeSeries(branch, startX, branchY[index], depth + 1)
       const endX = branch.length === 0 ? startX : placed.exitX
       branches.push({ nodeIds: placed.nodeIds, y: branchY[index], startX, endX })

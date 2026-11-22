@@ -137,7 +137,8 @@ function parallelBreaks(rung: RungLadderState, layout: RungLayout): string[] {
       if (inner === group) continue
       const nested = group.branches.some((branch) => inner.openNodeIds.every((id) => branch.nodeIds.includes(id)))
       if (!nested) continue
-      if (!(inner.closeX < group.closeX && inner.openX > group.openX))
+      // A nested group that ends its branch closes on the outer junction's x.
+      if (!(inner.closeX <= group.closeX + EPS && inner.openX > group.openX))
         breaks.push(`${inner.openNodeIds[0]}: outside ${name}`)
       if (inner.depth <= group.depth) breaks.push(`${inner.openNodeIds[0]}: depth not below ${name}`)
     }
@@ -254,11 +255,11 @@ describe('BDD-20 row 4 / AC26-c: A then an inner group B / "Conveyor_Infeed_Read
     expect([outer.depth, inner.depth]).toEqual([0, 1])
   })
 
-  it('makes the inner group as wide as its longest branch, and the outer as wide as A plus the inner group (P1, P6)', () => {
+  it('makes the inner group as wide as its longest branch, and the outer as wide as A plus the inner group, both closing on one x (P1, P6)', () => {
     expect(inner.closeX - inner.openX).toBeCloseTo(S.parPad + column('Conveyor_Infeed_Ready'), 6)
     expect(inner.openX).toBeCloseTo(outer.openX + S.parPad + column('A'), 6)
-    expect(outer.closeX - outer.openX).toBeCloseTo(2 * S.parPad + column('A') + (inner.closeX - inner.openX), 6)
-    expect(inner.closeX).toBeLessThan(outer.closeX)
+    expect(outer.closeX - outer.openX).toBeCloseTo(S.parPad + column('A') + (inner.closeX - inner.openX), 6)
+    expect(inner.closeX).toBeCloseTo(outer.closeX, 6)
   })
 
   it("extends B's branch to the inner junction and E's branch to the outer junction", () => {
