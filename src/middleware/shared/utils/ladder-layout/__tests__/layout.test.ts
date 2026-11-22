@@ -651,6 +651,11 @@ describe('segments are the top-level elements of the main series', () => {
   })
 })
 
+/** A plain copy of a layout, its maps as entry arrays, so a later change to the layout shows up in a comparison. */
+function layoutSnapshot(layout: RungLayout): unknown {
+  return JSON.parse(JSON.stringify({ ...layout, nodes: [...layout.nodes], labels: [...layout.labels] }))
+}
+
 describe('determinism', () => {
   const hard = loadCorpusProject('ld-corpus-hard')
 
@@ -665,10 +670,10 @@ describe('determinism', () => {
     const rung = loadedRungs(hard, 'Counters')[1]
     const before = structuredClone(rung)
     const layout = layoutRung(rung, corpusLabelSource(hard, 'Counters'))
-    const layoutBefore = structuredClone(layout)
+    const layoutBefore = layoutSnapshot(layout)
     applyRungLayout(rung, layout)
     expect(rung).toEqual(before)
-    expect(layout).toEqual(layoutBefore)
+    expect(layoutSnapshot(layout)).toEqual(layoutBefore)
   })
 })
 
