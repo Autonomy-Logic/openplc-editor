@@ -2,6 +2,7 @@ import type {
   CoordinateExtent,
   DefaultEdgeOptions,
   Node as FlowNode,
+  NodeChange,
   OnNodesChange,
   ReactFlowInstance,
 } from '@xyflow/react'
@@ -20,10 +21,13 @@ import {
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import {
-  labelSourceSignature,
-  type LadderLabelSource,
+  displayShift,
+  LADDER_STYLE,
   layoutRung,
   pouLabelSource,
+  presentPou,
+  toCanonicalPosition,
+  toDisplayNodes,
 } from '../../../../../../middleware/shared/utils/ladder-layout'
 import { mapsEqual, useContentStable } from '../../../../../hooks/use-content-stable'
 import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
@@ -61,8 +65,10 @@ import {
   removePlaceholderElements,
   renderPlaceholderElements,
   searchNearestPlaceholder,
+  withTransientShifts,
 } from './ladder-utils/elements/placeholder'
 import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
+import { useLadderLabelSource, useLadderPouCanvas } from './pou-canvas'
 import { computeRungDebugStates, poweredBlockIds, type RungDebugStates } from './rung-debug-states'
 import { isSameSelection } from './selection'
 
@@ -109,10 +115,6 @@ const NOOP = () => {}
 const PLACEMENT_EXTENT_PADDING = 50
 const PLACEMENT_SWALLOW_MS = 500
 
-/** True when two label sources draw the same location texts. */
-const sameLabelSource = (previous: LadderLabelSource, next: LadderLabelSource): boolean =>
-  labelSourceSignature(previous) === labelSourceSignature(next)
-
 const rungDebugStatesEqual = (previous: RungDebugStates | null, next: RungDebugStates | null): boolean =>
   previous !== null &&
   next !== null &&
@@ -157,12 +159,15 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     (rung?.reactFlowViewport as [number, number]) ?? [1530, 200],
   ])
 
-  const projectData = useOpenPLCStore((state) => state.project.data)
-  const labelSource = useContentStable(
-    useMemo(() => pouLabelSource(projectData, pouName), [projectData, pouName]),
-    sameLabelSource,
+  const canvas = useLadderPouCanvas()
+  const labelSource = useLadderLabelSource(pouName, canvas?.labelSource)
+  const layout = useMemo(
+    () => canvas?.layouts.get(rung) ?? layoutRung(rung, labelSource),
+    [canvas?.layouts, rung, labelSource],
   )
-  const layout = useMemo(() => layoutRung(rung, labelSource), [rung, labelSource])
+  const presentation = useMemo(() => canvas?.presentation ?? presentPou([layout], 0), [canvas?.presentation, layout])
+  const shifts = useMemo(() => withTransientShifts(presentation, rungLocal.nodes), [presentation, rungLocal.nodes])
+  const displayNodes = useMemo(() => toDisplayNodes(rungLocal.nodes, shifts), [rungLocal.nodes, shifts])
   const palette = useLadderThemePalette()
   const rungView = useMemo(() => ({ layout, labelSource, palette }), [layout, labelSource, palette])
 
@@ -219,13 +224,13 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         stroke: energized ? palette.on : palette.wire,
         strokeWidth: energized ? WIRE_STROKE.on : WIRE_STROKE.normal,
       }
-      const route = ladderRouteEdgeData(layout, edge, nodeById)
+      const route = ladderRouteEdgeData(layout, edge, nodeById, (id) => displayShift(shifts, id))
       return route === undefined ? { ...edge, style } : { ...edge, type: 'ladderRoute', style, data: route }
     })
-  }, [rungLocal.nodes, rungLocal.edges, stableDebugStates, layout, palette])
+  }, [rungLocal.nodes, rungLocal.edges, stableDebugStates, layout, palette, shifts])
 
   const styledNodes = useMemo(() => {
-    const baseNodes = rungLocal.nodes.map(ladderDisplayNode)
+    const baseNodes = displayNodes.map(ladderDisplayNode)
 
     if (isDebuggerActive) {
       return baseNodes.map((node) => ({
@@ -237,7 +242,46 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     return baseNodes
-  }, [rungLocal.nodes, isDebuggerActive])
+  }, [displayNodes, isDebuggerActive])
+
+  const canvasWidth = Math.max(reactFlowPanelExtent[1][0], presentation.widthPx)
+  const translateExtent = useMemo<CoordinateExtent>(
+    () => [
+      [0, 0],
+      [canvasWidth, reactFlowPanelExtent[1][1]],
+    ],
+    [canvasWidth, reactFlowPanelExtent],
+  )
+
+  /** `nodes` at the positions they are drawn at, the space the pointer is read in. */
+  const displayed = (nodes: FlowNode[]): FlowNode[] => toDisplayNodes(nodes, withTransientShifts(presentation, nodes))
+
+  /** A node xyflow reports, moved back to its canonical position. */
+  const toCanonicalNode = <T extends FlowNode>(node: T): T => {
+    const position = toCanonicalPosition(node.id, node.position, shifts)
+    return position.x === node.position.x ? node : { ...node, position }
+  }
+
+  /** A node change xyflow reports, its position or node moved back to canonical coordinates. */
+  const toCanonicalChange = (change: NodeChange<FlowNode>): NodeChange<FlowNode> => {
+    switch (change.type) {
+      case 'position':
+        return change.position === undefined
+          ? change
+          : { ...change, position: toCanonicalPosition(change.id, change.position, shifts) }
+      case 'add':
+      case 'replace':
+        return { ...change, item: toCanonicalNode(change.item) }
+      case 'dimensions':
+      case 'select':
+      case 'remove':
+        return change
+      default: {
+        const unreachable: never = change
+        return unreachable
+      }
+    }
+  }
 
   useEffect(() => {
     setRungLocal({
@@ -278,21 +322,15 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const pan = reactFlowInstance?.toObject() ?? { x: 0, y: 0 }
 
       const adjustedSearchNodePosition = {
-        x: nodePosition.x * zoom + ('x' in pan ? pan.x : 0),
+        x: (nodePosition.x + displayShift(shifts, foundNode.id)) * zoom + ('x' in pan ? pan.x : 0),
         y: nodePosition.y * zoom + ('y' in pan ? pan.y : 0),
       }
 
       setSearchNodePosition(adjustedSearchNodePosition)
-
-      reactFlowViewportRef.current?.scrollTo({
-        top: adjustedSearchNodePosition.y,
-        left: adjustedSearchNodePosition.x - 100,
-        behavior: 'smooth',
-      })
     } else {
       setSearchNodePosition({ x: 0, y: 0 })
     }
-  }, [searchQuery, rungLocal, reactFlowInstance])
+  }, [searchQuery, rungLocal, reactFlowInstance, shifts])
 
   useEffect(() => {
     const handleGlobalDragEnd = () => {
@@ -480,7 +518,10 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const handleNodeDrag = (event: globalThis.MouseEvent | globalThis.TouchEvent) => {
     if (!reactFlowInstance || !('clientX' in event)) return
-    const closestPlaceholder = onElementDragOver(rungLocal, reactFlowInstance, { x: event.clientX, y: event.clientY })
+    const closestPlaceholder = onElementDragOver({ ...rungLocal, nodes: displayNodes }, reactFlowInstance, {
+      x: event.clientX,
+      y: event.clientY,
+    })
     if (!closestPlaceholder) return
 
     setRungLocal((rung) => ({
@@ -543,22 +584,23 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   }
 
   const onNodesDelete = useStableCallback((nodes: FlowNode[]) => {
-    handleRemoveNode(nodes)
+    handleRemoveNode(nodes.map(toCanonicalNode))
   })
   const onNodeDragStart = useStableCallback((_event: globalThis.MouseEvent | globalThis.TouchEvent, node: FlowNode) => {
-    handleNodeStartDrag(node)
+    handleNodeStartDrag(toCanonicalNode(node))
   })
   const onNodeDrag = useStableCallback((event: globalThis.MouseEvent | globalThis.TouchEvent) => {
     handleNodeDrag(event)
   })
   const onNodeDragStop = useStableCallback((_event: globalThis.MouseEvent | globalThis.TouchEvent, node: FlowNode) => {
-    handleNodeDragStop(node)
+    handleNodeDragStop(toCanonicalNode(node))
   })
   const onNodeDoubleClick = useStableCallback((_event: MouseEvent, node: FlowNode) => {
-    handleNodeDoubleClick(node)
+    handleNodeDoubleClick(toCanonicalNode(node))
   })
 
-  const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((changes) => {
+  const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((displayChanges) => {
+    const changes = displayChanges.map(toCanonicalChange)
     setRungLocal((rung) => {
       let selectedNodes: FlowNode[] = rung.nodes.filter((node) => node.selected)
       changes.forEach((change) => {
@@ -649,7 +691,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
 
-    const closestPlaceholder = searchNearestPlaceholder(rungLocal, reactFlowInstance, {
+    const closestPlaceholder = searchNearestPlaceholder({ ...rungLocal, nodes: displayNodes }, reactFlowInstance, {
       x: event.clientX,
       y: event.clientY,
     })
@@ -705,7 +747,10 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const findPlacementPlaceholder = (nodes: FlowNode[], clientX: number, clientY: number) => {
     if (!reactFlowInstance) return undefined
-    return findPlaceholderWithinRadius(nodes, reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY }))
+    return findPlaceholderWithinRadius(
+      displayed(nodes),
+      reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY }),
+    )
   }
 
   const handlePlacementPointerMove = (event: ReactPointerEvent) => {
@@ -753,10 +798,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   }
 
   return (
-    <div className={cn('relative h-fit w-full p-1', className)}>
+    <div className={cn('relative h-fit w-full py-1', className)}>
       <div
         aria-label='Rung body'
-        className={cn('h-full w-full overflow-x-auto', armedElement && 'cursor-crosshair')}
+        className={cn('h-full w-full', armedElement && 'cursor-crosshair')}
+        style={{ paddingLeft: LADDER_STYLE.gutter }}
         ref={reactFlowViewportRef}
         {...{ [PLACEMENT_TARGET_ATTRIBUTE]: 'ld-rung' }}
         onPointerMove={armedElement ? handlePlacementPointerMove : undefined}
@@ -768,7 +814,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         <div
           style={{
             height: reactFlowPanelExtent[1][1] + 8,
-            width: reactFlowPanelExtent[1][0],
+            width: canvasWidth,
           }}
         >
           <LadderRungViewProvider view={rungView} poweredBlockIds={poweredBlocks}>
@@ -800,7 +846,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
                 onDragOver: onDragOver,
                 onDrop: onDrop,
 
-                translateExtent: reactFlowPanelExtent,
+                translateExtent,
                 panActivationKeyCode: null,
                 panOnDrag: false,
                 panOnScroll: false,

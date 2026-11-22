@@ -10,7 +10,8 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { LADDER_STYLE } from '@root/middleware/shared/utils/ladder-layout'
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -28,6 +29,10 @@ import { CoilNode } from '../../../../../_atoms/graphical-editor/ladder/coil'
 import { ContactNode } from '../../../../../_atoms/graphical-editor/ladder/contact'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { CreateRung } from '../../../../../_molecules/graphical-editor/ladder/rung/create-rung'
+import {
+  LadderPouCanvasProvider,
+  useLadderPouCanvasValue,
+} from '../../../../../_molecules/graphical-editor/ladder/rung/pou-canvas'
 import { Rung } from '../../../../../_organisms/graphical-editor/ladder/rung'
 import { useBoundPou } from '../active-context'
 import BlockElement from '../elements/ladder/block'
@@ -36,6 +41,22 @@ import ContactElement from '../elements/ladder/contact'
 import { useGraphicalPlacement } from '../placement/placement-context'
 
 const EMPTY_DIVERGENCES: string[] = []
+
+/** The visible width of the element in `ref`, followed as it resizes; 0 until it is measured. Display only. */
+function useVisibleWidth(ref: RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const measure = () => setWidth(element.clientWidth)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ref])
+  return width
+}
 
 export default function LadderEditor() {
   const store = useOpenPLCStoreApi()
@@ -139,6 +160,9 @@ export default function LadderEditor() {
   useGraphicalFocus(pouName, selectSearchedNode)
 
   const scrollableRef = useRef<HTMLDivElement>(null)
+  const viewportWidth = useVisibleWidth(scrollableRef)
+  const pouCanvas = useLadderPouCanvasValue(pouName, rungs, viewportWidth)
+
   useEffect(() => {
     if (scrollableRef.current) {
       scrollableRef.current.scrollTo({
@@ -240,43 +264,50 @@ export default function LadderEditor() {
 
   return (
     <div
-      className='h-full w-full overflow-y-auto'
+      data-testid='ld-pou-canvas'
+      className='h-full w-full overflow-auto'
       ref={scrollableRef}
       style={{ scrollbarGutter: 'stable' }}
       onContextMenu={placement?.handleContextMenu}
     >
-      <div className='flex flex-1 flex-col gap-4 px-2'>
-        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-          <div
-            className={cn({
-              'h-fit rounded-lg border dark:border-neutral-800': rungs.length > 0,
-            })}
-          >
-            <SortableContext items={rungs} strategy={verticalListSortingStrategy}>
-              {rungs.map((rung, index) => (
-                <Rung
-                  key={rung.id}
-                  id={rung.id}
-                  index={index}
-                  rung={rung}
-                  className={cn({
-                    'opacity-35': activeId === rung.id,
-                  })}
-                  nodeDivergences={nodeDivergences}
-                  isDebuggerActive={isDebuggerVisible}
-                />
-              ))}
-            </SortableContext>
-            {createPortal(
-              <DragOverlay dropAnimation={defaultDropAnimation} modifiers={[restrictToParentElement]}>
-                {activeId && activeItem ? (
-                  <Rung key={activeItem.id} id={activeItem.id} rung={activeItem} index={-1} />
-                ) : null}
-              </DragOverlay>,
-              document.body,
-            )}
-          </div>
-        </DndContext>
+      <div
+        className='flex flex-1 flex-col gap-4'
+        style={{ width: LADDER_STYLE.gutter + pouCanvas.presentation.widthPx, minWidth: '100%' }}
+      >
+        <LadderPouCanvasProvider value={pouCanvas}>
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+            <div
+              className={cn({
+                'h-fit rounded-lg outline outline-1 -outline-offset-1 outline-gray-200 dark:outline-neutral-800':
+                  rungs.length > 0,
+              })}
+            >
+              <SortableContext items={rungs} strategy={verticalListSortingStrategy}>
+                {rungs.map((rung, index) => (
+                  <Rung
+                    key={rung.id}
+                    id={rung.id}
+                    index={index}
+                    rung={rung}
+                    className={cn({
+                      'opacity-35': activeId === rung.id,
+                    })}
+                    nodeDivergences={nodeDivergences}
+                    isDebuggerActive={isDebuggerVisible}
+                  />
+                ))}
+              </SortableContext>
+              {createPortal(
+                <DragOverlay dropAnimation={defaultDropAnimation} modifiers={[restrictToParentElement]}>
+                  {activeId && activeItem ? (
+                    <Rung key={activeItem.id} id={activeItem.id} rung={activeItem} index={-1} />
+                  ) : null}
+                </DragOverlay>,
+                document.body,
+              )}
+            </div>
+          </DndContext>
+        </LadderPouCanvasProvider>
         <CreateRung onClick={handleAddNewRung} />
         <Portal.Root>
           {blockElement && (

@@ -1,5 +1,5 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
-import { hasBranchOnHandle } from '@root/middleware/shared/utils/ladder-layout'
+import { displayShift, hasBranchOnHandle, type PouPresentation } from '@root/middleware/shared/utils/ladder-layout'
 import type { Node, ReactFlowInstance } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -17,6 +17,34 @@ import { getDeepestNodesInsideParallels, getNodesInsideAllParallels, getPlacehol
 
 export const removePlaceholderElements = (nodes: Node[]) => {
   return nodes.filter((node) => node.type !== 'placeholder' && node.type !== 'parallelPlaceholder')
+}
+
+const COPYCAT_PREFIX = 'copycat_'
+
+/** The id of the node a placeholder sits next to, or undefined for any other node. */
+function placeholderRelatedId(node: Node): string | undefined {
+  if (node.type !== 'placeholder' && node.type !== 'parallelPlaceholder') return undefined
+  const related: unknown = node.data.relatedNode
+  if (typeof related !== 'object' || related === null || !('id' in related)) return undefined
+  return typeof related.id === 'string' ? related.id : undefined
+}
+
+/**
+ * The presentation extended to the transient nodes of a rung being edited: a copycat shifts with the node it copies and
+ * a placeholder with the node it sits next to, so they are drawn and hit-tested where that node is drawn.
+ */
+export const withTransientShifts = (presentation: PouPresentation, nodes: readonly Node[]): PouPresentation => {
+  let dxByNode: Map<string, number> | undefined
+  for (const node of nodes) {
+    if (presentation.dxByNode.has(node.id)) continue
+    const related = placeholderRelatedId(node) ?? node.id
+    const original = related.startsWith(COPYCAT_PREFIX) ? related.slice(COPYCAT_PREFIX.length) : related
+    const dx = displayShift(presentation, original)
+    if (dx === 0) continue
+    dxByNode ??= new Map(presentation.dxByNode)
+    dxByNode.set(node.id, dx)
+  }
+  return dxByNode === undefined ? presentation : { ...presentation, dxByNode }
 }
 
 /**
@@ -373,7 +401,7 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
 /**
  * Search for the nearest placeholder node
  *
- * @param rung The current rung state
+ * @param rung The current rung state, its nodes at their displayed positions, the space the pointer is read in
  * @param reactFlowInstance The react flow instance
  * @param position The position of the mouse
  *

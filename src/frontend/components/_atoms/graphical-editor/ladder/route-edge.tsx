@@ -27,14 +27,15 @@ function symbolInset(node: Node | undefined): number {
 
 /**
  * The route data of an LD edge that leaves an opening or ends on a closing parallel node, from the rung layout, with
- * the insets of the symbols at its ends; undefined for any other edge.
+ * the insets of the symbols at its ends; undefined for any other edge. dx is the display-only x shift per node id.
  */
 export function ladderRouteEdgeData(
   layout: RungLayout,
   edge: LdEdgeEnds,
   nodeById: ReadonlyMap<string, Node>,
+  dx: (nodeId: string) => number = () => 0,
 ): LadderRouteEdgeData | undefined {
-  const points = parallelEdgeRoute(layout, edge)
+  const points = parallelEdgeRoute(layout, edge, dx)
   if (points === undefined) return undefined
   return {
     points,

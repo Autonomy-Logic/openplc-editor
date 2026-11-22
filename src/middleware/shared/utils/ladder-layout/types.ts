@@ -88,6 +88,8 @@ export interface RungLayout {
   size: { width: number; height: number }
   /** Y of the rung's main wire. */
   mainWireY: number
+  /** Node id of the right power rail; undefined when the rung has none. */
+  rightRailId: string | undefined
   /** Trailing coils, or a trailing all-coil parallel group with its parallel nodes. */
   trailingOutputIds: readonly string[]
   /** Left to right, trailing outputs as the last segment; may hold parallel and variable nodes. */

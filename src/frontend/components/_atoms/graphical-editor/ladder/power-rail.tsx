@@ -2,7 +2,7 @@ import { useUpdateNodeInternals } from '@xyflow/react'
 import { memo, useEffect, useMemo } from 'react'
 
 import { CustomHandle, ladderHandleStyle } from './handle'
-import { useLadderNodeView } from './rung-view'
+import { useLadderNodeView, useLadderRungId } from './rung-view'
 import { DEFAULT_POWER_RAIL_HEIGHT } from './utils/constants'
 import { PowerRailProps } from './utils/types'
 
@@ -13,6 +13,7 @@ const RAIL_STROKE = 2.5
 const PowerRail = ({ id, data, height }: PowerRailProps) => {
   const updateNodeInternals = useUpdateNodeInternals()
   const { palette, geometry } = useLadderNodeView(id)
+  const rungId = useLadderRungId()
 
   const railHeight = useMemo(() => {
     const lowestHandle = Math.max(0, ...data.handles.map((handle) => handle.relPosition?.y ?? 0))
@@ -33,7 +34,12 @@ const PowerRail = ({ id, data, height }: PowerRailProps) => {
 
   return (
     <>
-      <svg width={1} height={railHeight} style={{ display: 'block', overflow: 'visible' }}>
+      <svg
+        width={1}
+        height={railHeight}
+        style={{ display: 'block', overflow: 'visible' }}
+        data-testid={data.variant === 'right' && rungId !== undefined ? `ld-right-rail-${rungId}` : undefined}
+      >
         <line x1={0} y1={0} x2={0} y2={railHeight} stroke={palette.rail} strokeWidth={RAIL_STROKE} />
       </svg>
       {data.handles.map((handle, index) => (

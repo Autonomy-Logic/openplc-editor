@@ -84,6 +84,11 @@ export function useLadderNodeView(nodeId: string): LadderNodeView {
   }, [view, nodeId])
 }
 
+/** The id of the enclosing rung, from its layout; undefined outside a rung view. */
+export function useLadderRungId(): string | undefined {
+  return useContext(RungViewContext)?.layout.rungId
+}
+
 /** True while power reaches block `nodeId`'s input on the rung wire in a debug session. */
 export function useLadderBlockPowered(nodeId: string): boolean {
   return useContext(PoweredBlocksContext).has(nodeId)

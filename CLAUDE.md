@@ -405,7 +405,8 @@ layout (`RungLayout.branchFillers`, `parallelEdgeRoute`) and never stored. Geome
 compiled statements, so any layout change must keep the ST-order corpus green
 (`st-transpiler/__tests__/ld-relayout-corpus.test.ts`).
 
-**LD screen drawing.** Each rung body lays its rung out with the engine and gives the layout, the label source and
+**LD screen drawing.** The LD editor lays every rung of the POU out once (`useLadderPouCanvasValue`,
+`_molecules/graphical-editor/ladder/rung/pou-canvas.ts`), and each rung body gives its layout, the label source and
 the theme palette (`LADDER_PALETTE`) to the node atoms through `LadderRungViewProvider`
 (`_atoms/graphical-editor/ladder/rung-view.tsx`). The atoms draw the layout's labels as SVG text in JetBrains Mono,
 never as HTML; a name becomes a one-line `<input>` when clicked or when its element is placed. Every edge
@@ -414,6 +415,14 @@ edges stay xyflow `smoothstep`. Rendering never writes geometry to the store: th
 and xyflow's measurements stay local. The LD diff view lays both sides out the same way with the project's current
 variables, and marks an element whose position or size alone changed only in a rung pair that is a pure re-layout
 (`graphical-diff.ts`).
+
+**LD POU canvas.** A POU is one canvas (`ld-pou-canvas`) that scrolls sideways as one, with a 44 px left gutter.
+`presentPou(layouts, visibleWidth)` (`ladder-layout/presentation.ts`) puts one right rail for every rung 24 px from
+the editor's right edge when every rung fits, else right after the widest rung, and right-justifies each rung's
+trailing outputs against it as display-only x shifts (`dxByNode`). xyflow gets `toDisplayNodes(...)`; every position
+it reports goes through `toCanonicalPosition` before reaching rung state, copycats and placeholders shift with the node
+they stand for (`withTransientShifts`), and hit-tests compare displayed positions with the pointer. The shifts and the
+editor width are never stored.
 
 ### Compilation Pipeline
 

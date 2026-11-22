@@ -76,7 +76,7 @@ const Rung = ({ className, index, id, rung, nodeDivergences, isDebuggerActive }:
       {getIsRungOpen({ rungId: rung.id }) && (
         <RungBody
           rung={rung}
-          className={cn('border border-transparent', {
+          className={cn('border-y border-transparent', {
             'rounded-b-lg': index === rungsCount - 1,
           })}
           nodeDivergences={nodeDivergences}

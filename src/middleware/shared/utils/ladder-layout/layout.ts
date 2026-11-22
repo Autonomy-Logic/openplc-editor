@@ -711,6 +711,7 @@ export function layoutRung(
     labels: builder.labels,
     size: { width, height },
     mainWireY,
+    rightRailId: structure.rightRail?.id,
     trailingOutputIds,
     segments:
       elementCount > MAX_REDUCIBLE_ELEMENTS ? [{ nodeIds: rung.nodes.map((node) => node.id), x: 0, width }] : segments,
