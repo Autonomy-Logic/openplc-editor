@@ -12,6 +12,7 @@ import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
+import { useRuntimeCommercialLicense } from '../../../../../../hooks/use-runtime-commercial-license'
 import { useRuntimeConnect } from '../../../../../../hooks/use-runtime-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { reopenProvisioningDialog } from '../../../../../../services/runtime-provisioning'
@@ -31,6 +32,7 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../..
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
+import { RuntimeCommercialLicenseStatus } from './components/runtime-commercial-license-status'
 
 type RuntimeConnectActivity = {
   label: string
@@ -65,6 +67,10 @@ function runtimeProvisioningActivity(
   return undefined
 }
 
+/**
+ * Device board configuration: board, port, pins and connection. Shows the runtime commercial licence that
+ * `useRuntimeCommercialLicenseOwner` resolves beside the runtime polling.
+ */
 const Board = memo(function () {
   const store = useOpenPLCStoreApi()
   const capabilities = useCapabilities()
@@ -100,6 +106,7 @@ const Board = memo(function () {
   } = useDeviceConnect(currentBoardInfo)
 
   const licensing = useDeviceLicense(currentBoardInfo, { ownsWatch: true })
+  const runtimeLicense = useRuntimeCommercialLicense()
 
   const pinMappingEnabled = resolveTargetCapabilities(currentBoardInfo).pinMapping
 
@@ -615,6 +622,16 @@ const Board = memo(function () {
                     onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
                   />
                 ) : null}
+                {connectionStatus === 'connected' ? (
+                  <RuntimeCommercialLicenseStatus
+                    status={runtimeLicense.status}
+                    hardwareId={runtimeLicense.hardwareId}
+                    idLabel={runtimeLicense.idLabel}
+                    buyUrl={runtimeLicense.buyUrl}
+                    awaitingPurchase={runtimeLicense.awaitingPurchase}
+                    onBuy={() => void runtimeLicense.buy()}
+                  />
+                ) : null}
               </DeviceConnectButton>
             </>
           ) : isEthernetUploadTarget(currentBoardInfo) ? (
@@ -654,6 +671,16 @@ const Board = memo(function () {
                     onBuy={() => void licensing.buy()}
                     onRecheck={() => void licensing.refresh()}
                     onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
+                {isConnected ? (
+                  <RuntimeCommercialLicenseStatus
+                    status={runtimeLicense.status}
+                    hardwareId={runtimeLicense.hardwareId}
+                    idLabel={runtimeLicense.idLabel}
+                    buyUrl={runtimeLicense.buyUrl}
+                    awaitingPurchase={runtimeLicense.awaitingPurchase}
+                    onBuy={() => void runtimeLicense.buy()}
                   />
                 ) : null}
               </DeviceConnectButton>
@@ -736,6 +763,16 @@ const Board = memo(function () {
                     onBuy={() => void licensing.buy()}
                     onRecheck={() => void licensing.refresh()}
                     onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
+                {isConnected ? (
+                  <RuntimeCommercialLicenseStatus
+                    status={runtimeLicense.status}
+                    hardwareId={runtimeLicense.hardwareId}
+                    idLabel={runtimeLicense.idLabel}
+                    buyUrl={runtimeLicense.buyUrl}
+                    awaitingPurchase={runtimeLicense.awaitingPurchase}
+                    onBuy={() => void runtimeLicense.buy()}
                   />
                 ) : null}
               </DeviceConnectButton>

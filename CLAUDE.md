@@ -424,8 +424,8 @@ enabled server. `DEBUG_BAUD` comes from `screens.serial.baud_rate` and
 
 With one UART for both (no `MBSERIAL_ON_SECONDARY`), the firmware answers two ids on it, routed by
 function code (`handle_serial_port` in `resources/sources/Baremetal/modbus_serial.cpp`): the editor's id
-(`MB_EDITOR_SLAVE`, equal to `DEBUG_SLAVE`) carries only the editor function codes 0x41-0x4D
-(`mb_pdu_is_editor_fc` in `modbus_pdu.cpp`) and silently drops anything else; the server's id
+(`MB_EDITOR_SLAVE`, equal to `DEBUG_SLAVE`) carries only the editor function codes 0x41-0x4E, board ID
+provisioning (0x4E) included (`mb_pdu_is_editor_fc` in `modbus_pdu.cpp`) and silently drops anything else; the server's id
 (`modbus.slaveid`, from `MBSERIAL_SLAVE`) carries the standard frames the framer recognizes and answers
 an editor function code with an illegal-function exception. A function code the framer does not
 recognize is dropped during serial framing, not answered. When the two ids are equal, that id serves
@@ -592,7 +592,7 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
 
 ### Debugging
 
-- **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4D for status, version, licensing, run/stop state, bootloader reboot and lock state (`resources/sources/Baremetal/modbus_types.h`). A firmware built with `openplc-cli compile --hmi-test-readout` also answers the test-only HMI codes 0x4E and 0x4F (`resources/sources/hmi/README.md`)
+- **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4E for status, version, licensing, run/stop state, bootloader reboot, lock state and board ID provisioning (0x4E) (`resources/sources/Baremetal/modbus_types.h`); 0x48 reports the board's raw ID sources. A firmware built with `openplc-cli compile --hmi-test-readout` also answers the test-only HMI codes 0x4F and 0x50 (`resources/sources/hmi/README.md`)
 - **Transports:** Modbus TCP, Modbus RTU, WebSocket, or virtual serial (simulator)
 - **Simulator:** the project's WebAssembly module (`src/backend/shared/simulator/`): `WasmSimulatorModule` runs it
   with simulated time (one scan period per scan, never ahead of the wall clock, in steps of at most 10 ms so the

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
 /*
-modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x4B)
+modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x4E)
 
 The debugger PDU handlers, dispatched from process_mbpacket. Kept ungated: the
 dispatch in modbus_pdu references them unconditionally (the always-on debugger is
@@ -39,8 +39,10 @@ void rebootToBootloader(const uint8_t *magic);
 // side-effect free (unlike 0x4C, which raises the unlock prompt on the device),
 // so the editor can poll it while waiting for the user to unlock.
 void getLockState(void);
+// FC 0x4E -- store a generated board ID once. `id` points at the 16 payload bytes; the frame carries a CRC on RTU.
+void debugProvisionBoardId(const uint8_t *id);
 #ifdef HMI_TEST_READOUT
-// FC 0x4E / 0x4F -- test-only HMI readout, compiled in by `openplc-cli compile
+// FC 0x4F / 0x50 -- test-only HMI readout, compiled in by `openplc-cli compile
 // --hmi-test-readout`: the current display list in chunks, and the HMI task's counters.
 void hmiGetDisplayList(uint32_t offset, uint8_t max_len);
 void hmiGetStats(void);

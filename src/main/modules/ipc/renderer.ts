@@ -51,6 +51,8 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
+  RuntimeHardwareIdResult,
+  RuntimeLicenseSyncResult,
   RuntimeUserRole,
   UpdateUserParams,
   UsersInfoResult,
@@ -750,6 +752,10 @@ const rendererProcessBridge = {
     switchPosition?: 'run' | 'stop'
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, includeStats),
+  runtimeGetHardwareId: (ipAddress: string): Promise<RuntimeHardwareIdResult> =>
+    ipcRenderer.invoke('runtime:get-hardware-id', ipAddress),
+  runtimeSyncLicenses: (ipAddress: string): Promise<RuntimeLicenseSyncResult> =>
+    ipcRenderer.invoke('runtime:sync-licenses', ipAddress),
   runtimeStartPlc: (ipAddress: string): Promise<{ success: boolean; error?: string; status?: string }> =>
     ipcRenderer.invoke('runtime:start-plc', ipAddress),
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>

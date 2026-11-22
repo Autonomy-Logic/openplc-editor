@@ -75,6 +75,7 @@ import {
 import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monitor'
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
 import { useRestoreProjectTargetDevice } from '../hooks/use-restore-project-target-device'
+import { useRuntimeCommercialLicenseOwner } from '../hooks/use-runtime-commercial-license'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { buildAllProjectFileContentsPure } from '../services/save-actions'
@@ -200,6 +201,7 @@ const WorkspaceScreen = () => {
 
   useRuntimePolling()
   useHoldHmiToolchain()
+  useRuntimeCommercialLicenseOwner()
   useRestoreProjectTargetDevice()
   // Mirrors a baremetal target's run/stop state from the held device link's existing liveness tick (no timer of its own).
   useDevicePlcState()

@@ -312,7 +312,7 @@ export interface RunCompilePipelineArgs {
   /** The project's HMI (`hmiBuildSources`), null when it has no screens. Runtime v4 builds ship it as `hmi/`; the
    *  simulator leaves it out; any other target without an `hmi` capability refuses it before compiling. */
   hmi: HmiBuildSources | null
-  /** Compiles the HMI's test-only display-list readout (function codes 0x4E, 0x4F) into a board firmware with a
+  /** Compiles the HMI's test-only display-list readout (function codes 0x4F, 0x50) into a board firmware with a
    *  panel. Only `openplc-cli compile --hmi-test-readout` sets it. */
   hmiTestReadout?: boolean
 }

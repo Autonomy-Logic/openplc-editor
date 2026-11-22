@@ -43,6 +43,7 @@ export const useRuntimePolling = () => {
     deviceActions.setRuntimeConnectionStatus('disconnected')
     deviceActions.setPlcRuntimeStatus(null)
     deviceActions.setPlcSwitchPosition(null)
+    deviceActions.setRuntimeLicense(null)
     deviceActions.setTimingStats(null)
     deviceActions.setEthercatStatus(null)
   }, [store])
