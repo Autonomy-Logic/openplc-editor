@@ -19,6 +19,7 @@ import {
 } from 'react'
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
+import { pouLabelSource } from '../../../../../../middleware/shared/utils/ladder-layout'
 import { mapsEqual, useContentStable } from '../../../../../hooks/use-content-stable'
 import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
 import { useDebugBoolValuesMap, useIsDebuggerVisible } from '../../../../../hooks/use-debug-value'
@@ -371,10 +372,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }
     }
 
-    const { nodes, edges, newNode, handleBranches } = addNewElement(sourceRung, {
-      elementType: newNodeType,
-      blockVariant: pouLibrary,
-    })
+    const { nodes, edges, newNode, handleBranches } = addNewElement(
+      sourceRung,
+      { elementType: newNodeType, blockVariant: pouLibrary },
+      pouLabelSource(store.getState().project.data, pouName),
+    )
 
     captureAndPush(pouName)
 
@@ -404,7 +406,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { ladderFlows } = store.getState()
-    const { nodes: newNodes, edges: newEdges, handleBranches } = removeElements({ ...rungLocal }, nodes)
+    const {
+      nodes: newNodes,
+      edges: newEdges,
+      handleBranches,
+    } = removeElements({ ...rungLocal }, nodes, pouLabelSource(store.getState().project.data, pouName))
 
     captureAndPush(pouName)
 
@@ -486,7 +492,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const handleNodeDragStop = (node: FlowNode) => {
     const { ladderFlows } = store.getState()
-    const result = onElementDrop(rungLocal, rung, node)
+    const result = onElementDrop(rungLocal, rung, node, pouLabelSource(store.getState().project.data, pouName))
 
     captureAndPush(pouName)
 

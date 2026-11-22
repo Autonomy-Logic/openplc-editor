@@ -43,9 +43,6 @@ export const DEFAULT_VARIABLE_HEIGHT = 32
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 
-/** Rung bounds `[width, height]` used when a rung carries no usable `defaultBounds`. */
-export const DEFAULT_RUNG_BOUNDS: readonly [number, number] = [300, 100]
-
 /** Space below a block's last pin row, down to the block frame's bottom edge. */
 export const LEGACY_BLOCK_BOTTOM_PADDING = 24
 
@@ -54,12 +51,6 @@ export const LEGACY_BLOCK_CHAR_WIDTH = 12
 
 /** Gap between the input and the output pin labels inside a block. */
 export const LEGACY_BLOCK_LABEL_GAP = 18
-
-/** Vertical clearance between main-line elements and the branch elements on the next block pin below. */
-export const LEGACY_BRANCH_OVERLAP_PADDING = 50
-
-/** Extra pin spacing added under a block pin whose branch holds parallels. */
-export const LEGACY_BRANCH_PARALLEL_CLEARANCE = 20
 
 /** Horizontal gap between a parallel close and a following, unrelated parallel open. */
 export const LEGACY_PARALLEL_PAIR_GAP = 100

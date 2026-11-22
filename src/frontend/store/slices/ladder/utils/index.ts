@@ -1,7 +1,11 @@
 import { Edge, Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
-import { updateDiagramElementsPosition } from '../../../../../middleware/shared/utils/ladder-layout'
+import {
+  EMPTY_LABEL_SOURCE,
+  type LadderLabelSource,
+  relayoutRung,
+} from '../../../../../middleware/shared/utils/ladder-layout'
 import { nodesBuilder } from '../../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type {
   BasicNodeData,
@@ -21,7 +25,11 @@ import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor
 import { newUuid } from '../../../../utils/new-uuid'
 import { RungLadderState } from '../types'
 
-export const duplicateLadderRung = (editorName: string, rung: RungLadderState): RungLadderState => {
+export const duplicateLadderRung = (
+  editorName: string,
+  rung: RungLadderState,
+  labelSource: LadderLabelSource = EMPTY_LABEL_SOURCE,
+): RungLadderState => {
   const nodeMaps: { [key: string]: Node } = rung.nodes.reduce(
     (acc, node) => {
       acc[node.id] = {
@@ -227,9 +235,7 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
   // leaving the duplicated diagram visually broken. Re-run the (branch-aware)
   // layout solver so the block re-expands and every element is repositioned
   // against the actual node set.
-  const laidOut = updateDiagramElementsPosition(newRung, newRung.defaultBounds as [number, number])
-
-  return { ...newRung, nodes: laidOut.nodes, edges: laidOut.edges }
+  return relayoutRung(newRung, labelSource)
 }
 
 /**

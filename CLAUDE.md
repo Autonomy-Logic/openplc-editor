@@ -393,6 +393,18 @@ There is **no URL-based router**. Navigation is tab-driven via the Zustand `tabs
 
 Flow state is stored per-POU in dedicated slices (`ladder`, `fbd`). Flows must be relinked to current variables after variable table changes.
 
+**LD layout engine** (`src/middleware/shared/utils/ladder-layout/`, byte-identical on openplc-web). Every stored LD
+coordinate is engine output: `layoutRung(rung, labelSource)` computes the geometry (columns sized from names and
+locations, a location line reserved on every contact and coil, block header band and pin rows) and
+`applyRungLayout` stores it, with the natural size as `defaultBounds` and `reactFlowViewport`. Editing paths call
+`relayoutRung(rung, labelSource)`, which also rebuilds the pin variable boxes. Every layout caller passes a
+`LadderLabelSource` (`pouLabelSource(project, pou)`); a caller without one passes `EMPTY_LABEL_SOURCE`. In a parallel
+group every branch spans the longest branch: a shorter branch ends in a straight branch filler to one vertical
+closing junction (before the coils in a trailing coil group). Branch fillers and junction lines are derived from the
+layout (`RungLayout.branchFillers`, `parallelEdgeRoute`) and never stored. Geometry decides the order of the
+compiled statements, so any layout change must keep the ST-order corpus green
+(`st-transpiler/__tests__/ld-relayout-corpus.test.ts`).
+
 ### Compilation Pipeline
 
 Orchestrated by `CompilerModule` (`src/backend/editor/compiler/compiler-module.ts`):

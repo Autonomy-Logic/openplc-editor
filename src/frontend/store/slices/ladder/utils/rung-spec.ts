@@ -1,7 +1,11 @@
-import { Edge, getNodesBounds, Node } from '@xyflow/react'
+import { Edge, Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
-import { updateDiagramElementsPosition } from '../../../../../middleware/shared/utils/ladder-layout'
+import {
+  EMPTY_LABEL_SOURCE,
+  type LadderLabelSource,
+  relayoutRung,
+} from '../../../../../middleware/shared/utils/ladder-layout'
 import {
   defaultCustomNodesStyles,
   nodesBuilder,
@@ -54,15 +58,6 @@ const IEC_STRING_LITERAL = /^'(?:[^'$\r\n]|\$(?:[$'LNPRTlnprt]|[0-9A-Fa-f]{2}))*
 
 const findVariable = (variables: PLCVariable[], name: string): PLCVariable | undefined =>
   variables.find((v) => v.name.toLowerCase() === name.toLowerCase())
-
-/** Mirrors `updateReactFlowPanelExtent` (rung/body.tsx) so a builder-authored rung gets the
- *  same viewport a mounted editor would have computed — an LD POU never opened in the editor
- *  must not fall back to the (possibly too-small) `defaultBounds` seed. */
-function computeReactFlowViewport(nodes: Node[], defaultBounds: [number, number]): [number, number] {
-  const zeroPositionNode: Node = { id: '-1', position: { x: 0, y: 0 }, data: {}, width: 150, height: 40 }
-  const bounds = getNodesBounds([zeroPositionNode, ...nodes])
-  return [Math.max(bounds.width, defaultBounds[0]), Math.max(bounds.height, defaultBounds[1]) + 20]
-}
 
 function buildRailNodes(rungId: string, defaultBounds: [number, number]) {
   const { powerRail } = defaultCustomNodesStyles
@@ -163,14 +158,17 @@ function resolvePinBindings(
  * (the AI tool executor) is expected to validate inputs up front for richer messages; this
  * is the last line of defense so a bad spec can never produce a half-built diagram.
  */
-export function buildRungFromSpec(args: {
-  rungId: string
-  spec: RungSpec
-  /** POU interface + globals — used to resolve every `variable`/`instanceName`/pin binding by name. */
-  variables: PLCVariable[]
-  resolveBlock: (blockType: string) => BlockVariant | undefined
-  defaultBounds?: [number, number]
-}): { ok: true; rung: RungLadderState } | { ok: false; errors: string[] } {
+export function buildRungFromSpec(
+  args: {
+    rungId: string
+    spec: RungSpec
+    /** POU interface + globals — used to resolve every `variable`/`instanceName`/pin binding by name. */
+    variables: PLCVariable[]
+    resolveBlock: (blockType: string) => BlockVariant | undefined
+    defaultBounds?: [number, number]
+  },
+  labelSource: LadderLabelSource = EMPTY_LABEL_SOURCE,
+): { ok: true; rung: RungLadderState } | { ok: false; errors: string[] } {
   const { rungId, spec, variables, resolveBlock, defaultBounds = DEFAULT_BOUNDS } = args
   const errors: string[] = []
 
@@ -288,16 +286,11 @@ export function buildRungFromSpec(args: {
     nodes,
     edges,
   }
-  const laidOut = updateDiagramElementsPosition(preLayoutRung, defaultBounds)
+  const laidOut = relayoutRung(preLayoutRung, labelSource)
 
   const rung: RungLadderState = {
-    id: rungId,
-    comment: spec.comment ?? '',
-    defaultBounds,
-    reactFlowViewport: computeReactFlowViewport(laidOut.nodes, defaultBounds),
-    selectedNodes: [],
+    ...laidOut,
     nodes: laidOut.nodes.map((node) => ({ ...node, selected: false })),
-    edges: laidOut.edges,
   }
 
   return { ok: true, rung }

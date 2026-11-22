@@ -4,25 +4,12 @@ export {
   labelSourceSignature,
   type LadderLabelSource,
   type LocationLabel,
+  pouLabelSource,
   resolveLocationLabel,
 } from './labels'
-export {
-  isSizableVariant,
-  legacyBlockSize,
-  legacyRungBounds,
-  type LegacySizableVariant,
-  sizeBlockNode,
-} from './legacy/block-size'
-export {
-  calculateBranchElementPositions,
-  calculateDynamicHandleOffsets,
-  findRailId,
-  getBranch,
-  hasBranchOnHandle,
-  type LegacyBranchPosition,
-  type LegacyBranchPositionResult,
-  updateRailForBranches,
-} from './legacy/branches'
+export { applyRungLayout, layoutRung, rungLayoutDiffers } from './layout'
+export { legacyBlockSize, type LegacySizableVariant } from './legacy/block-size'
+export { findRailId, getBranch, hasBranchOnHandle } from './legacy/branches'
 export { type LegacyHandle, type LegacyPoint } from './legacy/node-access'
 export {
   findAllParallelsDepthAndNodes,
@@ -41,7 +28,6 @@ export {
   renderVariableBlock,
   updateVariableBlockPosition,
 } from './legacy/variable-block'
-export { changeRailBounds, legacyLayoutRung, updateDiagramElementsPosition } from './legacy-layout'
 export {
   DEFAULT_BLOCK_CONNECTOR_Y,
   DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
@@ -66,7 +52,6 @@ export {
   DEFAULT_POWER_RAIL_CONNECTOR_Y,
   DEFAULT_POWER_RAIL_HEIGHT,
   DEFAULT_POWER_RAIL_WIDTH,
-  DEFAULT_RUNG_BOUNDS,
   DEFAULT_VARIABLE_CONNECTOR_X,
   DEFAULT_VARIABLE_CONNECTOR_Y,
   DEFAULT_VARIABLE_HEIGHT,
@@ -76,8 +61,6 @@ export {
   LEGACY_BLOCK_BOTTOM_PADDING,
   LEGACY_BLOCK_CHAR_WIDTH,
   LEGACY_BLOCK_LABEL_GAP,
-  LEGACY_BRANCH_OVERLAP_PADDING,
-  LEGACY_BRANCH_PARALLEL_CLEARANCE,
   LEGACY_NODE_STYLES,
   LEGACY_PARALLEL_PAIR_GAP,
   type LegacyNodeStyle,
@@ -97,6 +80,7 @@ export {
   inOutVariableNames,
   isRecord,
 } from './node-data'
+export { relayoutRung } from './relayout'
 export {
   compareLdNodePosition,
   isLdVariableNode,
@@ -121,4 +105,14 @@ export {
   symbolKindOf,
   type SymbolLine,
 } from './symbols'
+export type {
+  BranchFiller,
+  LabelBox,
+  LayoutSegment,
+  NodeGeometry,
+  ParallelBranchLayout,
+  ParallelGroupLayout,
+  RungLayout,
+} from './types'
 export { WIDE_CODE_POINT_RANGES } from './wide-ranges'
+export { type LdEdgeEnds, parallelEdgeRoute, type WirePoint } from './wires'

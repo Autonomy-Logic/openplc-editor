@@ -1,4 +1,4 @@
-import type { PLCVariable } from '../../ports/types'
+import type { PLCProjectData, PLCVariable } from '../../ports/types'
 import { isLiteralLocation } from '../iec-address/registry/resolve'
 
 /** Variables a ladder POU's location labels are read from; plain arrays only, so it survives a structured clone. */
@@ -8,6 +8,15 @@ export interface LadderLabelSource {
 }
 
 export const EMPTY_LABEL_SOURCE: LadderLabelSource = { pouVariables: [], globalVariables: [] }
+
+/** The label source of a project's POU: its own variables and the resource globals; no POU variables when it is absent. */
+export function pouLabelSource(project: PLCProjectData, pouName: string): LadderLabelSource {
+  const pou = project.pous.find((candidate) => candidate.name === pouName)
+  return {
+    pouVariables: pou?.interface?.variables ?? [],
+    globalVariables: project.configurations.resource.globalVariables,
+  }
+}
 
 /** The location line of an element: nothing, a literal `%` address or an alias name, both drawn verbatim. */
 export type LocationLabel = { kind: 'none' } | { kind: 'address'; text: string } | { kind: 'alias'; text: string }

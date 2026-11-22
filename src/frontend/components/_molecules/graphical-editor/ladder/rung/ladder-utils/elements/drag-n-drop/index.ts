@@ -1,5 +1,6 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
 import { toast } from '@root/frontend/utils/toast'
+import { EMPTY_LABEL_SOURCE, type LadderLabelSource } from '@root/middleware/shared/utils/ladder-layout'
 import type { Edge, Node, ReactFlowInstance } from '@xyflow/react'
 import { toInteger } from 'lodash'
 
@@ -278,7 +279,12 @@ export const onElementDragOver = (
  * Drag and drop function to stop the drag of an element and connect it to the nearest placeholder.
  * Classifies the drop scenario once, then dispatches to a focused handler.
  */
-export const onElementDrop = (rung: RungLadderState, oldStateRung: RungLadderState, node: Node): DropResult => {
+export const onElementDrop = (
+  rung: RungLadderState,
+  oldStateRung: RungLadderState,
+  node: Node,
+  labelSource: LadderLabelSource = EMPTY_LABEL_SOURCE,
+): DropResult => {
   const fallback = { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
 
   // 1. Find selected placeholder
@@ -304,6 +310,7 @@ export const onElementDrop = (rung: RungLadderState, oldStateRung: RungLadderSta
     selectedPlaceholderIndex,
     preparedNodes,
     preparedEdges,
+    labelSource,
   }
 
   // 5. Dispatch to the appropriate handler
@@ -316,19 +323,26 @@ export const onElementDrop = (rung: RungLadderState, oldStateRung: RungLadderSta
       return handleRestore(ctx)
 
     case 'branch-parallel':
-      return handleBranchParallel(oldStateRung, node, action.aboveElement)
+      return handleBranchParallel(oldStateRung, node, action.aboveElement, labelSource)
 
     case 'main-parallel':
       return handleMainParallel(ctx, action.sourceIsBranch)
 
     case 'branch-serial':
-      return handleBranchSerial(oldStateRung, node, action.target)
+      return handleBranchSerial(oldStateRung, node, action.target, labelSource)
 
     case 'branch-parallel-path':
-      return handleBranchParallelPath(oldStateRung, node, action.targetNode, action.branchContext, action.position)
+      return handleBranchParallelPath(
+        oldStateRung,
+        node,
+        action.targetNode,
+        action.branchContext,
+        action.position,
+        labelSource,
+      )
 
     case 'branch-create':
-      return handleBranchCreate(oldStateRung, node, action.target)
+      return handleBranchCreate(oldStateRung, node, action.target, labelSource)
 
     case 'main-serial':
       return handleMainSerial(ctx, action.sourceIsBranch)

@@ -40,13 +40,3 @@ export function connectorIdOf(data: Record<string, unknown>, key: string): unkno
 export function handleIdOf(handle: LegacyHandle): string | undefined {
   return typeof handle.id === 'string' ? handle.id : undefined
 }
-
-/** Copies a handle with its flow `y`, its in-node `y` and its CSS `top` set to the given values. */
-export function withHandleY(handle: LegacyHandle, glbY: number, relY: number): LegacyHandle {
-  return {
-    ...handle,
-    glbPosition: { ...handle.glbPosition, y: glbY },
-    relPosition: { ...getRecord(handle, 'relPosition'), y: relY },
-    style: { ...getRecord(handle, 'style'), top: relY },
-  }
-}

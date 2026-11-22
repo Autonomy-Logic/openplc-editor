@@ -50,7 +50,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { PLCVariable, RungLadderState } from '../../../../middleware/shared/ports/types'
-import { legacyLayoutRung } from '../../../../middleware/shared/utils/ladder-layout'
+import { relayoutRung } from '../../../../middleware/shared/utils/ladder-layout'
 import {
   defaultCustomNodesStyles,
   nodesBuilder,
@@ -179,7 +179,8 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               // its branches, but block WIDTH comes from the variant and is otherwise only
               // computed when one is created or edited, so a rung recovered without this lays
               // out around blocks of zero width.
-              const { nodes, edges } = legacyLayoutRung(rung)
+              const laidOut = relayoutRung(rung)
+              const { nodes } = laidOut
 
               // Recovery may MOVE an element; it may never lose one. The layout can return a
               // set that has dropped elements for a rung it did not understand — on a skeletal
@@ -195,7 +196,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               if (!positionsChanged(rung.nodes, nodes)) return rung
 
               recovered = true
-              return { ...rung, nodes, edges }
+              return laidOut
             } catch {
               // Best-effort by definition: a rung the layout cannot walk keeps the geometry it
               // arrived with, and `recovered` is left alone — one rung failing must not erase

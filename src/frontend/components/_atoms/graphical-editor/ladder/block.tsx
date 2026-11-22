@@ -1,4 +1,4 @@
-import { updateDiagramElementsPosition } from '@root/middleware/shared/utils/ladder-layout'
+import { pouLabelSource, relayoutRung } from '@root/middleware/shared/utils/ladder-layout'
 import { FocusEvent, memo, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -311,14 +311,14 @@ export const BlockNodeElement = <T extends object>({
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+    const { nodes: variableNodes, edges: variableEdges } = relayoutRung(
       {
         ...rung,
         nodes: newNodes,
         edges: newEdges,
         ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
-      [rung.defaultBounds[0], rung.defaultBounds[1]],
+      pouLabelSource(store.getState().project.data, pouName),
     )
 
     const project2 = store.getState().project
@@ -872,14 +872,14 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+    const { nodes: variableNodes, edges: variableEdges } = relayoutRung(
       {
         ...rung,
         nodes: newNodes,
         edges: newEdges,
         ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
-      [rung.defaultBounds[0], rung.defaultBounds[1]],
+      pouLabelSource(store.getState().project.data, pouName),
     )
 
     setNodes({

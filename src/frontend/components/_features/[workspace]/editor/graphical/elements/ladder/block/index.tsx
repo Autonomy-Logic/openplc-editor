@@ -13,7 +13,7 @@ import {
   removeLastExtensibleInput,
 } from '@root/frontend/utils/PLC/extensible-block-variables'
 import { PLCPou } from '@root/middleware/shared/ports'
-import { updateDiagramElementsPosition } from '@root/middleware/shared/utils/ladder-layout'
+import { pouLabelSource, relayoutRung } from '@root/middleware/shared/utils/ladder-layout'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -560,14 +560,14 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       })
     }
 
-    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+    const { nodes: variableNodes, edges: variableEdges } = relayoutRung(
       {
         ...rung,
         nodes: newNodes,
         edges: newEdges,
         ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
-      [rung.defaultBounds[0], rung.defaultBounds[1]],
+      pouLabelSource(store.getState().project.data, pouName),
     )
 
     setNodes({
