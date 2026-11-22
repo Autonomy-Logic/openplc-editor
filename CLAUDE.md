@@ -405,6 +405,16 @@ layout (`RungLayout.branchFillers`, `parallelEdgeRoute`) and never stored. Geome
 compiled statements, so any layout change must keep the ST-order corpus green
 (`st-transpiler/__tests__/ld-relayout-corpus.test.ts`).
 
+**LD screen drawing.** Each rung body lays its rung out with the engine and gives the layout, the label source and
+the theme palette (`LADDER_PALETTE`) to the node atoms through `LadderRungViewProvider`
+(`_atoms/graphical-editor/ladder/rung-view.tsx`). The atoms draw the layout's labels as SVG text in JetBrains Mono,
+never as HTML; a name becomes a one-line `<input>` when clicked or when its element is placed. Every edge
+`parallelEdgeRoute` routes is drawn as the straight polyline of the `ladderRoute` edge type (`route-edge.tsx`); other
+edges stay xyflow `smoothstep`. Rendering never writes geometry to the store: the panel size comes from the layout,
+and xyflow's measurements stay local. The LD diff view lays both sides out the same way with the project's current
+variables, and marks an element whose position or size alone changed only in a rung pair that is a pure re-layout
+(`graphical-diff.ts`).
+
 ### Compilation Pipeline
 
 Orchestrated by `CompilerModule` (`src/backend/editor/compiler/compiler-module.ts`):
