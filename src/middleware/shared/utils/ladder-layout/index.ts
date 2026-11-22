@@ -80,7 +80,14 @@ export {
   inOutVariableNames,
   isRecord,
 } from './node-data'
-export { displayShift, type PouPresentation, presentPou, toCanonicalPosition, toDisplayNodes } from './presentation'
+export {
+  displayShift,
+  type PouPresentation,
+  presentPou,
+  rungPresentation,
+  toCanonicalPosition,
+  toDisplayNodes,
+} from './presentation'
 export { relayoutRung } from './relayout'
 export {
   compareLdNodePosition,

@@ -26,6 +26,7 @@ import {
   layoutRung,
   pouLabelSource,
   presentPou,
+  rungPresentation,
   toCanonicalPosition,
   toDisplayNodes,
 } from '../../../../../../middleware/shared/utils/ladder-layout'
@@ -108,7 +109,7 @@ const WIRE_STROKE = { normal: 1.25, on: 2 } as const
 const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
   deletable: false,
   selectable: false,
-  type: 'smoothstep',
+  type: 'ladderWire',
 }
 const PRO_OPTIONS = { hideAttribution: true }
 const NOOP = () => {}
@@ -165,7 +166,10 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     () => canvas?.layouts.get(rung) ?? layoutRung(rung, labelSource),
     [canvas?.layouts, rung, labelSource],
   )
-  const presentation = useMemo(() => canvas?.presentation ?? presentPou([layout], 0), [canvas?.presentation, layout])
+  const presentation = useMemo(
+    () => rungPresentation(canvas?.presentation ?? presentPou([layout], 0), layout),
+    [canvas?.presentation, layout],
+  )
   const shifts = useMemo(() => withTransientShifts(presentation, rungLocal.nodes), [presentation, rungLocal.nodes])
   const displayNodes = useMemo(() => toDisplayNodes(rungLocal.nodes, shifts), [rungLocal.nodes, shifts])
   const palette = useLadderThemePalette()

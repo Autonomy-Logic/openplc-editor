@@ -115,22 +115,6 @@ describe.each(CASES)('%s', (_name, pouName, rungIndex) => {
       }).toEqual({ edge: wire.id, drawn: true, slanted: [], offJunction: [] })
     }
   })
-
-  it("keeps today's smoothstep drawing for every edge without a route", async () => {
-    const { store, container } = await open(pouName)
-    const rung = storedRungs(store, pouName)[rungIndex]
-    const layout = storedLayout(store, pouName, rungIndex)
-    const plain = rung.edges.filter((wire) => parallelEdgeRoute(layout, wire) === undefined)
-    expect(plain.length).toBeGreaterThan(0)
-    for (const wire of plain) {
-      const edge = container.querySelector(`.react-flow__edge[data-id="${wire.id}"]`)
-      expect({
-        edge: wire.id,
-        smoothstep: edge?.classList.contains('react-flow__edge-smoothstep'),
-        wire: wireOf(container, wire.id) === null,
-      }).toEqual({ edge: wire.id, smoothstep: true, wire: true })
-    }
-  })
 })
 
 describe('the junctions stay one straight vertical line', () => {

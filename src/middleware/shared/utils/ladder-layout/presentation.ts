@@ -33,6 +33,17 @@ export function presentPou(
   return { railX, widthPx: railX + style.padR, dxByNode }
 }
 
+/**
+ * The presentation of one rung of the POU: the same rail, with only this rung's shifts. Node ids are unique per rung,
+ * not per POU, so each rung body must use its own map.
+ */
+export function rungPresentation(p: PouPresentation, layout: RungLayout): PouPresentation {
+  const dx = p.railX - layout.size.width
+  const ids =
+    layout.rightRailId === undefined ? layout.trailingOutputIds : [...layout.trailingOutputIds, layout.rightRailId]
+  return { ...p, dxByNode: new Map(ids.map((id) => [id, dx])) }
+}
+
 /** The display shift of node `nodeId`: its entry in the presentation, 0 when it has none. */
 export function displayShift(p: PouPresentation, nodeId: string): number {
   return p.dxByNode.get(nodeId) ?? 0

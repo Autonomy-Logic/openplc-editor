@@ -6,7 +6,7 @@ import {
   symbolKindOf,
   type WirePoint,
 } from '@root/middleware/shared/utils/ladder-layout'
-import { BaseEdge, type Edge, type EdgeProps, type Node } from '@xyflow/react'
+import { BaseEdge, type Edge, type EdgeProps, getSmoothStepPath, type Node, type Position } from '@xyflow/react'
 import { memo } from 'react'
 
 /** Data of an LD edge drawn along its engine route: the route's points and how far it runs on into each symbol. */
@@ -73,7 +73,48 @@ const LadderRouteEdge = ({ id, data, style }: EdgeProps<LadderRouteEdgeType>) =>
 
 const exportLadderRouteEdge = memo(LadderRouteEdge)
 
-/** The edge types of an LD rung: the routed parallel wires; every other edge stays xyflow's smoothstep. */
-export const ladderEdgeTypes = { ladderRoute: exportLadderRouteEdge }
+/** Ends closer than this in y count as one height. */
+const SAME_HEIGHT_EPS = 0.5
+
+/**
+ * The SVG path of an LD wire without an engine route: a straight segment between its ends when they share a y (a
+ * smoothstep's fixed offset would overshoot a short wire), else xyflow's smoothstep.
+ */
+export function ladderWirePath(ends: {
+  sourceX: number
+  sourceY: number
+  targetX: number
+  targetY: number
+  sourcePosition: Position
+  targetPosition: Position
+}): string {
+  if (Math.abs(ends.sourceY - ends.targetY) <= SAME_HEIGHT_EPS) {
+    // A target left of its source (a trailing group's closing junction drawn on the rail) leaves nothing to draw.
+    const fromX = Math.min(ends.sourceX, ends.targetX)
+    return `M${fromX} ${ends.sourceY} L${ends.targetX} ${ends.sourceY}`
+  }
+  return getSmoothStepPath(ends)[0]
+}
+
+/** An LD wire between two handles, drawn by ladderWirePath. */
+const LadderWireEdge = ({
+  id,
+  style,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+}: EdgeProps) => (
+  <BaseEdge
+    id={id}
+    path={ladderWirePath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition })}
+    style={style}
+  />
+)
+
+/** The edge types of an LD rung: the routed parallel wires, and every other wire. */
+export const ladderEdgeTypes = { ladderRoute: exportLadderRouteEdge, ladderWire: memo(LadderWireEdge) }
 
 export { exportLadderRouteEdge as LadderRouteEdge }
