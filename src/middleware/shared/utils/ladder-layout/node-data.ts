@@ -1,12 +1,4 @@
-/**
- * Narrow helpers over xyflow's untyped `Node.data` — `backend/shared` cannot
- * import the `components`-layer node/data types, so these mirror the field
- * names the live editor's node builders and read-only diff renderers
- * (`_atoms/graphical-editor/{ladder,fbd}/*`) already use, the same way
- * `diff/ladder-nodes.tsx` / `diff/fbd-nodes.tsx` narrow the same data —
- * except every read here goes through a type guard instead of `as`.
- */
-
+/** Type guard for a non-null object; the readers of xyflow's untyped `Node.data` in this module build on it. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }

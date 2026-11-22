@@ -1,4 +1,13 @@
 import type { RungLadderState } from '@root/middleware/shared/ports/types'
+import {
+  blockInputVariables,
+  blockOutputVariables,
+  getBlockVariables,
+  getNestedString,
+  getRecord,
+  getString,
+  inOutVariableNames,
+} from '@root/middleware/shared/utils/ladder-layout/node-data'
 import type { Node } from '@xyflow/react'
 
 import { edgeToDrawOp, isVisibleEdge } from './edges'
@@ -13,15 +22,6 @@ import {
   transformDrawOps,
   unionBounds,
 } from './geometry'
-import {
-  blockInputVariables,
-  blockOutputVariables,
-  getBlockVariables,
-  getNestedString,
-  getRecord,
-  getString,
-  inOutVariableNames,
-} from './node-data'
 import {
   asCoilVariant,
   asContactVariant,

@@ -33,49 +33,14 @@ export const COIL_NEGATION_LINE = { x1: 10.2366, y1: 20.4967, x2: 24.3787, y2: 6
 /** Resolved endpoints of Contact.tsx's negation `<line>`, in the 28x28 viewBox space. */
 export const CONTACT_NEGATION_LINE = { x1: 4.4274, y1: 22.9004, x2: 22.8122, y2: 4.5156 }
 
-export type CoilVariant = 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
-export type ContactVariant = 'default' | 'negated' | 'risingEdge' | 'fallingEdge'
-
-/** Modifier glyph drawn near the lower-right of the symbol; `''` for `default`. */
-export const COIL_VARIANT_GLYPHS: Record<CoilVariant, string> = {
-  default: '',
-  negated: '',
-  set: 'S',
-  reset: 'R',
-  risingEdge: 'P',
-  fallingEdge: 'N',
-}
-
-export const CONTACT_VARIANT_GLYPHS: Record<ContactVariant, string> = {
-  default: '',
-  negated: '',
-  risingEdge: 'P',
-  fallingEdge: 'N',
-}
-
-export function asCoilVariant(value: string | undefined): CoilVariant {
-  switch (value) {
-    case 'negated':
-    case 'risingEdge':
-    case 'fallingEdge':
-    case 'set':
-    case 'reset':
-      return value
-    default:
-      return 'default'
-  }
-}
-
-export function asContactVariant(value: string | undefined): ContactVariant {
-  switch (value) {
-    case 'negated':
-    case 'risingEdge':
-    case 'fallingEdge':
-      return value
-    default:
-      return 'default'
-  }
-}
+export {
+  asCoilVariant,
+  asContactVariant,
+  COIL_VARIANT_GLYPHS,
+  type CoilVariant,
+  CONTACT_VARIANT_GLYPHS,
+  type ContactVariant,
+} from '@root/middleware/shared/utils/ladder-layout/symbols'
 
 // ---------------------------------------------------------------------------
 // FBD — connector / continuation
