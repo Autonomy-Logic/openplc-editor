@@ -1127,12 +1127,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           )
           relayoutWarnings.push(...migration.warnings)
           if (migration.changed) relaidPous.push(pou.name)
-          getState().ladderFlowActions.addLadderFlow({
-            ...bodyValue,
-            rungs: migration.rungs,
-            updated: migration.changed || bodyValue.updated,
-            name: pou.name,
-          })
+          getState().ladderFlowActions.addLadderFlow({ ...bodyValue, rungs: migration.rungs, name: pou.name })
         }
         if (pou.body.language === 'fbd') {
           const bodyValue = structuredClone(pou.body.value) as FBDFlowType
@@ -1460,7 +1455,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
 
       for (const flow of getState().ladderFlows) {
-        getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+        // A POU converted to the new layout stays updated, so the next save writes it back.
+        getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: relaidPous.includes(flow.name) })
       }
       for (const flow of getState().fbdFlows) {
         getState().fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })

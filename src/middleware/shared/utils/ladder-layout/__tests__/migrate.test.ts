@@ -12,7 +12,7 @@ import { pouLabelSource } from '../labels'
 import { migrateLadderRungs } from '../migrate'
 
 describe('migrateLadderRungs', () => {
-  const { projectData } = readCorpusProject('ld-corpus-hard')
+  const { projectData } = readCorpusProject('ld-corpus-basic')
 
   it('converts every rung saved in the old layout, keeping every element and the compiled order, without warnings', () => {
     for (const pou of ldPouNames(projectData)) {
@@ -23,9 +23,10 @@ describe('migrateLadderRungs', () => {
         changed: true,
         warnings: [],
       })
-      expect(migration.rungs.map((rung) => rung.nodes.map((node) => node.id).sort())).toEqual(
-        before.map((rung) => rung.nodes.map((node) => node.id).sort()),
-      )
+      // Every node keeps its id and its data (variables, variants, pins); only geometry may change.
+      const content = (rungs: typeof before) =>
+        rungs.map((rung) => rung.nodes.map((node) => JSON.stringify([node.id, node.type, node.data.variable ?? null])))
+      expect(content(migration.rungs)).toEqual(content(before))
     }
   })
 

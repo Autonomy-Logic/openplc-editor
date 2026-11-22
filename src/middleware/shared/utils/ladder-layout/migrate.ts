@@ -1,6 +1,6 @@
 import type { RungLadderState } from '../../ports/types'
 import type { LadderLabelSource } from './labels'
-import { relayoutRung } from './relayout'
+import { applyRungLayout, layoutRung } from './layout'
 import { ldSinkOrder } from './sink-order'
 
 /** The rungs of one LD POU converted to the current layout, whether any moved, and what to warn about. */
@@ -51,7 +51,8 @@ export function migrateLadderRungs(
   const migrated = rungs.map((rung, index) => {
     let next: RungLadderState
     try {
-      next = relayoutRung(rung, src)
+      // Geometry only: rebuilding pin variable boxes here would drop their variables.
+      next = applyRungLayout(rung, layoutRung(rung, src))
     } catch (error) {
       warnings.push(`${pouName}, rung ${index + 1}: kept as it was, the new layout failed (${String(error)}).`)
       return rung
