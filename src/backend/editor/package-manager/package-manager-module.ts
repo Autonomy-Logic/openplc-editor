@@ -19,8 +19,8 @@ import {
   parseSignatureFile,
   SIGNATURE_FILENAME,
 } from '../../shared/utils/vpp/package-verification-core'
-import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
-import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
+import { TRUST_REFUSAL, verifyTrustedPackage } from '../package-trust'
+import type { VerifyTrustedPackage } from '../package-trust/types'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import type { DependencyInstallResult } from './arduino-dependency-installer'
@@ -34,11 +34,30 @@ import type { ImportResult, InstalledPackage, PackageIntegrityResult, PackageMan
  */
 const REQUIRE_SIGNATURE = true
 
+/** The trust check each PackageManagerModule was constructed with, held outside the instance. */
+const trustChecks = new WeakMap<PackageManagerModule, VerifyTrustedPackage>()
+
+/** The trust check of @p manager; throws when it has none. */
+function trustCheckOf(manager: PackageManagerModule): VerifyTrustedPackage {
+  const verify = trustChecks.get(manager)
+  if (verify === undefined) throw new Error(TRUST_REFUSAL)
+  return verify
+}
+
+/** The reason a verdict that did not pass gives: its second element when that is a string. */
+function refusalReason(verdict: unknown): string {
+  if (!Array.isArray(verdict)) return TRUST_REFUSAL
+  const items: unknown[] = verdict
+  const [, reason] = items
+  return typeof reason === 'string' ? reason : TRUST_REFUSAL
+}
+
 class PackageManagerModule {
   private packagesDir: string
   private registryPath: string
 
-  constructor() {
+  constructor(verify: VerifyTrustedPackage = verifyTrustedPackage) {
+    trustChecks.set(this, verify)
     this.packagesDir = join(app.getPath('userData'), 'packages')
     this.registryPath = join(this.packagesDir, 'registry.json')
     mkdirSync(this.packagesDir, { recursive: true })
@@ -94,11 +113,30 @@ class PackageManagerModule {
       // one check covers both. It runs after the manifest is structurally
       // valid but before any field is used as a path or any HAL/plugin code
       // is ever compiled. Fails closed.
+      let packageId = manifest.package.id
+      let version = manifest.package.version
       if (REQUIRE_SIGNATURE) {
-        const verification = verifyPackageSignature(tempDir, TRUSTED_PACKAGE_KEYS)
-        if (!verification.valid) {
-          return { success: false, error: `Package signature verification failed: ${verification.error}` }
+        let verdict: unknown
+        try {
+          verdict = trustCheckOf(this)(tempDir, true)
+        } catch {
+          verdict = null
         }
+        if (!Array.isArray(verdict) || verdict[0] !== true) {
+          return { success: false, error: `Package signature verification failed: ${refusalReason(verdict)}` }
+        }
+        const verified: unknown[] = verdict
+        const [, verifiedId, verifiedVersion] = verified
+        if (
+          typeof verifiedId !== 'string' ||
+          typeof verifiedVersion !== 'string' ||
+          verifiedId !== manifest.package.id ||
+          verifiedVersion !== manifest.package.version
+        ) {
+          return { success: false, error: `Package signature verification failed: ${TRUST_REFUSAL}` }
+        }
+        packageId = verifiedId
+        version = verifiedVersion
       }
 
       // Compatibility floor (DOPE-448). This is the ONLY place the editor
@@ -128,12 +166,11 @@ class PackageManagerModule {
       // `targetDir` resolve outside packagesDir and the rmSync below
       // could delete an arbitrary user directory.
       try {
-        validatePathId(manifest.package.id, 'manifest.package.id')
+        validatePathId(packageId, 'manifest.package.id')
       } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : String(err) }
       }
 
-      const packageId = manifest.package.id
       const targetDir = join(this.packagesDir, packageId)
 
       // Defence in depth: even with the regex above, assert containment
@@ -161,7 +198,7 @@ class PackageManagerModule {
 
       const registry = this.readRegistry()
       registry.packages[packageId] = {
-        version: manifest.package.version,
+        version,
         installedAt: new Date().toISOString(),
         path: targetDir,
         devices: manifest.devices.map((d) => d.id),
@@ -270,8 +307,8 @@ class PackageManagerModule {
   /**
    * Returns null when the installed package recorded at `packagePath` is
    * genuinely signed by a trusted key, or a short human-readable reason when it
-   * is not (bad id shape, path escaping packagesDir, missing files, or any
-   * failure surfaced by `verifyPackageSignature`).
+   * is not (bad id shape, path escaping packagesDir, missing files, a refusal
+   * of the trust check at use, or a verified identity other than `packageId`).
    */
   private signatureRejectionReason(packageId: string, packagePath: string | undefined): string | null {
     try {
@@ -290,8 +327,16 @@ class PackageManagerModule {
     if (!existsSync(packagePath)) {
       return 'package files are missing'
     }
-    const verification = verifyPackageSignature(packagePath, TRUSTED_PACKAGE_KEYS)
-    return verification.valid ? null : (verification.error ?? 'invalid signature')
+    let verdict: unknown
+    try {
+      verdict = trustCheckOf(this)(packagePath, false)
+    } catch {
+      return TRUST_REFUSAL
+    }
+    if (!Array.isArray(verdict) || verdict[0] !== true) return refusalReason(verdict)
+    const verified: unknown[] = verdict
+    const [, verifiedId] = verified
+    return verifiedId === packageId ? null : TRUST_REFUSAL
   }
 
   listInstalled(): InstalledPackage[] {

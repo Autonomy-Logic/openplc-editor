@@ -7,7 +7,7 @@
  * runs; that the editor starts with no Python thread is the cold-start case of `wasm-toolchain.spec.ts`.
  *
  * The test opens a new project in the worker's editor. Running needs a production build; see "Electron e2e" in
- * CLAUDE.md.
+ * CLAUDE.md. `E2E_PACKAGED_APP` runs it against a test-only packaged build (`npm run package:test`).
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

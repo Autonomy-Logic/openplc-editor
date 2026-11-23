@@ -76,6 +76,30 @@ The release pipeline needs nothing for this: any release with the usual
 installers is found. Unauthenticated API calls are limited to 60 an hour per IP,
 far above one check per launch.
 
+## Rebuilt installers
+
+`rebuild-release.yml` can replace the six installers of a published release
+with rebuilt ones of the same version (`docs/release-hardening.md`). For the
+update notice this means:
+
+- **A same-version rebuild gives no notice.** The editor compares versions
+  only, so a user on 4.3.5 hears nothing when the 4.3.5 installers are
+  replaced; they get the rebuilt editor by downloading it again.
+- **Old digest, new file.** The digest is read at the check and the file is
+  downloaded later, by name. When the installer is replaced in between, the
+  download no longer matches the old digest: it is deleted and the user is
+  sent to the releases page, as for any mismatch.
+- **A few seconds without the installer.** The workflow uploads the new file as
+  `<name>.uploading`, deletes the old asset, then renames the upload. Between
+  the delete and the rename the release has no asset of that name, and the
+  `.uploading` name matches no installer, so a check in those seconds finds no
+  installer for that platform and shows no notice (while the Apple silicon
+  `.dmg` is absent, a Mac under Rosetta is offered the Intel one instead). A
+  download started in those seconds fails, and the user is offered the
+  releases page.
+- The workflow uploads only the six installers: never `latest*.yml`, never a
+  `.blockmap`.
+
 ## Why not electron-updater
 
 Every editor from 4.1.0 on still embeds `app-update.yml` and could self-update

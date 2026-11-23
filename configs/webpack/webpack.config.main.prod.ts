@@ -2,8 +2,9 @@
  * Webpack config for production electron main process
  */
 
+import { existsSync } from 'fs'
 import HtmlWebpackPlugin from 'html-webpack-plugin'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
@@ -16,6 +17,16 @@ import webpackPaths from './webpack.paths'
 
 checkNodeEnv('production')
 deleteSourceMaps()
+
+/** The committed trust module, replaced in the bundle by the one `scripts/package-trust/cli.ts prepare` placed. */
+const committedTrustModule = join(webpackPaths.srcPath, 'backend', 'editor', 'package-trust', 'package-trust-anchor.ts')
+const placedTrustModule = join(webpackPaths.releasePath, 'package-trust', 'package-trust-anchor.ts')
+if (!existsSync(placedTrustModule)) {
+  throw new Error(
+    `${placedTrustModule} is missing: run "ts-node --transpile-only scripts/package-trust/cli.ts prepare" before webpack`,
+  )
+}
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const configuration: webpack.Configuration = {
   devtool: 'source-map',
@@ -81,6 +92,11 @@ const configuration: webpack.Configuration = {
 
     new webpack.DefinePlugin({
       'process.type': '"browser"',
+    }),
+
+    new webpack.NormalModuleReplacementPlugin(new RegExp(`^${escapeRegExp(committedTrustModule)}$`), (resolveData) => {
+      resolveData.createData.resource = placedTrustModule
+      resolveData.createData.context = dirname(placedTrustModule)
     }),
   ],
 

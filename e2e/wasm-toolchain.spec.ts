@@ -10,8 +10,9 @@
  * counts), the missing toolchain (another working directory) and the packaged app.
  *
  * Running needs a production build; see "Electron e2e" in CLAUDE.md.
- * Opt-in: E2E_PACKAGED_APP, the executable of a packaged build (`npm run package`), also runs the compile case
- * against that build, where the patched clang package ships as an extra resource outside the asar archive.
+ * Opt-in: E2E_PACKAGED_APP, the executable of a test-only packaged build (`npm run package:test`; Playwright cannot
+ * drive a fused `npm run package` build), also runs the compile case against that build, where the patched clang
+ * package ships as an extra resource outside the asar archive.
  */
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'

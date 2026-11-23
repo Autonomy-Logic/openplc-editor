@@ -25,6 +25,7 @@ release/build
 release/relay
 release/yowasp-clang
 release/hmi-objects
+release/package-trust
 configs/dll
 
 .idea

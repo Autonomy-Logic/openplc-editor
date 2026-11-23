@@ -61,6 +61,7 @@ npm run build:renderer   # React renderer only
 npm run build:dll        # Webpack DLL cache for faster dev rebuilds
 npm run build:relay      # Vendor-document relay.js for a VPP package (release/relay/)
 npm run package          # Build + create distributable (electron-builder)
+npm run package:test     # Test-only package with the inspect fuse on, for Playwright (never in a workflow)
 
 npm run lint             # ESLint check
 npm run lint:fix         # Auto-fix lint issues
@@ -159,6 +160,12 @@ loads only when Claude Code runs from this repository, and does not see shell ed
 more: when a change touches such a port, move its logic into the shared surface
 in the same PR pair (editor + web).
 
+**Exception: package trust (DOPE-893).** The trust anchor in `src/backend/editor/package-trust/`
+is desktop-only logic: a module generated per build (`scripts/package-trust/`) that checks every
+package decision of `PackageManagerModule` (`src/backend/editor/package-manager/`). Neither it nor
+the `PackageManagerModule` logic is moved to the shared surface, and openplc-web is not changed.
+This is a recorded exception, not a precedent: see `docs/release-hardening.md`.
+
 ## Electron e2e (Playwright)
 
 `ci-e2e-debug-lock.yml` runs the `debug-*` specs on every pull request; every other
@@ -194,6 +201,19 @@ and closes a debug session with no PLC attached. Any other build drops the branc
 - **An unsigned fixture package is removed when a project opens.** A suite that installs one
   (`e2e/fixtures/vendor-configurator/`) replaces the `packages:verify-signatures` handler with a
   no-op once the bridge has registered it, as `e2e/vendor-configurator.spec.ts` does.
+- **Packaged builds carry Electron fuses** (`electronFuses` in `electron-builder.json`): no
+  `ELECTRON_RUN_AS_NODE`, no `NODE_OPTIONS`, no `--inspect` style arguments, ASAR integrity, and the
+  app loads only from `app.asar`. `_electron.launch` needs the inspect arguments, so Playwright can
+  drive a packaged build (`E2E_PACKAGED_APP`) only when it comes from `npm run package:test`. A
+  release build (`npm run package`) is checked by spawning it (`scripts/release/packaged-checks.mjs`).
+- **`E2E_PACKAGED_APP` switches every spec that launches through `e2e/helpers/editor-session.ts`**
+  (`launchEditor` or its `editor` fixture) to that packaged executable, path resolved from the
+  repository root; unset, they run the built `release/app/dist/main/main.js`.
+- **A modified `app.asar` makes the app terminate at start**, with exit code 1 or a signal such as
+  SIGTRAP: expect either.
+- **A local macOS build with no signing identity starts only because `resetAdHocDarwinSignature`**
+  re-signs it ad hoc after the fuses are written. It has no hardened runtime; only CI's Developer ID
+  builds do. Details: `docs/release-hardening.md`.
 
 **Never wait on a dead app.** Every wait for a build, a Play, a running simulator or a Console line must also
 read what the app shows and fail at once when it reports a failure: use `e2e/helpers/app-console.ts`
@@ -808,6 +828,21 @@ repos and merge to `development`; promote `development` to `main` in both repos;
 Release"). openplc-web has no release workflow: `production-cd.yml` deploys on every push to its
 `main`, and `staging-cd.yml` on pushes to `development`.
 
+**Release mode.** A run of `release.yml` on a `v*` tag (a tag push, or a dispatch on the tag) is
+release mode: its `trust-module` job, in the GitHub Environment `release-trust` (secret
+`TRUST_SEED_SECRET`, approved by a required reviewer), generates the build's trust module, and the
+five build jobs download it and build with `OPENPLC_RELEASE_BUILD=1`. A dispatch on a branch builds with the development seed and publishes
+nothing. Every run reads the fuses of each built executable (`scripts/release/read-fuses.mjs`), scans
+the unpacked output for the trusted key (`scan-trust-literals.mjs`) and runs `packaged-checks` on the
+macOS arm64, Windows x64 and Linux x64 installers; `create-release` runs `check-upload-set.mjs` and
+uploads exactly the six installers.
+
+**Installers of a published release are replaced only through `rebuild-release.yml`** (modes
+`rebuild`, `dry-run`, `verify`, `seed-audit`), from the release's backport branch
+`feature/<KEY>-backport-v<version>`, and only after a rehearsal on a draft release
+(`v<version>-rehearsal`) passed. A backport branch never gets a `v*` tag: the tag would start
+`release.yml`. Procedure and checks: `docs/release-hardening.md`.
+
 ### Update notice (never publish `latest*.yml`):
 The editor checks the GitHub releases API once per launch and, when a newer
 version is out, shows a banner at the top of the window ("Update" and an X);
@@ -818,6 +853,8 @@ installer (`assets/installer.nsh`) that asks the user to close a running editor
 and never kills it; keep `oneClick: false`. **Never add `latest-mac.yml` / `latest-linux*.yml` / `latest.yml`
 to a release**: every editor from 4.1.0 to 4.3.2 still embeds electron-updater's
 `app-update.yml` and would install it without asking, unsigned on Windows.
+`rebuild-release.yml` keeps the same rule, and a same-version rebuild gives no update notice; while an
+installer is being replaced its name is absent for a few seconds (`docs/update-notice.md`).
 
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`
