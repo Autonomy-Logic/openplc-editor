@@ -431,12 +431,14 @@ const serialMarker = (nodes: readonly Node[], nodeId: string, position: 'left' |
 
 /**
  * The markers with one diamond per insertion point: when a node's only wire in comes from a node that offers a right
- * marker, the same point in the series, one of the two is dropped: the node's left marker, after the left rail, else the
- * source's right marker. Both stay before the right rail and the outputs drawn against it, which sit far from the
+ * marker, the same point in the series, one of the two is dropped: after the left rail, the node's left marker, the rail's
+ * taking its place so it sits as far from the element as its other markers; else the source's right marker, the node's
+ * left marker moving halfway between the two so it is as far from both elements. Both stay before the right rail and the outputs drawn against it, which sit far from the
  * element before them.
  */
 const withoutDuplicateMarkers = (rung: RungLadderState, nodes: Node[]): Node[] => {
   const dropped = new Set<string>()
+  const moved = new Map<string, { x: number; y: number }>()
   const atRail = new Set(layoutRungOrStored(rung, EMPTY_LABEL_SOURCE).trailingOutputIds)
   for (const node of rung.nodes) {
     if (atRail.has(node.id) || node.id.startsWith('right-rail')) continue
@@ -449,9 +451,21 @@ const withoutDuplicateMarkers = (rung: RungLadderState, nodes: Node[]): Node[] =
     if (incoming.length !== 1) continue
     const right = serialMarker(nodes, incoming[0].source, 'right')
     if (right === undefined) continue
-    dropped.add(incoming[0].source.startsWith('left-rail') ? left.id : right.id)
+    if (incoming[0].source.startsWith('left-rail')) {
+      dropped.add(left.id)
+      moved.set(right.id, left.position)
+    } else {
+      dropped.add(right.id)
+      moved.set(left.id, { x: (left.position.x + right.position.x) / 2, y: left.position.y })
+    }
   }
-  return dropped.size === 0 ? nodes : nodes.filter((node) => !dropped.has(node.id))
+  if (dropped.size === 0) return nodes
+  return nodes
+    .filter((node) => !dropped.has(node.id))
+    .map((node) => {
+      const position = moved.get(node.id)
+      return position === undefined ? node : { ...node, position: { ...position } }
+    })
 }
 
 /**

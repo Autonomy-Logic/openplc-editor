@@ -15,7 +15,7 @@ const sizeClasses = {
 export default function ContactIcon(props: IContactIconProps) {
   const { className, size = 'sm', modifier, ...res } = props
   // An edge contact opens its bars so the P or N inside stays readable.
-  const spread = modifier === 'rising' || modifier === 'falling' ? 2 : 0
+  const spread = modifier === 'rising' || modifier === 'falling' ? 2.5 : 0
   const left = 9.44922 - spread
   const right = 15.4492 + spread
 
@@ -38,7 +38,7 @@ export default function ContactIcon(props: IContactIconProps) {
       <line x1={right} y1='7' x2={right} y2='17' stroke='#B4D0FE' strokeWidth='1.5' />
       {modifier === 'negated' && <line x1='10.7' y1='15.6' x2='14.2' y2='8.4' stroke='#B4D0FE' strokeWidth='1.5' />}
       {(modifier === 'rising' || modifier === 'falling') && (
-        <text x='12.45' y='14.35' textAnchor='middle' fontSize='6.5' fontWeight='700' fill='#B4D0FE'>
+        <text x='12.45' y='14.7' textAnchor='middle' fontSize='7.5' fontWeight='700' fill='#B4D0FE'>
           {modifier === 'rising' ? 'P' : 'N'}
         </text>
       )}

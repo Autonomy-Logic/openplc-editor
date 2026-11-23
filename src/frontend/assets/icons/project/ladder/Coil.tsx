@@ -15,7 +15,7 @@ const sizeClasses = {
 export default function CoilIcon(props: ICoilIconProps) {
   const { className, size = 'sm', modifier, ...res } = props
   // A set or reset coil opens its arcs so the S or R inside stays readable.
-  const spread = modifier === undefined ? 0 : 1.75
+  const spread = modifier === undefined ? 0 : 2.25
 
   return (
     <svg
@@ -43,7 +43,7 @@ export default function CoilIcon(props: ICoilIconProps) {
       <path d={`M${16.6371 + spread} 11.3629H21.0003`} stroke='#B4D0FE' strokeWidth='1.35' />
       <path d={`M3 11.3629H${7.36364 - spread}`} stroke='#B4D0FE' strokeWidth='1.35' />
       {modifier !== undefined && (
-        <text x='12' y='13.5' textAnchor='middle' fontSize='6' fontWeight='700' fill='#B4D0FE'>
+        <text x='12' y='13.85' textAnchor='middle' fontSize='7' fontWeight='700' fill='#B4D0FE'>
           {modifier === 'set' ? 'S' : 'R'}
         </text>
       )}

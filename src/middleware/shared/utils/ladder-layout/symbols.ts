@@ -92,8 +92,8 @@ const COIL_ARC_INSET = 4
 const COIL_ARC_BULGE = 2
 /** How far a coil's arcs reach above and below the symbol box, so its letter has room. */
 const COIL_OVERREACH = 2
-const CONTACT_LETTER_SIZE_PX = LADDER_TYPOGRAPHY.nameSizePx - 3
-const COIL_LETTER_SIZE_PX = LADDER_TYPOGRAPHY.nameSizePx - 3
+const CONTACT_LETTER_SIZE_PX = LADDER_TYPOGRAPHY.nameSizePx - 2
+const COIL_LETTER_SIZE_PX = LADDER_TYPOGRAPHY.nameSizePx - 2
 
 /** The two brackets of a contact whose bars stand `half` px either side of its centre. */
 const contactPaths = (half: number): readonly string[] => [
