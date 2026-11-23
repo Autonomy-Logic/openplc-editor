@@ -1,0 +1,1177 @@
+name: Rebuild Release
+
+run-name: Rebuild ${{ inputs.release }} (${{ inputs.mode }}) from ${{ inputs.ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'rebuild: build and replace the six installers; dry-run: build only; verify: check the digests of a rebuild run; seed-audit: search a rebuild run for its seed'
+        type: choice
+        default: rebuild
+        options:
+          - rebuild
+          - dry-run
+          - verify
+          - seed-audit
+      ref:
+        description: 'Branch to build (rebuild, dry-run)'
+        type: string
+        required: false
+        default: ''
+      release:
+        description: 'Target release tag, e.g. v4.3.5 or v4.3.5-rehearsal (every mode)'
+        type: string
+        required: true
+      negative_controls:
+        description: 'Also run the negative controls (rehearsal only)'
+        type: boolean
+        default: false
+      run_id:
+        description: 'Rebuild run to verify or audit (verify, seed-audit)'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rebuild-${{ inputs.release }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_VERSION: '22.x'
+  DIGEST_JS: |
+    const { createHash } = require('node:crypto')
+    const { readFileSync, writeFileSync } = require('node:fs')
+    const { basename } = require('node:path')
+    const [out, ...files] = process.argv.slice(1)
+    const digests = {}
+    for (const file of files) digests[basename(file)] = createHash('sha256').update(readFileSync(file)).digest('hex')
+    writeFileSync(out, JSON.stringify(digests, null, 2) + '\n')
+    console.log(JSON.stringify(digests, null, 2))
+
+jobs:
+  resolve:
+    if: ${{ inputs.mode == 'rebuild' || inputs.mode == 'dry-run' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.sha.outputs.sha }}
+      release_id: ${{ steps.release.outputs.release_id }}
+    steps:
+      - name: Require a branch to build
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          if [ -z "$REF" ]; then
+            echo "::error::The ref input is required in rebuild and dry-run modes"
+            exit 1
+          fi
+
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Require the backport branch of the release
+        env:
+          REF: ${{ inputs.ref }}
+          RELEASE: ${{ inputs.release }}
+        run: node tooling/scripts/release/check-ref.mjs --release "$RELEASE" --ref "$REF"
+
+      - name: Checkout the branch to build, with tags
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: tree
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Resolve the commit
+        id: sha
+        run: echo "sha=$(git -C tree rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Record the branch and the commit in the run summary
+        env:
+          REF: ${{ inputs.ref }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          {
+            echo "Branch: $REF"
+            echo "Commit: $SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check the app version against the release tag
+        id: version
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          VERSION=$(node tooling/scripts/release/check-version.mjs --release "$RELEASE" --tree tree)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Require the commit to descend from the version tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          if ! git -C tree merge-base --is-ancestor "refs/tags/v$VERSION" "$SHA"; then
+            echo "::error::Tag v$VERSION is not an ancestor of $SHA"
+            exit 1
+          fi
+
+      - name: Find the release, drafts included
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[] | select(.tag_name == $ENV.RELEASE) | .id')
+          COUNT=$(printf '%s\n' "$IDS" | grep -c . || true)
+          if [ "$COUNT" -ne 1 ]; then
+            echo "::error::Expected one release with tag $RELEASE, found $COUNT"
+            exit 1
+          fi
+          echo "release_id=$IDS" >> "$GITHUB_OUTPUT"
+
+      - name: Record the original digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          mkdir -p manifest
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets' > release-assets.json
+          node tooling/scripts/release/release-digests.mjs before --version "$VERSION" --assets release-assets.json --out manifest/original.json
+          jq -n --arg release "$RELEASE" --arg release_id "$RELEASE_ID" --arg version "$VERSION" --arg sha "$SHA" \
+            '{release: $release, release_id: $release_id, version: $version, sha: $sha}' > manifest/manifest.json
+          cat manifest/manifest.json manifest/original.json
+
+      - name: Upload the rebuild manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebuild-manifest
+          path: manifest/
+          retention-days: 30
+          if-no-files-found: error
+
+  trust-module:
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: release-trust
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      SHA: ${{ needs.resolve.outputs.sha }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the commit to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: tree
+        run: npm ci --ignore-scripts
+
+      - name: Install STruC++
+        working-directory: tree
+        run: npm run setup:strucpp
+
+      - name: Generate the trust module
+        working-directory: tree
+        env:
+          OPENPLC_TRUST_SEED_SECRET: ${{ secrets.TRUST_SEED_SECRET }}
+        run: npx ts-node --transpile-only scripts/package-trust/cli.ts generate-release --version "$VERSION" --commit "$SHA" --out release/package-trust/package-trust-anchor.ts
+
+      - name: Check the trust module at every check site
+        working-directory: tree
+        run: |
+          OPENPLC_TRUST_MODULE_UNDER_TEST="$GITHUB_WORKSPACE/tree/release/package-trust/package-trust-anchor.ts" \
+            npx jest --config jest.config.json --ci src/backend/editor/package-trust/__tests__/check-sites.test.ts
+
+      - name: Upload the trust module
+        uses: actions/upload-artifact@v4
+        with:
+          name: trust-module
+          path: tree/release/package-trust/package-trust-anchor.ts
+          retention-days: 1
+          if-no-files-found: error
+
+  cross-seed:
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the commit to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: tree
+        run: npm ci --ignore-scripts
+
+      - name: Install STruC++
+        working-directory: tree
+        run: npm run setup:strucpp
+
+      - name: Check that two seeds give different call sites
+        working-directory: tree
+        run: npx ts-node --transpile-only scripts/package-trust/cli.ts cross-seed-check --root "$GITHUB_WORKSPACE/tree"
+
+  build-macos:
+    needs: [resolve, trust-module]
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the commit to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tree/package-lock.json
+
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: tree/resources/bin
+          key: binaries-macOS-${{ hashFiles('tree/binary-versions.json') }}
+
+      - name: Install dependencies
+        working-directory: tree
+        run: npm ci
+
+      - name: Download binaries for x64
+        working-directory: tree
+        run: npx ts-node scripts/download-binaries.ts --arch x64
+
+      - name: Download the trust module
+        uses: actions/download-artifact@v4
+        with:
+          name: trust-module
+          path: tree/release/package-trust
+
+      - name: Build date
+        id: date
+        run: echo "build_date=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Import Code Signing Certificate
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+          rm $RUNNER_TEMP/certificate.p12
+
+      - name: Build and package
+        working-directory: tree
+        env:
+          CI: 'true'
+          OPENPLC_RELEASE_BUILD: '1'
+          BUILD_DATE: ${{ steps.date.outputs.build_date }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run package
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create branded DMG files
+        working-directory: tree
+        run: |
+          chmod +x ./create_dmg.sh
+          ./create_dmg.sh "$VERSION"
+
+      - name: Collect the installers and their digests
+        run: |
+          mkdir -p out
+          mv "tree/OpenPLC_Editor_${VERSION}.dmg" "out/OpenPLC_Editor_${VERSION}.dmg"
+          mv "tree/OpenPLC_Editor_${VERSION}-ARM.dmg" "out/OpenPLC_Editor_${VERSION}-ARM.dmg"
+          node -e "$DIGEST_JS" built-macos.json out/*
+
+      - name: Read the fuses of every built executable
+        run: node tooling/scripts/release/read-fuses.mjs "tree/release/build/mac/OpenPLC Editor.app" "tree/release/build/mac-arm64/OpenPLC Editor.app"
+
+      - name: Scan the unpacked outputs for trust-anchor literals
+        run: node tooling/scripts/release/scan-trust-literals.mjs --trusted-keys tooling/src/backend/shared/utils/vpp/trusted-keys.ts tree/release/build/mac tree/release/build/mac-arm64
+
+      - name: Upload the installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-macos
+          path: out/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload the digests
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-macos
+          path: built-macos.json
+          retention-days: 30
+          if-no-files-found: error
+
+  build-windows-x64:
+    needs: [resolve, trust-module]
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the commit to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tree/package-lock.json
+
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: tree/resources/bin
+          key: binaries-Windows-x64-${{ hashFiles('tree/binary-versions.json') }}
+
+      - name: Install dependencies
+        working-directory: tree
+        run: npm ci
+
+      - name: Download binaries for x64
+        working-directory: tree
+        run: npx ts-node scripts/download-binaries.ts --arch x64
+
+      - name: Download the trust module
+        uses: actions/download-artifact@v4
+        with:
+          name: trust-module
+          path: tree/release/package-trust
+
+      - name: Build date
+        id: date
+        run: echo "build_date=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and package
+        working-directory: tree
+        env:
+          OPENPLC_RELEASE_BUILD: '1'
+          BUILD_DATE: ${{ steps.date.outputs.build_date }}
+        run: npm run package
+
+      - name: Collect the installer and its digest
+        run: |
+          shopt -s nullglob
+          INSTALLERS=(tree/release/build/*.exe)
+          if [ "${#INSTALLERS[@]}" -ne 1 ]; then
+            echo "::error::Expected one installer in release/build, found ${#INSTALLERS[@]}"
+            exit 1
+          fi
+          mkdir -p out
+          mv "${INSTALLERS[0]}" "out/OpenPLC.Editor_${VERSION}.exe"
+          node -e "$DIGEST_JS" built-windows-x64.json out/*
+
+      - name: Read the fuses of the built executable
+        run: node tooling/scripts/release/read-fuses.mjs "tree/release/build/win-unpacked/OpenPLC Editor.exe"
+
+      - name: Negative control, the original installer fails the fuse readout
+        if: ${{ inputs.negative_controls }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern "OpenPLC.Editor_${VERSION}.exe" --dir original
+          7z x "original/OpenPLC.Editor_${VERSION}.exe" -o"original/nsis" -y > /dev/null
+          7z x 'original/nsis/$PLUGINSDIR/app-64.7z' -o"original/app" -y > /dev/null
+          BUILT="tree/release/build/win-unpacked/OpenPLC Editor.exe"
+          ORIGINAL="original/app/OpenPLC Editor.exe"
+          set +e
+          node tooling/scripts/release/read-fuses.mjs "$BUILT" "$ORIGINAL" > readout.txt 2>&1
+          STATUS=$?
+          set -e
+          cat readout.txt
+          if [ "$STATUS" -ne 1 ]; then
+            echo "::error::The fuse readout did not fail on the original v$VERSION executable"
+            exit 1
+          fi
+          if ! grep -qF "$ORIGINAL" readout.txt; then
+            echo "::error::The fuse readout did not name the original v$VERSION executable"
+            exit 1
+          fi
+          if grep -qF "$BUILT" readout.txt; then
+            echo "::error::The fuse readout named the rebuilt executable"
+            exit 1
+          fi
+
+      - name: Scan the unpacked output for trust-anchor literals
+        run: node tooling/scripts/release/scan-trust-literals.mjs --trusted-keys tooling/src/backend/shared/utils/vpp/trusted-keys.ts tree/release/build/win-unpacked
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-windows-x64
+          path: out/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-windows-x64
+          path: built-windows-x64.json
+          retention-days: 30
+          if-no-files-found: error
+
+  build-windows-arm64:
+    needs: [resolve, trust-module]
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the commit to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tree/package-lock.json
+
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: tree/resources/bin
+          key: binaries-Windows-arm64-${{ hashFiles('tree/binary-versions.json') }}
+
+      - name: Install dependencies
+        working-directory: tree
+        run: npm ci
+
+      - name: Download binaries for ARM64
+        working-directory: tree
+        run: npx ts-node scripts/download-binaries.ts --arch arm64
+
+      - name: Download the trust module
+        uses: actions/download-artifact@v4
+        with:
+          name: trust-module
+          path: tree/release/package-trust
+
+      - name: Build date
+        id: date
+        run: echo "build_date=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Build application
+        working-directory: tree
+        env:
+          OPENPLC_RELEASE_BUILD: '1'
+          BUILD_DATE: ${{ steps.date.outputs.build_date }}
+        run: npm run build
+
+      - name: Package for ARM64
+        working-directory: tree
+        env:
+          CI: 'true'
+          OPENPLC_RELEASE_BUILD: '1'
+        run: npx electron-builder --win --arm64 --publish never
+
+      - name: Collect the installer and its digest
+        run: |
+          shopt -s nullglob
+          INSTALLERS=(tree/release/build/*.exe)
+          if [ "${#INSTALLERS[@]}" -ne 1 ]; then
+            echo "::error::Expected one installer in release/build, found ${#INSTALLERS[@]}"
+            exit 1
+          fi
+          mkdir -p out
+          mv "${INSTALLERS[0]}" "out/OpenPLC.Editor_${VERSION}-ARM64.exe"
+          node -e "$DIGEST_JS" built-windows-arm64.json out/*
+
+      - name: Read the fuses of the built executable
+        run: node tooling/scripts/release/read-fuses.mjs "tree/release/build/win-arm64-unpacked/OpenPLC Editor.exe"
+
+      - name: Scan the unpacked output for trust-anchor literals
+        run: node tooling/scripts/release/scan-trust-literals.mjs --trusted-keys tooling/src/backend/shared/utils/vpp/trusted-keys.ts tree/release/build/win-arm64-unpacked
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-windows-arm64
+          path: out/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-windows-arm64
+          path: built-windows-arm64.json
+          retention-days: 30
+          if-no-files-found: error
+
+  build-linux-x64:
+    needs: [resolve, trust-module]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the commit to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tree/package-lock.json
+
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: tree/resources/bin
+          key: binaries-Linux-x64-${{ hashFiles('tree/binary-versions.json') }}
+
+      - name: Install dependencies
+        working-directory: tree
+        run: npm ci
+
+      - name: Download the trust module
+        uses: actions/download-artifact@v4
+        with:
+          name: trust-module
+          path: tree/release/package-trust
+
+      - name: Build date
+        id: date
+        run: echo "build_date=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and package
+        working-directory: tree
+        env:
+          OPENPLC_RELEASE_BUILD: '1'
+          BUILD_DATE: ${{ steps.date.outputs.build_date }}
+        run: npm run package
+
+      - name: Collect the installer and its digest
+        run: |
+          shopt -s nullglob
+          INSTALLERS=(tree/release/build/*.AppImage)
+          if [ "${#INSTALLERS[@]}" -ne 1 ]; then
+            echo "::error::Expected one AppImage in release/build, found ${#INSTALLERS[@]}"
+            exit 1
+          fi
+          mkdir -p out
+          mv "${INSTALLERS[0]}" "out/OpenPLC.Editor-${VERSION}.AppImage"
+          node -e "$DIGEST_JS" built-linux-x64.json out/*
+
+      - name: Read the fuses of the built executable
+        run: node tooling/scripts/release/read-fuses.mjs tree/release/build/linux-unpacked/open-plc-editor
+
+      - name: Scan the unpacked output for trust-anchor literals
+        run: node tooling/scripts/release/scan-trust-literals.mjs --trusted-keys tooling/src/backend/shared/utils/vpp/trusted-keys.ts tree/release/build/linux-unpacked
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-linux-x64
+          path: out/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-linux-x64
+          path: built-linux-x64.json
+          retention-days: 30
+          if-no-files-found: error
+
+  build-linux-arm64:
+    needs: [resolve, trust-module]
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the commit to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: tree/package-lock.json
+
+      - name: Cache tool binaries
+        uses: actions/cache@v4
+        with:
+          path: tree/resources/bin
+          key: binaries-Linux-arm64-${{ hashFiles('tree/binary-versions.json') }}
+
+      - name: Install dependencies
+        working-directory: tree
+        run: npm ci
+
+      - name: Download the trust module
+        uses: actions/download-artifact@v4
+        with:
+          name: trust-module
+          path: tree/release/package-trust
+
+      - name: Build date
+        id: date
+        run: echo "build_date=$(date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Build application
+        working-directory: tree
+        env:
+          OPENPLC_RELEASE_BUILD: '1'
+          BUILD_DATE: ${{ steps.date.outputs.build_date }}
+        run: npm run build
+
+      - name: Package for ARM64
+        working-directory: tree
+        env:
+          CI: 'true'
+          OPENPLC_RELEASE_BUILD: '1'
+        run: npx electron-builder --linux AppImage --arm64 --publish never
+
+      - name: Collect the installer and its digest
+        run: |
+          shopt -s nullglob
+          INSTALLERS=(tree/release/build/*.AppImage)
+          if [ "${#INSTALLERS[@]}" -ne 1 ]; then
+            echo "::error::Expected one AppImage in release/build, found ${#INSTALLERS[@]}"
+            exit 1
+          fi
+          mkdir -p out
+          mv "${INSTALLERS[0]}" "out/OpenPLC.Editor-${VERSION}-ARM64.AppImage"
+          node -e "$DIGEST_JS" built-linux-arm64.json out/*
+
+      - name: Read the fuses of the built executable
+        run: node tooling/scripts/release/read-fuses.mjs tree/release/build/linux-arm64-unpacked/open-plc-editor
+
+      - name: Scan the unpacked output for trust-anchor literals
+        run: node tooling/scripts/release/scan-trust-literals.mjs --trusted-keys tooling/src/backend/shared/utils/vpp/trusted-keys.ts tree/release/build/linux-arm64-unpacked
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-linux-arm64
+          path: out/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-linux-arm64
+          path: built-linux-arm64.json
+          retention-days: 30
+          if-no-files-found: error
+
+  packaged-checks:
+    needs: [resolve, build-macos, build-windows-x64, build-linux-x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            platform: mac
+            artifact: installers-macos
+            asset_prefix: OpenPLC_Editor_
+            asset_suffix: '-ARM.dmg'
+          - runner: windows-2022
+            platform: win
+            artifact: installers-windows-x64
+            asset_prefix: OpenPLC.Editor_
+            asset_suffix: '.exe'
+          - runner: ubuntu-22.04
+            platform: linux
+            artifact: installers-linux-x64
+            asset_prefix: OpenPLC.Editor-
+            asset_suffix: '.AppImage'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      PLATFORM: ${{ matrix.platform }}
+      ASSET: ${{ matrix.asset_prefix }}${{ needs.resolve.outputs.version }}${{ matrix.asset_suffix }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the positive-control package and the trusted keys of the built commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          sparse-checkout: |
+            src/backend/editor/package-trust/__tests__/fixtures/com.openplc.fx3u-compatible-2.1.0.vpp
+            src/backend/shared/utils/vpp/trusted-keys.ts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download the rebuilt installer
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: installers
+
+      - name: Run the packaged checks on the rebuilt installer
+        run: |
+          mkdir -p reports
+          if [ "$PLATFORM" = linux ]; then
+            chmod +x "installers/$ASSET"
+            set -- xvfb-run -a
+          fi
+          "$@" node tooling/scripts/release/packaged-checks.mjs --platform "$PLATFORM" \
+            --installer "installers/$ASSET" --version "$VERSION" \
+            --positive-control tree/src/backend/editor/package-trust/__tests__/fixtures/com.openplc.fx3u-compatible-2.1.0.vpp \
+            --trusted-keys tree/src/backend/shared/utils/vpp/trusted-keys.ts \
+            --report "reports/packaged-checks-$PLATFORM.json"
+
+      - name: Download the original installer of the published release
+        id: original
+        if: ${{ !cancelled() && inputs.negative_controls }}
+        run: |
+          mkdir -p original
+          curl -fsSL -o "original/$ASSET" "https://github.com/Autonomy-Logic/openplc-editor/releases/download/v$VERSION/$ASSET"
+
+      - name: Run the packaged checks on the original installer as a negative control
+        if: ${{ !cancelled() && inputs.negative_controls && steps.original.outcome == 'success' }}
+        run: |
+          mkdir -p reports
+          if [ "$PLATFORM" = linux ]; then
+            chmod +x "original/$ASSET"
+            set -- xvfb-run -a
+          fi
+          "$@" node tooling/scripts/release/packaged-checks.mjs --platform "$PLATFORM" \
+            --installer "original/$ASSET" --version "$VERSION" \
+            --positive-control tree/src/backend/editor/package-trust/__tests__/fixtures/com.openplc.fx3u-compatible-2.1.0.vpp \
+            --trusted-keys tree/src/backend/shared/utils/vpp/trusted-keys.ts \
+            --report "reports/negative-control-$PLATFORM.json" --negative-control
+
+      - name: Upload the reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-checks-${{ matrix.platform }}
+          path: reports/
+          retention-days: 30
+
+  publish:
+    if: ${{ inputs.mode == 'rebuild' }}
+    needs:
+      - resolve
+      - build-macos
+      - build-windows-x64
+      - build-windows-arm64
+      - build-linux-x64
+      - build-linux-arm64
+      - packaged-checks
+      - cross-seed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      SHA: ${{ needs.resolve.outputs.sha }}
+      RELEASE_ID: ${{ needs.resolve.outputs.release_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download the rebuild manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: rebuild-manifest
+          path: manifest
+
+      - name: Download the installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: installers-*
+          merge-multiple: true
+          path: upload
+
+      - name: Download the build digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          merge-multiple: true
+          path: digests
+
+      - name: Merge the build digests
+        run: jq -s 'add' digests/built-*.json > built.json && cat built.json
+
+      - name: Negative control, a set with update metadata fails the upload set check
+        if: ${{ inputs.negative_controls }}
+        run: |
+          rm -rf negative-control
+          cp -R upload negative-control
+          : > negative-control/latest.yml
+          if node tooling/scripts/release/check-upload-set.mjs --version "$VERSION" negative-control; then
+            echo "::error::The upload set check passed a set holding latest.yml"
+            exit 1
+          fi
+
+      - name: Check the upload set
+        run: node tooling/scripts/release/check-upload-set.mjs --version "$VERSION" upload
+
+      - name: Replace the six installers
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[] | "\(.id)\t\(.name)"' > current-assets.tsv
+          for FILE in upload/*; do
+            NAME=$(basename "$FILE")
+            for STALE_ID in $(awk -F '\t' -v name="$NAME.uploading" '$2 == name { print $1 }' current-assets.tsv); do
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$STALE_ID"
+            done
+            NEW_ID=$(curl --fail-with-body -sS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$FILE" \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$NAME.uploading" | jq -r '.id')
+            for OLD_ID in $(awk -F '\t' -v name="$NAME" '$2 == name { print $1 }' current-assets.tsv); do
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$OLD_ID"
+            done
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$NEW_ID" -f name="$NAME" > /dev/null
+            echo "Replaced $NAME"
+          done
+
+      - name: Check the release digests
+        run: |
+          for ATTEMPT in 1 2 3 4 5 6; do
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets' > release-assets.json
+            STATUS=0
+            node tooling/scripts/release/release-digests.mjs after --version "$VERSION" --assets release-assets.json --built built.json --original manifest/original.json || STATUS=$?
+            if [ "$STATUS" -ne 3 ]; then
+              exit "$STATUS"
+            fi
+            if [ "$ATTEMPT" -lt 6 ]; then
+              sleep 10
+            fi
+          done
+          echo "::error::GitHub computed no sha256 digest for the assets named above after 6 reads"
+          exit 1
+
+      - name: Record the rebuild in the release notes
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.body // ""' > current-body.md
+          node tooling/scripts/release/release-notes.mjs --body current-body.md --date "$(date -u +%Y-%m-%d)" --commit "$SHA" --original manifest/original.json --built built.json > new-body.md
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F body=@new-body.md > /dev/null
+
+  verify:
+    if: ${{ inputs.mode == 'verify' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Require a run to verify
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::The run_id input is required in verify mode"
+            exit 1
+          fi
+
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download the rebuild manifest of the run
+        uses: actions/download-artifact@v4
+        with:
+          name: rebuild-manifest
+          path: manifest
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download the build digests of the run
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          merge-multiple: true
+          path: digests
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Check the release digests
+        env:
+          RELEASE: ${{ inputs.release }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if [ "$(jq -r .release manifest/manifest.json)" != "$RELEASE" ]; then
+            echo "::error::Run $RUN_ID rebuilt $(jq -r .release manifest/manifest.json), not $RELEASE"
+            exit 1
+          fi
+          VERSION=$(jq -r .version manifest/manifest.json)
+          RELEASE_ID=$(jq -r .release_id manifest/manifest.json)
+          jq -s 'add' digests/built-*.json > built.json
+          for ATTEMPT in 1 2 3 4 5 6; do
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets' > release-assets.json
+            STATUS=0
+            node tooling/scripts/release/release-digests.mjs after --version "$VERSION" --assets release-assets.json --built built.json --original manifest/original.json || STATUS=$?
+            if [ "$STATUS" -ne 3 ]; then
+              exit "$STATUS"
+            fi
+            if [ "$ATTEMPT" -lt 6 ]; then
+              sleep 10
+            fi
+          done
+          echo "::error::GitHub computed no sha256 digest for the assets named above after 6 reads"
+          exit 1
+
+  seed-audit:
+    if: ${{ inputs.mode == 'seed-audit' }}
+    runs-on: ubuntu-latest
+    environment: release-trust
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ inputs.run_id }}
+    steps:
+      - name: Require a run to audit
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::The run_id input is required in seed-audit mode"
+            exit 1
+          fi
+
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download the rebuild manifest of the run
+        uses: actions/download-artifact@v4
+        with:
+          name: rebuild-manifest
+          path: ${{ runner.temp }}/audit/manifest
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Require the trust-module artifact of the run
+        run: |
+          COUNT=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?name=trust-module" --jq '[.artifacts[] | select(.name == "trust-module" and .expired == false)] | length')
+          if [ "$COUNT" -lt 1 ]; then
+            echo "::error::The trust-module artifact of run $RUN_ID is missing or expired; it is kept for one day, so run seed-audit within one day of the rebuild"
+            exit 1
+          fi
+
+      - name: Download the trust-module artifact of the run
+        uses: actions/download-artifact@v4
+        with:
+          name: trust-module
+          path: ${{ runner.temp }}/audit/trust-module
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download the remaining artifacts of the run
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/audit/artifacts
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Read the manifest
+        id: manifest
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          MANIFEST="$RUNNER_TEMP/audit/manifest/manifest.json"
+          if [ "$(jq -r .release "$MANIFEST")" != "$RELEASE" ]; then
+            echo "::error::Run $RUN_ID rebuilt $(jq -r .release "$MANIFEST"), not $RELEASE"
+            exit 1
+          fi
+          echo "version=$(jq -r .version "$MANIFEST")" >> "$GITHUB_OUTPUT"
+          echo "sha=$(jq -r .sha "$MANIFEST")" >> "$GITHUB_OUTPUT"
+          echo "release_id=$(jq -r .release_id "$MANIFEST")" >> "$GITHUB_OUTPUT"
+
+      - name: Download the logs of the run, the release assets and the cache keys
+        env:
+          RELEASE_ID: ${{ steps.manifest.outputs.release_id }}
+        run: |
+          AUDIT="$RUNNER_TEMP/audit"
+          mkdir -p "$AUDIT/logs" "$AUDIT/assets"
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log > "$AUDIT/logs/run.log"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[] | "\(.id)\t\(.name)"' > "$AUDIT/assets.tsv"
+          while IFS=$'\t' read -r ASSET_ID NAME; do
+            gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" > "$AUDIT/assets/$NAME"
+          done < "$AUDIT/assets.tsv"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/caches" --jq '.actions_caches[].key' > "$AUDIT/cache-keys.txt"
+
+      - name: Search for the seed of the run
+        env:
+          OPENPLC_TRUST_SEED_SECRET: ${{ secrets.TRUST_SEED_SECRET }}
+          VERSION: ${{ steps.manifest.outputs.version }}
+          SHA: ${{ steps.manifest.outputs.sha }}
+        run: node tooling/scripts/release/seed-audit.mjs --version "$VERSION" --commit "$SHA" "$RUNNER_TEMP/audit"

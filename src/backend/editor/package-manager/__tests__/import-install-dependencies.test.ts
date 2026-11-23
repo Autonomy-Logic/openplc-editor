@@ -13,22 +13,13 @@ jest.mock('extract-zip', () => ({ __esModule: true, default: jest.fn() }))
 jest.mock('../../services/logger-service', () => ({
   logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
 }))
-jest.mock('../../../shared/utils/vpp/trusted-keys', () => {
-  const { generateKeyPairSync } = jest.requireActual<typeof import('node:crypto')>('node:crypto')
-  const { publicKey, privateKey } = generateKeyPairSync('ed25519')
-  return {
-    TRUSTED_PACKAGE_KEYS: { 'test-key': publicKey.export({ type: 'spki', format: 'pem' }).toString() },
-    __TEST_PRIVATE_PEM: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
-  }
-})
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const PRIVATE_PEM: string = (require('../../../shared/utils/vpp/trusted-keys') as { __TEST_PRIVATE_PEM: string })
-  .__TEST_PRIVATE_PEM
 
 import type { DependencyInstallResult } from '../arduino-dependency-installer'
+import { TEST_AUTONOMY_KEY, testVerifyTrustedPackage } from '../../package-trust/__tests__/fixtures/trust-test-kit'
 import { PackageManagerModule } from '../package-manager-module'
 import type { PackageManifest } from '../types'
+
+const verify = testVerifyTrustedPackage()
 
 const PACKAGE_ID = 'com.test.board'
 
@@ -54,13 +45,17 @@ function packageFiles(version: string, tamper = false): Record<string, string> {
   const payload = {
     formatVersion: '1.0',
     alg: 'ed25519',
-    keyId: 'test-key',
+    keyId: TEST_AUTONOMY_KEY.keyId,
     packageId: PACKAGE_ID,
     version,
     signedAt: '2026-06-01T00:00:00.000Z',
     files: Object.fromEntries(Object.entries(files).map(([rel, content]) => [rel, sha256(content)])),
   }
-  const signature = cryptoSign(null, Uint8Array.from(Buffer.from(canonicalize(payload), 'utf-8')), PRIVATE_PEM)
+  const signature = cryptoSign(
+    null,
+    Uint8Array.from(Buffer.from(canonicalize(payload), 'utf-8')),
+    TEST_AUTONOMY_KEY.privateKey,
+  )
   files[SIGNATURE_FILENAME] = JSON.stringify({ ...payload, signature: signature.toString('base64') })
   if (tamper) files['plugin/main.c'] = 'int vpp_init(void) { return -1; }'
   return files
@@ -101,7 +96,7 @@ describe('PackageManagerModule.importFromFile with a dependency install', () => 
 
   it('installs the dependencies of a verified package, then registers it', async () => {
     archives.set('v1.vpp', packageFiles('1.0.0'))
-    const manager = new PackageManagerModule()
+    const manager = new PackageManagerModule(verify)
     const install = callback({ ok: true, installed: 2 })
 
     const result = await manager.importFromFile('v1.vpp', install)
@@ -115,7 +110,7 @@ describe('PackageManagerModule.importFromFile with a dependency install', () => 
 
   it('never installs dependencies for a package that fails its signature check', async () => {
     archives.set('bad.vpp', packageFiles('1.0.0', true))
-    const manager = new PackageManagerModule()
+    const manager = new PackageManagerModule(verify)
     const install = callback({ ok: true, installed: 0 })
 
     const result = await manager.importFromFile('bad.vpp', install)
@@ -132,7 +127,7 @@ describe('PackageManagerModule.importFromFile with a dependency install', () => 
     ['is cancelled', { ok: false, cancelled: true, error: 'Installation cancelled.' } as const, true],
   ])('leaves nothing installed when the dependency install %s', async (_label, outcome, canceled) => {
     archives.set('v1.vpp', packageFiles('1.0.0'))
-    const manager = new PackageManagerModule()
+    const manager = new PackageManagerModule(verify)
 
     const result = await manager.importFromFile('v1.vpp', callback(outcome))
 
@@ -145,7 +140,7 @@ describe('PackageManagerModule.importFromFile with a dependency install', () => 
   it('keeps the installed version when the next version fails to install its dependencies', async () => {
     archives.set('v1.vpp', packageFiles('1.0.0'))
     archives.set('v2.vpp', packageFiles('2.0.0'))
-    const manager = new PackageManagerModule()
+    const manager = new PackageManagerModule(verify)
     await manager.importFromFile('v1.vpp', callback({ ok: true, installed: 0 }))
     const v1Main = installedMain()
 
