@@ -1,24 +1,8 @@
-/**
- * Editor RuntimePort adapter — delegates to Electron IPC bridge.
- *
- * Communicates with the main process RuntimeModule via window.bridge.runtime*
- * methods. The main process handles HTTPS calls to the OpenPLC runtime device,
- * including self-signed certificate support and automatic JWT token refresh.
- *
- * Connection context:
- *   - IP address: provided via getIpAddress() callback injected at creation.
- *     Set by the store/UI when the user configures the device.
- *   - JWT token: owned entirely by the main process (the single token
- *     authority). The renderer no longer holds or passes the token — main
- *     injects it into every runtime call and refreshes it on expiry, then
- *     notifies the renderer via onTokenRefreshed. This adapter only tracks
- *     whether a session is active (for isReadyForDebug).
- */
-
 import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
 import type { OpenPLCStore } from '../../../frontend/store'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type {
+  BootloaderCapabilitiesOptions,
   CompilationStatusResult,
   DiscoverDevicesOptions,
   DiscoverDevicesResult,
@@ -39,15 +23,7 @@ import type {
 } from '../../shared/ports/runtime-port'
 import type { SerialPort, Unsubscribe } from '../../shared/ports/types'
 
-/**
- * Ask the main process for the stored project on `ipAddress`, unpacked.
- *
- * An internal of `fetchRetrievableProject`, which is the one way in that shared
- * code uses. It was a port method until nothing outside this file turned out to
- * call it: the desktop pulls a path out of a scratch directory and web pulls
- * bytes out of an orchestrator response, and neither shape is any use to the
- * shared picker, which is why both are hidden behind one method that is.
- */
+/** Ask the main process for the stored project on `ipAddress`, unpacked. An internal of `fetchRetrievableProject`. */
 async function retrieveProjectFromDevice(ipAddress: string) {
   try {
     return await window.bridge.runtimeRetrieveProject(ipAddress)
@@ -57,8 +33,6 @@ async function retrieveProjectFromDevice(ipAddress: string) {
 }
 
 export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: () => string): RuntimePort {
-  // Whether a runtime session is active. The token itself lives in the main
-  // process; this only gates isReadyForDebug.
   let loggedIn = false
 
   function requireIp(): string {
@@ -72,18 +46,10 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
       return getIpAddress() !== '' && loggedIn
     },
 
-    /**
-     * The bootloader on the currently targeted device.
-     *
-     * A nested object rather than eight more top-level methods: it is a
-     * different service on a different port with its own session, and keeping
-     * that boundary visible at the call site stops it being mistaken for the
-     * runtime's API.
-     */
     bootloader: {
-      async getCapabilities() {
+      async getCapabilities(options?: BootloaderCapabilitiesOptions) {
         try {
-          return await window.bridge.bootloaderGetCapabilities(requireIp())
+          return await window.bridge.bootloaderGetCapabilities(requireIp(), options)
         } catch (err) {
           return { success: false as const, error: getErrorMessage(err) }
         }
@@ -268,13 +234,6 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
       }
     },
 
-    /**
-     * VPP screen actions through the runtime's existing `POST
-     * /api/plugin-command` catch-all, over the same direct HTTPS transport
-     * every other runtime call uses. The main process already interprets the
-     * response — that route reports plugin failures at HTTP 200 — so this is a
-     * pass-through.
-     */
     async sendPluginCommand(args: PluginCommandArgs): Promise<PluginCommandOutcome> {
       try {
         const ip = requireIp()
@@ -306,8 +265,6 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
       const handler = (_event: unknown, newToken: string) => callback(newToken)
       return window.bridge.onRuntimeTokenRefreshed(handler)
     },
-
-    // --- EtherCAT Discovery ---
 
     async getNetworkInterfaces() {
       try {
@@ -363,8 +320,6 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
       }
     },
 
-    // --- LAN discovery ---
-
     async discoverDevices(opts?: DiscoverDevicesOptions): Promise<DiscoverDevicesResult> {
       try {
         return await window.bridge.runtimeDiscoverDevices(opts)
@@ -378,8 +333,6 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
       return window.bridge.onRuntimeDeviceDiscovered(handler)
     },
 
-    // --- stored source project ---
-
     async installRetrievedLibraries(project: FetchedProject, names: string[]) {
       try {
         return await window.bridge.runtimeInstallRetrievedLibraries(String(project.payload), names)
@@ -387,12 +340,6 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
         return { success: false, installed: [], failed: [{ name: '', error: getErrorMessage(err) }] }
       }
     },
-
-    // --- Retrieve Project from PLC, in the shape the shared picker uses ------
-    //
-    // The picker is one component for both platforms. What differs here is that
-    // the desktop finds devices by scanning its own LAN and identifies them by
-    // address; web asks an orchestrator. Those differences end at this boundary.
 
     async listRetrievableDevices() {
       const result = await this.discoverDevices!({ durationMs: 3000 })
@@ -403,21 +350,14 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
     },
 
     onRetrievableDeviceFound(callback: (device: RetrievableDevice) => void): Unsubscribe {
-      // The LAN scan answers progressively, so rows appear as replies arrive
-      // rather than all at once when the sweep ends.
       return this.onDeviceDiscovered!((device) => callback(toRetrievableDevice(device)))
     },
 
     connectedRetrievableDeviceKey() {
-      // A configured address is not a session. `loggedIn` is what says a token
-      // was actually obtained, and without that check the picker would skip
-      // asking for credentials for a device nobody has signed in to.
       return loggedIn ? getIpAddress() : ''
     },
 
     selectRetrievableDevice(device: RetrievableDevice) {
-      // The adapter reads its target from the store, so this has to move before
-      // the login rather than with it.
       store.getState().deviceActions.setRuntimeIpAddress(device.key)
     },
 
@@ -430,8 +370,6 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
         success: true as const,
         project: {
           projectName: retrieved.projectName ?? '',
-          // The scratch directory it was unpacked into. Opaque to the picker;
-          // it comes back here to be opened.
           payload: retrieved.projectPath,
           libraries: retrieved.libraries,
         },
@@ -440,18 +378,12 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
   }
 }
 
-/**
- * One LAN reply, in the shape the shared picker reads.
- *
- * The address is the identity on this platform: it is what the runtime API
- * client is pointed at, and what a session belongs to.
- */
+/** One LAN reply, in the shape the shared picker reads, keyed by address. */
 function toRetrievableDevice(device: DiscoveredRuntimeDevice): RetrievableDevice {
   return {
     key: device.ipAddress,
     name: device.ipAddress,
     location: device.hostname || undefined,
-    // A device only appears here because it answered the scan.
     answeredScan: true,
     projectName: device.projectName,
     projectTimestamp: device.projectTimestamp,
