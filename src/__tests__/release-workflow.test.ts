@@ -680,10 +680,10 @@ describe('release.yml: packaged-checks', () => {
     return job('packaged-checks')
   }
 
-  it('runs on macos-14, windows-2022 and ubuntu-22.04 through its matrix', () => {
+  it('runs on macos-latest, windows-2022 and ubuntu-22.04 through its matrix', () => {
     const runners = strings(record(checks().body.strategy).matrix).filter((value) => RUNNER_LABEL.test(value))
 
-    expect([...new Set(runners)].sort()).toEqual(['macos-14', 'ubuntu-22.04', 'windows-2022'])
+    expect([...new Set(runners)].sort()).toEqual(['macos-latest', 'ubuntu-22.04', 'windows-2022'])
   })
 
   it('waits for the macOS, Windows x64 and Linux x64 build jobs', () => {
