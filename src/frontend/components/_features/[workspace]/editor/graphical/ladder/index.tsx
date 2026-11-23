@@ -6,6 +6,10 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
 } from '@dnd-kit/core'
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -182,6 +186,11 @@ export default function LadderEditor() {
   const scrollableRef = useRef<HTMLDivElement>(null)
   const viewportWidth = useVisibleWidth(scrollableRef)
   const pouCanvas = useLadderPouCanvasValue(pouName, rungs, viewportWidth)
+  // A rung drag starts after 4 px, so a click on the gutter still selects the rung.
+  const rungDragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor),
+  )
 
   // Stored coordinates are engine output: a rename, an instance name or a changed location re-lays the rung out.
   useLayoutEffect(() => {
@@ -332,7 +341,12 @@ export default function LadderEditor() {
         style={{ width: LADDER_STYLE.gutter + pouCanvas.presentation.widthPx, minWidth: '100%' }}
       >
         <LadderPouCanvasProvider value={pouCanvas}>
-          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+          <DndContext
+            sensors={rungDragSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+            onDragStart={handleDragStart}
+          >
             <div className='relative h-fit'>
               {/* One pair of power rails for the whole POU, so the rungs read as one continuous flow. */}
               {[0, pouCanvas.presentation.railX].map((x) => (

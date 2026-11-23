@@ -21,7 +21,7 @@ import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/act
 import { VariablesBlockAutoComplete } from './autocomplete'
 import { CustomHandle, ladderHandleStyle } from './handle'
 import { LadderSymbolGlyph, ladderSymbolInset } from './ladder-symbol'
-import { labelsBounds, LadderLocationText, LadderNameField, LadderText } from './ladder-text'
+import { LadderLocationText, LadderNameField, LadderText } from './ladder-text'
 import { labelOfRole, LADDER_ERROR_COLOUR, LADDER_FORCED_COLOURS, useLadderNodeView } from './rung-view'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData } from './utils/types'
@@ -63,6 +63,9 @@ export interface LadderCellVisualProps {
   onClick?: (event: MouseEvent<HTMLDivElement>) => void
 }
 
+/** Space between a selected contact or coil's highlight and its symbol, in px. */
+const HIGHLIGHT_PAD = 3
+
 /** A contact or coil: its symbol, its one-line name and its location line, from the rung layout. */
 export function LadderCellVisual({
   nodeId,
@@ -79,26 +82,32 @@ export function LadderCellVisual({
   const { labels, palette, labelSource } = useLadderNodeView(nodeId)
   const nameLabel = nameLabelOf(labels, variableName)
   const locationLabel = labelOfRole(labels, 'location')
-  const bounds = labelsBounds([nameLabel, ...(locationLabel ? [locationLabel] : [])], {
-    width: LADDER_STYLE.sym,
-    height: LADDER_STYLE.symH,
-  })
 
   return (
     <div className='relative' style={{ width: LADDER_STYLE.sym, height: LADDER_STYLE.symH }} onClick={onClick}>
-      <div
-        className={cn('pointer-events-none absolute rounded-[3px]', {
-          'outline outline-2 outline-offset-2 outline-brand': selected,
-        })}
-        style={{ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }}
-      />
       {interactive && (
         <div
-          className='absolute rounded-[3px] hover:outline hover:outline-2 hover:outline-offset-2 hover:outline-brand'
+          className='peer absolute'
           style={{ left: 0, top: 0, width: LADDER_STYLE.sym, height: LADDER_STYLE.symH }}
         />
       )}
-      <LadderSymbolGlyph kind={kind} stroke={symbolColour} energized={energized} />
+      <div
+        aria-hidden
+        data-selected={selected}
+        className={cn('pointer-events-none absolute rounded-[3px]', {
+          'bg-brand-light dark:bg-brand-medium-dark': selected,
+          'peer-hover:bg-neutral-100 dark:peer-hover:bg-neutral-850': interactive && !selected,
+        })}
+        style={{
+          left: -HIGHLIGHT_PAD,
+          top: -HIGHLIGHT_PAD,
+          width: LADDER_STYLE.sym + 2 * HIGHLIGHT_PAD,
+          height: LADDER_STYLE.symH + 2 * HIGHLIGHT_PAD,
+        }}
+      />
+      <div className='relative'>
+        <LadderSymbolGlyph kind={kind} stroke={symbolColour} energized={energized} />
+      </div>
       {nameSlot ? (
         nameSlot(nameLabel)
       ) : (

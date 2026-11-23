@@ -293,23 +293,3 @@ export function LadderNameField({
     </>
   )
 }
-
-/** The box around a node's glyph and its labels, in node coordinates, for the selection outline. */
-export function labelsBounds(
-  labels: readonly LabelBox[],
-  box: { width: number; height: number },
-): { left: number; top: number; width: number; height: number } {
-  let left = 0
-  let top = 0
-  let right = box.width
-  let bottom = box.height
-  for (const label of labels) {
-    const width = textWidthPx(label.text, label.sizePx)
-    const x = anchoredLeft(label, width)
-    left = Math.min(left, x)
-    right = Math.max(right, x + width)
-    top = Math.min(top, label.y - label.sizePx)
-    bottom = Math.max(bottom, label.y + label.sizePx * 0.3)
-  }
-  return { left, top, width: right - left, height: bottom - top }
-}
