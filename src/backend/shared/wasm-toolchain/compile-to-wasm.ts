@@ -248,8 +248,10 @@ interface CompileContext {
   loadFailures: WasmToolchainLoadError[]
   report: Report
   stats: WasmCompileStats
-  /** Each job's timing by its planned object path. */
+  /** Called with each object built or taken from the cache. */
   onObject: WasmCompileOptions['onObject']
+  /** Progress lines for the build's console: what is compiled, each file as it ends, the link. */
+  progress: ((message: string) => void) | undefined
 }
 
 /**
@@ -283,7 +285,7 @@ async function validVariant(
  * was added or removed, and compiles the rest, largest first.
  */
 async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToTree>, ctx: CompileContext) {
-  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, onObject } = ctx
+  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, onObject, progress } = ctx
   const pending: PlannedUnit[] = []
   for (const p of jobs) {
     const hit = await validVariant(cache, p.key, ctx)
@@ -296,6 +298,10 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
     }
   }
   pending.sort((x, y) => y.size - x.size)
+  const reused = jobs.length - pending.length
+  if (pending.length > 0)
+    progress?.(`Compiling ${pending.length} of ${jobs.length} files${reused > 0 ? ` (${reused} reused)` : ''}...`)
+  let done = 0
   await runLimited(pending, runner.concurrency, async (p) => {
     if (loadFailures.length > 0) return
     const result = await runSafely(runner, { argv: p.argv, tree })
@@ -315,6 +321,8 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
         onObject?.(p.unit, p.key, entry)
       }
       reportStderr(report, result.stderr, 'warning')
+      done++
+      progress?.(`Compiled ${p.unit.source} (${done}/${pending.length})`)
       return
     }
     reportStderr(report, result.stderr, 'error')
@@ -358,6 +366,7 @@ export async function compileToWasm(
     diagnostics.push({ message, level })
     log?.(message, level)
   }
+  const progress = log ? (message: string): void => log(message, 'info') : undefined
   const fail = (error: string): WasmCompileResult => {
     report(error, 'error')
     return { ok: false, error, stats, diagnostics }
@@ -390,6 +399,7 @@ export async function compileToWasm(
       report,
       stats,
       onObject,
+      progress,
     })
 
   const planned = await planUnits(request)
@@ -407,6 +417,7 @@ export async function compileToWasm(
     const object = objects.get(p.object)
     if (object) linkFiles[p.object] = object
   }
+  progress?.(`Linking ${output}...`)
   const link = await runSafely(runner, {
     argv: [
       'clang++',

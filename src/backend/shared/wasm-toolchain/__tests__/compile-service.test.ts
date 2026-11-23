@@ -109,7 +109,7 @@ describe('createWasmCompileService', () => {
     const log: Array<[string, string]> = []
     const result = await service.compile(request, (m, l) => log.push([m, l]))
     expect(result.ok).toBe(false)
-    expect(log[0]).toEqual(['a.c:1:1: error: bad', 'error'])
+    expect(log.find(([, level]) => level === 'error')).toEqual(['a.c:1:1: error: bad', 'error'])
   })
 })
 
