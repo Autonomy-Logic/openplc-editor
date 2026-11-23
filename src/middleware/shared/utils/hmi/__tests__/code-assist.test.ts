@@ -42,7 +42,7 @@ const SETTINGS = defaultHmiSettings()
 /** Completions at the `|` of `text`. */
 function at(text: string, settings = SETTINGS) {
   const offset = text.indexOf('|')
-  return hmiCompletions(text.replace('|', ''), offset, CATALOG, settings)
+  return hmiCompletions(text.slice(0, offset) + text.slice(offset + 1), offset, CATALOG, settings)
 }
 const labels = (text: string) => at(text)?.map((i) => i.label) ?? null
 
