@@ -9,6 +9,8 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { UsersInfoRawFacts, UsersInfoResult } from '@root/middleware/shared/ports/runtime-port'
 import {
   createRuntimeTokenManager,
+  isSessionExpiredStatus,
+  type RuntimeCredentialChange,
   type RuntimeTokenManager,
 } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
 import { usersInfoFromFacts } from '@root/middleware/shared/utils/runtime-provisioning'
@@ -19,6 +21,12 @@ export const RUNTIME_API_PORT = 8443
 export type RuntimeApiResult<T> = { success: true; data?: T } | { success: false; error: string }
 
 const LoginResponseSchema = z.object({ access_token: z.string() })
+
+type MutationResult = { success: true; data: string } | { success: false; error: string; statusCode?: number }
+
+function stripMutationStatus(r: MutationResult): { success: true; data: string } | { success: false; error: string } {
+  return r.success ? { success: true, data: r.data } : { success: false, error: r.error }
+}
 
 const PlcStatusResponseSchema = z.object({
   status: z.string().optional(),
@@ -205,7 +213,7 @@ export class RuntimeApiClient {
   }
 
   /**
-   * Authenticated request with the raw status and body, refreshing the token on 401/403.
+   * Authenticated request with the raw status and body, refreshing the token on 401.
    * Throws on a transport failure.
    */
   async runtimeApiExchange(
@@ -217,7 +225,7 @@ export class RuntimeApiClient {
     const url = this.runtimeUrl(ipAddress, endpoint)
     const res = await this.tokens.withAuth(
       (token) => this.httpRequest({ method, url, body, headers: { Authorization: `Bearer ${token}` } }),
-      (r) => r.statusCode === 401 || r.statusCode === 403,
+      (r) => isSessionExpiredStatus(r.statusCode),
     )
     return { status: res.statusCode, body: res.data }
   }
@@ -327,19 +335,6 @@ export class RuntimeApiClient {
     }
   }
 
-  private isTokenExpiredError(statusCode: number | undefined, errorMessage: string): boolean {
-    if (statusCode === 401 || statusCode === 403) {
-      return true
-    }
-    const lowerError = errorMessage.toLowerCase()
-    return (
-      lowerError.includes('unauthorized') ||
-      lowerError.includes('token') ||
-      lowerError.includes('expired') ||
-      lowerError.includes('invalid token')
-    )
-  }
-
   private parseApiResponse<T>(
     data: string,
     responseParser?: (data: string) => T,
@@ -377,13 +372,13 @@ export class RuntimeApiClient {
           return { success: false, error: getErrorMessage(error) }
         }
       },
-      (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+      (r) => !r.success && isSessionExpiredStatus(r.statusCode),
     )
     return result.success ? result : { success: false, error: result.error, statusCode: result.statusCode }
   }
 
   /**
-   * Make an authenticated POST request to the runtime API with automatic token refresh on 401/403.
+   * Make an authenticated POST request to the runtime API with automatic token refresh on 401.
    */
   makeRuntimeApiPostRequest<T>(
     ipAddress: string,
@@ -449,7 +444,7 @@ export class RuntimeApiClient {
     return this.tokens
       .withAuth<PostResult>(
         (token) => doRequest(token),
-        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+        (r) => !r.success && isSessionExpiredStatus(r.statusCode),
       )
       .then(stripStatus)
   }
@@ -464,56 +459,79 @@ export class RuntimeApiClient {
     endpoint: string,
     body?: string,
   ): Promise<{ success: true; data: string } | { success: false; error: string }> {
-    type R = { success: true; data: string } | { success: false; error: string; statusCode?: number }
-
-    const doRequest = (token: string): Promise<R> =>
-      new Promise((resolve) => {
-        const headers: Record<string, string | number> = { Authorization: `Bearer ${token}` }
-        if (body !== undefined) {
-          headers['Content-Type'] = 'application/json'
-          headers['Content-Length'] = Buffer.byteLength(body)
-        }
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: endpoint,
-            method,
-            headers,
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              const statusCode = res.statusCode ?? 0
-              if (statusCode >= 200 && statusCode < 300) {
-                resolve({ success: true, data })
-              } else {
-                resolve({ success: false, error: data || `Unexpected status: ${statusCode}`, statusCode })
-              }
-            })
-          },
-        )
-        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        if (body !== undefined) req.write(body)
-        req.end()
-      })
-
     return this.tokens
-      .withAuth<R>(
-        (token) => doRequest(token),
-        (r) => !r.success && r.statusCode === 401,
+      .withAuth<MutationResult>(
+        (token) => this.mutationRequest(token, method, ipAddress, endpoint, body),
+        (r) => !r.success && isSessionExpiredStatus(r.statusCode),
       )
-      .then((r) => (r.success ? { success: true, data: r.data } : { success: false, error: r.error }))
+      .then(stripMutationStatus)
+  }
+
+  /** A mutation of the signed-in account, run through the token authority's own-account change. */
+  makeOwnAccountMutation(
+    change: RuntimeCredentialChange,
+    method: 'PUT',
+    ipAddress: string,
+    endpoint: string,
+    body: string,
+  ): Promise<{ success: true; data: string } | { success: false; error: string }> {
+    return this.tokens
+      .changeOwnCredentials<MutationResult>(
+        change,
+        (token) => this.mutationRequest(token, method, ipAddress, endpoint, body),
+        (r) => !r.success && isSessionExpiredStatus(r.statusCode),
+        (r) => r.success,
+      )
+      .then(stripMutationStatus)
+  }
+
+  private mutationRequest(
+    token: string,
+    method: 'POST' | 'PUT' | 'DELETE',
+    ipAddress: string,
+    endpoint: string,
+    body?: string,
+  ): Promise<MutationResult> {
+    return new Promise((resolve) => {
+      const headers: Record<string, string | number> = { Authorization: `Bearer ${token}` }
+      if (body !== undefined) {
+        headers['Content-Type'] = 'application/json'
+        headers['Content-Length'] = Buffer.byteLength(body)
+      }
+      const req = https.request(
+        {
+          hostname: ipAddress,
+          port: this.RUNTIME_API_PORT,
+          path: endpoint,
+          method,
+          headers,
+          ...getRuntimeHttpsOptions(),
+        },
+        (res: IncomingMessage) => {
+          let data = ''
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString()
+          })
+          res.on('end', () => {
+            const statusCode = res.statusCode ?? 0
+            if (statusCode >= 200 && statusCode < 300) {
+              resolve({ success: true, data })
+            } else {
+              resolve({ success: false, error: data || `Unexpected status: ${statusCode}`, statusCode })
+            }
+          })
+        },
+      )
+      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+        req.destroy()
+        resolve({ success: false, error: 'Connection timeout' })
+      })
+      req.on('error', (error: Error) => {
+        resolve({ success: false, error: error.message })
+      })
+      if (body !== undefined) req.write(body)
+      req.end()
+    })
   }
 
   /** Fetch the stored source project, base64 in JSON. A 403 is returned as an answer, not as a transport failure. */
@@ -629,7 +647,7 @@ export class RuntimeApiClient {
     return this.tokens
       .withAuth<UploadResult>(
         (token) => doRequest(token),
-        (r) => !r.success && (r.statusCode === 401 || r.statusCode === 403),
+        (r) => !r.success && isSessionExpiredStatus(r.statusCode),
       )
       .then((result) => {
         if (result.success) {

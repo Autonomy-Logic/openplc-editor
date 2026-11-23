@@ -519,17 +519,22 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeUpdateUser = (_event: IpcMainInvokeEvent, ipAddress: string, userId: number, params: UpdateUserParams) =>
     this.updateRuntimeUser(ipAddress, userId, params)
 
-  handleRuntimeUpdateOwnAccount = (
+  handleRuntimeUpdateOwnAccount = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
     userId: number,
     params: UpdateUserParams,
-  ) =>
-    this.tokens.changeOwnCredentials(
+  ) => {
+    const body = JSON.stringify(runtimeUpdateUserBody(params))
+    const res = await this.runtimeApi.makeOwnAccountMutation(
       params,
-      () => this.updateRuntimeUser(ipAddress, userId, params),
-      (result) => result.success,
+      'PUT',
+      ipAddress,
+      `/api/update-user/${userId}`,
+      body,
     )
+    return res.success ? { success: true } : { success: false, error: res.error }
+  }
 
   handleRuntimeDeleteUser = async (_event: IpcMainInvokeEvent, ipAddress: string, userId: number) => {
     const res = await this.makeRuntimeApiMutation('DELETE', ipAddress, `/api/delete-user/${userId}`)
