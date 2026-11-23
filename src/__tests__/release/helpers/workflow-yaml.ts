@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 
@@ -124,4 +125,19 @@ export function workflowReader(path: string): WorkflowReader {
     environmentOf,
     upstream,
   }
+}
+
+/** Why tests that run workflow steps under bash cannot run here: Windows, or the first of @p tools missing from PATH. */
+export function stepRunnerSkipReason(tools: readonly ('bash' | 'jq')[]): string | null {
+  if (process.platform === 'win32') return 'needs bash and symlinks, not run on Windows'
+  const missing = tools.find((tool) => {
+    const probe = spawnSync(tool, ['--version'], { stdio: 'ignore' })
+    return probe.error !== undefined || probe.status !== 0
+  })
+  return missing === undefined ? null : `needs ${missing} on PATH`
+}
+
+/** @p title, ending with ` (skipped: <reason>)` when @p reason is not `null`. */
+export function skippedTitle(title: string, reason: string | null): string {
+  return reason === null ? title : `${title} (skipped: ${reason})`
 }

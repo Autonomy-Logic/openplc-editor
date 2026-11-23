@@ -18,7 +18,9 @@ import {
   type Job,
   list,
   record,
+  skippedTitle,
   type Step,
+  stepRunnerSkipReason,
   str,
   strings,
   text,
@@ -30,6 +32,9 @@ const WORKFLOW = join(repo, '.github', 'workflows', 'release.yml')
 const CLAUDE_MD = join(repo, 'CLAUDE.md')
 const workflow = workflowReader(WORKFLOW)
 const { jobs, job, needsOf, uses, environmentOf, upstream } = workflow
+const STEP_SKIP = stepRunnerSkipReason(['bash'])
+const stepIt = STEP_SKIP === null ? it : it.skip
+const skipped = (title: string): string => skippedTitle(title, STEP_SKIP)
 
 const BUILD_JOBS = ['build-macos', 'build-windows-x64', 'build-windows-arm64', 'build-linux-x64', 'build-linux-arm64']
 const RELEASE_FLAG = 'OPENPLC_RELEASE_BUILD'
@@ -787,7 +792,7 @@ describe('release.yml: create-release', () => {
       expect(str(record(step.env).VERSION)).toMatch(/^\$\{\{\s*steps\.version\.outputs\.version\s*\}\}$/)
     })
 
-    it('passes the six 4.4.0-rc1 installers when run for the tag v4.4.0-rc1', () => {
+    stepIt(skipped('passes the six 4.4.0-rc1 installers when run for the tag v4.4.0-rc1'), () => {
       const result = runUploadSetCheck(PRERELEASE_INSTALLERS)
 
       expect({ status: result.status, output: result.output }).toEqual({
@@ -796,7 +801,7 @@ describe('release.yml: create-release', () => {
       })
     })
 
-    it('fails the six 4.4.0-rc1 installers plus latest.yml, naming it (ABUSE-11)', () => {
+    stepIt(skipped('fails the six 4.4.0-rc1 installers plus latest.yml, naming it (ABUSE-11)'), () => {
       const result = runUploadSetCheck([...PRERELEASE_INSTALLERS, 'latest.yml'])
 
       expect(result.status).toBe(1)

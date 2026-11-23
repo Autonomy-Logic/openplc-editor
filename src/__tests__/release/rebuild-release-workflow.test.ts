@@ -27,7 +27,9 @@ import {
   type Job,
   list,
   record,
+  skippedTitle,
   type Step,
+  stepRunnerSkipReason,
   str,
   strings,
   text,
@@ -38,6 +40,10 @@ const repo = join(__dirname, '..', '..', '..')
 const WORKFLOW = join(repo, '.github', 'workflows', 'rebuild-release.yml')
 const workflow = workflowReader(WORKFLOW)
 const { jobs, job, needsOf, uses, environmentOf, upstream } = workflow
+const STEP_SKIP = stepRunnerSkipReason(['bash', 'jq'])
+const stepIt = STEP_SKIP === null ? it : it.skip
+const skipped = (title: string): string => skippedTitle(title, STEP_SKIP)
+const stepDescribe = STEP_SKIP === null ? describe : describe.skip
 
 /** Steps that change a release: an asset upload or delete, a body edit, or an action that can do either. */
 const MUTATION =
@@ -991,7 +997,7 @@ describe('rebuild-release.yml: the branch to build', () => {
     }).toEqual({ ref: true, release: true, options: true, inlineExpression: false })
   })
 
-  it('writes the ref and the resolved commit to the step summary of resolve', () => {
+  stepIt(skipped('writes the ref and the resolved commit to the step summary of resolve'), () => {
     const box = sandbox()
     const resolve = job('resolve')
     const summarySteps = resolve.steps.filter((step) => str(step.run).includes('GITHUB_STEP_SUMMARY'))
@@ -1026,7 +1032,7 @@ describe('rebuild-release.yml: STruC++ in trust-module', () => {
   })
 })
 
-describe('rebuild-release.yml: publish uploads each installer before deleting the one it replaces', () => {
+stepDescribe(skipped('rebuild-release.yml: publish uploads each installer before deleting the one it replaces'), () => {
   const STALE = 'OpenPLC.Editor_4.3.5.exe.uploading'
   const STALE_ID = 106
 
@@ -1099,7 +1105,7 @@ describe('rebuild-release.yml: publish uploads each installer before deleting th
   )
 })
 
-describe.each(['publish', 'verify'])('rebuild-release.yml: %s reads the digests back', (id) => {
+stepDescribe.each(['publish', 'verify'])(skipped('rebuild-release.yml: %s reads the digests back'), (id) => {
   const PENDING = 'OpenPLC_Editor_4.3.5-ARM.dmg'
 
   function readBackStep(): Step {
@@ -1197,11 +1203,11 @@ describe('rebuild-release.yml: seed-audit and the trust-module artifact', () => 
     expect(audit.steps[download]?.['continue-on-error']).toBeUndefined()
   })
 
-  it.each([
+  stepIt.each([
     ['missing', [MANIFEST]],
     ['expired', [MANIFEST, { id: 2, name: 'trust-module', expired: true }]],
   ])(
-    'fails when the trust-module artifact is %s, naming it, the run id and the one-day retention',
+    skipped('fails when the trust-module artifact is %s, naming it, the run id and the one-day retention'),
     (_state, artifacts) => {
       const result = checking(artifacts)
 
@@ -1214,7 +1220,7 @@ describe('rebuild-release.yml: seed-audit and the trust-module artifact', () => 
     },
   )
 
-  it('passes when the trust-module artifact of the run has not expired', () => {
+  stepIt(skipped('passes when the trust-module artifact of the run has not expired'), () => {
     const result = checking([MANIFEST, { id: 2, name: 'trust-module', expired: false }])
 
     expect(result.status).toBe(0)
