@@ -52,7 +52,7 @@ export const buildBlockNode = <T extends object | undefined>({
   handleX,
   handleY,
   variant,
-  executionControl = false,
+  executionControl,
 }: BlockBuilderProps<T>) => {
   const original = [...((variant as BlockVariant)?.variables ?? [])]
   const outIndex = original.findIndex((v) => v.name === 'OUT')

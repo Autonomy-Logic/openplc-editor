@@ -1,5 +1,5 @@
 import type { RungLadderState } from '@root/middleware/shared/ports/types'
-import { layoutRung } from '@root/middleware/shared/utils/ladder-layout/layout'
+import { layoutRungOrStored } from '@root/middleware/shared/utils/ladder-layout/layout'
 import { textWidthPx } from '@root/middleware/shared/utils/ladder-layout/measure'
 import { LADDER_PALETTE, LADDER_STYLE, LADDER_TYPOGRAPHY } from '@root/middleware/shared/utils/ladder-layout/style'
 import { ladderSymbol, symbolKindOf } from '@root/middleware/shared/utils/ladder-layout/symbols'
@@ -9,7 +9,14 @@ import type { Node } from '@xyflow/react'
 
 import { getLiteralType } from '../../../frontend/utils/keywords'
 import { PX_TO_PT, transformDrawOps } from './geometry'
-import { LD_MARKER, type LdPrintRow, type LdPrintRung, ldRowCanvasWidthPx, planLadderPou } from './ladder-print-plan'
+import {
+  LD_MARKER,
+  ldPouScale,
+  type LdPrintRow,
+  type LdPrintRung,
+  ldRowCanvasWidthPx,
+  planLadderPou,
+} from './ladder-print-plan'
 import type { ContentBlock, DrawOp, PrintPou, PrintRenderMode } from './types'
 
 const PAPER = LADDER_PALETTE.paper
@@ -387,10 +394,11 @@ export function renderLadderPou(
 ): ContentBlock[] {
   const contentWidthPx = contentWidthPt / PX_TO_PT
   const contentHeightPx = contentHeightPt / PX_TO_PT
-  const layouts = pou.rungs.map((rung) => layoutRung(rung, pou.labels))
+  const layouts = pou.rungs.map((rung) => layoutRungOrStored(rung, pou.labels))
+  const commentWidth = commentWidthPx(ldRowCanvasWidthPx(contentWidthPx, ldPouScale(layouts, contentWidthPx, mode)))
   const inputs = pou.rungs.map((rung, index) => ({
     layout: layouts[index],
-    headerPx: commentHeightPx(wrapCommentLines(rung.comment, commentWidthPx(ldRowCanvasWidthPx(contentWidthPx, 1)))),
+    headerPx: commentHeightPx(wrapCommentLines(rung.comment, commentWidth)),
   }))
   const plan = planLadderPou(inputs, contentWidthPx, contentHeightPx, mode)
   const blocks = pou.rungs.map((rung, index) =>

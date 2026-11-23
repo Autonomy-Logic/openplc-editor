@@ -128,6 +128,16 @@ function planRung(
 }
 
 /**
+ * The scale most rungs of a POU print at: 1 when its widest rung fits, else the scale that fits it, no lower than 0.8
+ * in Normal mode and with no floor in Scale to fit.
+ */
+export function ldPouScale(layouts: readonly RungLayout[], contentWidthPx: number, mode: PrintRenderMode): number {
+  const widest = Math.max(0, ...layouts.map(ldPrintedWidthPx))
+  const fit = widest <= 0 ? 1 : Math.min(1, contentWidthPx / widest)
+  return mode === 'scale-to-fit' ? fit : Math.max(LD_MIN_POU_SCALE, fit)
+}
+
+/**
  * How an LD POU prints in a content box (px). Normal: one scale for every rung, 1 when the widest rung fits, else down
  * to 0.8; a rung still too wide wraps between top-level segments onto lettered rows. Scale to fit: one scale fitting the
  * widest rung, no floor, no wrap. In both, a rung with a part too wide for a row, or taller than the page, is scaled
@@ -139,9 +149,11 @@ export function planLadderPou(
   contentHeightPx: number,
   mode: PrintRenderMode,
 ): LdPrintPlan {
-  const widest = Math.max(0, ...rungs.map((rung) => ldPrintedWidthPx(rung.layout)))
-  const fit = widest <= 0 ? 1 : Math.min(1, contentWidthPx / widest)
-  const pouScale = mode === 'scale-to-fit' ? fit : Math.max(LD_MIN_POU_SCALE, fit)
+  const pouScale = ldPouScale(
+    rungs.map((rung) => rung.layout),
+    contentWidthPx,
+    mode,
+  )
   const wrap = mode !== 'scale-to-fit'
   return {
     pouScale,

@@ -69,6 +69,16 @@ describe('POU screen: variables first', () => {
     fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: /Delete variable/ }))
     expect(variables('Main')).toHaveLength(3)
 
+    // A key on a cell's dropdown or button belongs to that control, not to the row shortcuts.
+    const firstRow = screen.getAllByRole('row').filter((row) => row.id !== '')[0]
+    fireEvent.click(firstRow)
+    const control = firstRow.querySelector('button')
+    if (control === null) throw new Error('the row holds no dropdown or button')
+    fireEvent.keyDown(control, { key: 'Delete' })
+    expect(variables('Main')).toHaveLength(3)
+    fireEvent.keyDown(control, { key: 'Enter' })
+    expect(variables('Main')).toHaveLength(3)
+
     debugging()
     expect(screen.getByLabelText<HTMLButtonElement>('Add variable').disabled).toBe(true)
   })

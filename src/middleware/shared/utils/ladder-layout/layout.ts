@@ -1006,3 +1006,35 @@ export function rungLayoutDiffers(rung: RungLadderState, layout: RungLayout, tol
     )
   })
 }
+
+/** The layout of a rung as it is stored: every node where it already is, no labels, one segment, nothing shifted. */
+function storedRungLayout(rung: RungLadderState): RungLayout {
+  const nodes = new Map(rung.nodes.map((node) => [node.id, currentGeometry(node)] as const))
+  const width = rung.defaultBounds[0] ?? 0
+  const height = rung.defaultBounds[1] ?? 0
+  const rightRail = rung.nodes.find((node) => node.type === 'powerRail' && node.id.startsWith('right-rail'))
+  return {
+    rungId: rung.id,
+    nodes,
+    labels: new Map(),
+    size: { width, height },
+    mainWireY: height / 2,
+    rightRailId: rightRail?.id,
+    trailingOutputIds: [],
+    segments: [{ nodeIds: rung.nodes.map((node) => node.id), x: 0, width }],
+    parallels: [],
+    branchFillers: [],
+  }
+}
+
+/**
+ * `layoutRung`, or, for a rung the engine cannot read (a node without a handle list, as an import may leave), the rung
+ * where it is stored, so drawing and printing never fail on it.
+ */
+export function layoutRungOrStored(rung: RungLadderState, src: LadderLabelSource): RungLayout {
+  try {
+    return layoutRung(rung, src)
+  } catch {
+    return storedRungLayout(rung)
+  }
+}

@@ -633,12 +633,13 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
     setFiltersOn(!filtersOn)
   }
 
-  /** The row shortcuts: they act on the selected row while the table, not a cell field, has the focus. */
+  /**
+   * The row shortcuts: they act on the selected row only while the table container itself has the focus, never from a
+   * cell's field, dropdown or button, whose own keys they must not take.
+   */
   const handleTableKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const target = event.target
     if (isEditingLocked || editorVariables.display !== 'table') return
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
-    if (target instanceof HTMLElement && target.isContentEditable) return
+    if (event.target !== event.currentTarget) return
     const selected = parseInt(editorVariables.selectedRow)
     if (event.key === 'Enter') handleCreateVariable({ position: event.shiftKey ? 'above' : 'below' })
     else if (event.altKey && event.key === 'ArrowUp' && selected > 0) handleRearrangeVariables(-1)

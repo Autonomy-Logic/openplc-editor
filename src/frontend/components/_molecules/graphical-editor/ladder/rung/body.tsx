@@ -23,7 +23,7 @@ import type { PLCVariable } from '../../../../../../middleware/shared/ports/type
 import {
   displayShift,
   LADDER_STYLE,
-  layoutRung,
+  layoutRungOrStored,
   pouLabelSource,
   presentPou,
   rungPresentation,
@@ -163,7 +163,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   const canvas = useLadderPouCanvas()
   const labelSource = useLadderLabelSource(pouName, canvas?.labelSource)
   const layout = useMemo(
-    () => canvas?.layouts.get(rung) ?? layoutRung(rung, labelSource),
+    () => canvas?.layouts.get(rung) ?? layoutRungOrStored(rung, labelSource),
     [canvas?.layouts, rung, labelSource],
   )
   const presentation = useMemo(

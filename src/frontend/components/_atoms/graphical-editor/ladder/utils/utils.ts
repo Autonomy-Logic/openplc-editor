@@ -172,7 +172,12 @@ export const getBlockSize = (
   }
 }
 
-export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean) => {
+/**
+ * A block variant with EN/ENO added when execution control is on. It is forced on, and locked, when the first input
+ * or output cannot take BOOL; `executionControl` undefined (a block being placed) turns it on unless both are exactly
+ * BOOL, so a block on ANY pins starts with EN/ENO and the user may turn it off.
+ */
+export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean | undefined) => {
   const inputConnectors = blockInputVariables(variantLib.variables).map((variable) => ({
     name: variable.name,
     type: variable.type,
@@ -188,12 +193,16 @@ export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, exe
     outputConnectors.length === 0 ||
     !validateVariableType('BOOL', outputConnectors[0].type.value.toUpperCase()).isValid
 
+  const exactlyBool =
+    inputConnectors[0]?.type.value.toUpperCase() === 'BOOL' && outputConnectors[0]?.type.value.toUpperCase() === 'BOOL'
+  const wanted = (executionControl ?? !exactlyBool) || mustHaveExecutionControlEnabled
+
   const existingEN = variantLib.variables.find((v) => v.name === 'EN')
   const existingENO = variantLib.variables.find((v) => v.name === 'ENO')
   const others = variantLib.variables.filter((v) => v.name !== 'EN' && v.name !== 'ENO')
 
   let newVariables = others
-  if (executionControl || mustHaveExecutionControlEnabled) {
+  if (wanted) {
     const EN = existingEN || {
       name: 'EN',
       class: 'input',
@@ -209,7 +218,7 @@ export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, exe
 
   return {
     variant: { ...variantLib, variables: newVariables },
-    executionControl: executionControl || mustHaveExecutionControlEnabled,
+    executionControl: wanted,
     lockExecutionControl: mustHaveExecutionControlEnabled,
   }
 }

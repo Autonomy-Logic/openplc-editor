@@ -1,7 +1,7 @@
 import {
   labelSourceSignature,
   type LadderLabelSource,
-  layoutRung,
+  layoutRungOrStored,
   pouLabelSource,
   type PouPresentation,
   presentPou,
@@ -54,7 +54,7 @@ export function useLadderPouCanvasValue(
 ): LadderPouCanvas {
   const labelSource = useLadderLabelSource(pouName)
   const layouts = useMemo(
-    () => new Map(rungs.map((rung) => [rung, layoutRung(rung, labelSource)] as const)),
+    () => new Map(rungs.map((rung) => [rung, layoutRungOrStored(rung, labelSource)] as const)),
     [rungs, labelSource],
   )
   const presentation = useMemo(() => presentPou([...layouts.values()], viewportWidthPx), [layouts, viewportWidthPx])

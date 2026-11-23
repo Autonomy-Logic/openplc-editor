@@ -23,7 +23,7 @@ import { useVersionControl } from '../../../../../../middleware/shared/providers
 import {
   applyRungLayout,
   LADDER_PALETTE,
-  layoutRung,
+  layoutRungOrStored,
   pouLabelSource,
   type RungLayout,
 } from '../../../../../../middleware/shared/utils/ladder-layout'
@@ -194,7 +194,7 @@ function LadderRungCell({
   const palette = cell.isDark ? LADDER_PALETTE.dark : LADDER_PALETTE.light
   const laidOut = useMemo(() => {
     const rung = rungOf(flow)
-    const layout = layoutRung(rung, labelSource)
+    const layout = layoutRungOrStored(rung, labelSource)
     return { layout, flow: { ...flow, nodes: applyRungLayout(rung, layout).nodes } }
   }, [flow, labelSource])
   const view = useMemo(() => ({ layout: laidOut.layout, labelSource, palette }), [laidOut, labelSource, palette])

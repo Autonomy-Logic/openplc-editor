@@ -7,7 +7,7 @@ export {
   pouLabelSource,
   resolveLocationLabel,
 } from './labels'
-export { applyRungLayout, EMPTY_NAME_PLACEHOLDER, layoutRung, rungLayoutDiffers } from './layout'
+export { applyRungLayout, EMPTY_NAME_PLACEHOLDER, layoutRung, layoutRungOrStored, rungLayoutDiffers } from './layout'
 export { legacyBlockSize, type LegacySizableVariant } from './legacy/block-size'
 export { findRailId, getBranch, hasBranchOnHandle } from './legacy/branches'
 export { type LegacyHandle, type LegacyPoint } from './legacy/node-access'
