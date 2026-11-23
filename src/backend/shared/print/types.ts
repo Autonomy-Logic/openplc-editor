@@ -82,6 +82,8 @@ export type ContentBlock = {
   widthPt: number
   heightPt: number
   ops: DrawOp[]
+  /** Space left below the block before the next one; the page flow's default gap when absent. */
+  gapAfterPt?: number
 }
 
 // ---------------------------------------------------------------------------

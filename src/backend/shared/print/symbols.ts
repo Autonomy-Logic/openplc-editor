@@ -1,46 +1,10 @@
 /**
- * Ladder/FBD symbol geometry and SVG path data, duplicated (not imported)
- * from the on-screen icons — `backend/shared` cannot depend on the
- * `components` layer. Keep these in sync with
- * `frontend/assets/icons/flow/{Coil,Contact}.tsx` and
- * `frontend/components/_atoms/graphical-editor/fbd/svg/*.tsx` by hand.
+ * FBD symbol geometry and SVG path data, duplicated (not imported) from the on-screen icons: `backend/shared` cannot
+ * depend on the `components` layer. Keep in sync with `frontend/components/_atoms/graphical-editor/fbd/svg/*.tsx`.
+ * Ladder symbols come from the layout engine (`ladder-layout/symbols.ts`).
  */
 
 export const INK_COLOR = '#030303'
-export const BRAND_COLOR = '#0464FB'
-
-// ---------------------------------------------------------------------------
-// Ladder — coil / contact
-// ---------------------------------------------------------------------------
-
-export const COIL_BLOCK_WIDTH = 28
-export const COIL_BLOCK_HEIGHT = 24
-export const COIL_ICON_VIEWBOX = { width: 34, height: 28 }
-
-export const CONTACT_BLOCK_WIDTH = 24
-export const CONTACT_BLOCK_HEIGHT = 24
-export const CONTACT_ICON_VIEWBOX = { width: 28, height: 28 }
-
-/** The two coil "parentheses" paths, `)( ` glyph, from Coil.tsx (viewBox 0 0 34 28). */
-export const COIL_PARENTHESES_PATHS = [
-  'M27 0C27.5915 1.20462 28.0845 2.35047 28.5117 3.40818C28.9718 4.4659 29.3333 5.55299 29.6291 6.64008C29.9249 7.75656 30.1549 8.90241 30.2864 10.0777C30.4507 11.2823 30.5164 12.6044 30.5164 14.0147C30.5164 15.4544 30.4507 16.7765 30.2864 17.9517C30.1549 19.1563 29.9249 20.3022 29.6291 21.3893C29.3333 22.4764 28.9718 23.5635 28.5117 24.6212C28.0845 25.6789 27.5915 26.8248 27 28H29.5305C30.9108 25.8258 32.0282 23.5341 32.8169 21.1542C33.6056 18.8038 34 16.4239 34 14.0147C34 11.6348 33.6056 9.25498 32.8169 6.87513C32.0282 4.49528 30.9108 2.20357 29.5305 0H27Z',
-  'M7 0C6.40845 1.20462 5.91549 2.35047 5.48826 3.40818C5.02817 4.4659 4.66667 5.55299 4.37089 6.64008C4.07512 7.75656 3.84507 8.90241 3.71361 10.0777C3.5493 11.2823 3.48357 12.6044 3.48357 14.0147C3.48357 15.4544 3.5493 16.7765 3.71361 17.9517C3.84507 19.1563 4.07512 20.3022 4.37089 21.3893C4.66667 22.4764 5.02817 23.5635 5.48826 24.6212C5.91549 25.6789 6.40845 26.8248 7 28H4.46948C3.0892 25.8258 1.97183 23.5341 1.1831 21.1542C0.394366 18.8038 0 16.4239 0 14.0147C0 11.6348 0.394366 9.25498 1.1831 6.87513C1.97183 4.49528 3.0892 2.20357 4.46948 0H7Z',
-] as const
-
-/** Resolved endpoints of Coil.tsx's negation `<line>` (originally CSS-matrix-transformed), in the 34x28 viewBox space. */
-export const COIL_NEGATION_LINE = { x1: 10.2366, y1: 20.4967, x2: 24.3787, y2: 6.3545 }
-
-/** Resolved endpoints of Contact.tsx's negation `<line>`, in the 28x28 viewBox space. */
-export const CONTACT_NEGATION_LINE = { x1: 4.4274, y1: 22.9004, x2: 22.8122, y2: 4.5156 }
-
-export {
-  asCoilVariant,
-  asContactVariant,
-  COIL_VARIANT_GLYPHS,
-  type CoilVariant,
-  CONTACT_VARIANT_GLYPHS,
-  type ContactVariant,
-} from '@root/middleware/shared/utils/ladder-layout/symbols'
 
 // ---------------------------------------------------------------------------
 // FBD — connector / continuation

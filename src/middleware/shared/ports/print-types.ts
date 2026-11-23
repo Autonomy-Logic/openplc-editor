@@ -7,6 +7,7 @@
  * so the engine's own call sites are unaffected.
  */
 
+import type { LadderLabelSource } from '../utils/ladder-layout/labels'
 import type { FBDRungState, RungLadderState, VariableClass, VariableFlag } from './types'
 
 // ---------------------------------------------------------------------------
@@ -75,7 +76,7 @@ export type PrintTextKind = 'st' | 'il' | 'cpp' | 'python'
 // ---------------------------------------------------------------------------
 
 export type PrintPou =
-  | { name: string; kind: 'ld'; rungs: RungLadderState[]; variables: PrintVar[] }
+  | { name: string; kind: 'ld'; rungs: RungLadderState[]; variables: PrintVar[]; labels: LadderLabelSource }
   | { name: string; kind: 'fbd'; rung: FBDRungState; variables: PrintVar[] }
   | { name: string; kind: PrintTextKind; lines: ColoredLine[]; variables: PrintVar[] }
 

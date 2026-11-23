@@ -426,6 +426,14 @@ it reports goes through `toCanonicalPosition` before reaching rung state, copyca
 they stand for (`withTransientShifts`), and hit-tests compare displayed positions with the pointer. The shifts and the
 editor width are never stored.
 
+**LD print.** The PDF draws Ladder from the same engine (`backend/shared/print/ladder-painter.ts`, with the POU's
+`LadderLabelSource` carried in the `ld` `PrintPou`), in `LADDER_PALETTE.paper`: one content block per rung (comment
+lines wrapped, number, rows) so pages break only between rungs, then the End row. `ladder-print-plan.ts` picks the
+scale: 100% when the widest rung fits, else one POU scale down to 80%, then a rung wraps between top-level segments
+onto rows joined by lettered markers (A..Z, AA), its outputs on the last row; a rung with a part too wide for a row,
+or taller than the page, is scaled alone. Gutter, rails, number and comment use the POU scale, so the rails of every
+rung meet. Scale to fit keeps one scale for the widest rung, no floor, no wrap.
+
 ### Compilation Pipeline
 
 Orchestrated by `CompilerModule` (`src/backend/editor/compiler/compiler-module.ts`):
