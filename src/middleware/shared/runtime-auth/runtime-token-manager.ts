@@ -73,8 +73,8 @@ export interface RuntimeTokenManager {
   /**
    * Run an authenticated operation with the current token. If the result is
    * unauthorized, refresh once and retry exactly once with the new token.
-   * `isUnauthorized` lets the caller classify its own transport's result shape
-   * (HTTP 401/403, etc.) without this module knowing the transport.
+   * `isUnauthorized` lets the caller classify its own transport's result shape;
+   * it should match only an expired or revoked token (`isSessionExpiredStatus`).
    */
   withAuth<T>(operation: (token: string) => Promise<T>, isUnauthorized: (result: T) => boolean): Promise<T>
   /**
@@ -89,21 +89,31 @@ export interface RuntimeTokenManager {
    */
   onSessionEnded(callback: () => void): () => void
   /**
-   * Run a change to the signed-in account. On success adopt the changed credentials and, when the password changed,
-   * sign in again with them. A re-authentication that runs meanwhile also tries the new credentials.
+   * Run a change to the signed-in account with the current token, re-authenticating and retrying once when the
+   * result is unauthorized. On success adopt the changed credentials and, when the password changed, sign in again
+   * with them. A refresh requested meanwhile waits for the change to settle and then signs in once, with the
+   * credentials in force afterwards.
    */
   changeOwnCredentials<T>(
     change: RuntimeCredentialChange,
-    operation: () => Promise<T>,
+    operation: (token: string) => Promise<T>,
+    isUnauthorized: (result: T) => boolean,
     succeeded: (result: T) => boolean,
   ): Promise<T>
+}
+
+/** Whether a runtime reply means the token expired or was revoked. Any other refusal, 403 included, is final. */
+export function isSessionExpiredStatus(statusCode: number | undefined): boolean {
+  return statusCode === 401
 }
 
 export function createRuntimeTokenManager(transport: TokenLoginTransport): RuntimeTokenManager {
   let token: string | null = null
   let credentials: RuntimeCredentials | null = null
-  let pendingCredentials: RuntimeCredentials | null = null
   let refreshInFlight: Promise<boolean> | null = null
+  let loginInFlight: Promise<boolean> | null = null
+  let changesInFlight = 0
+  let changeChain: Promise<void> = Promise.resolve()
   const subscribers = new Set<(newToken: string) => void>()
   const sessionEndedSubscribers = new Set<() => void>()
 
@@ -127,7 +137,6 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
   function clear(): void {
     token = null
     credentials = null
-    pendingCredentials = null
   }
 
   function adoptToken(fresh: string): void {
@@ -141,19 +150,32 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
   }
 
   async function reauthenticate(current: RuntimeCredentials): Promise<boolean> {
-    const pending = pendingCredentials
-    const candidates = pending ? [pending, current] : [current]
-    for (const candidate of candidates) {
-      const result = await transport.login(candidate)
-      if (result.success && result.token) {
-        credentials = candidate
-        adoptToken(result.token)
-        return true
-      }
-      if (result.statusCode !== 401) return false
+    const result = await transport.login(current)
+    if (credentials !== current) return false
+    if (result.success && result.token) {
+      adoptToken(result.token)
+      return true
     }
-    if (credentials === current) endSession()
+    if (result.statusCode === 401) endSession()
     return false
+  }
+
+  /** One sign-in with the credentials in force now; concurrent callers share it. */
+  function signIn(): Promise<boolean> {
+    if (loginInFlight) return loginInFlight
+    const current = credentials
+    if (!current) return Promise.resolve(false)
+    const pending = reauthenticate(current)
+      .catch(() => false)
+      .finally(() => {
+        loginInFlight = null
+      })
+    loginInFlight = pending
+    return pending
+  }
+
+  async function settleChanges(): Promise<void> {
+    while (changesInFlight > 0) await changeChain
   }
 
   function refresh(): Promise<boolean> {
@@ -162,39 +184,47 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
     if (refreshInFlight) return refreshInFlight
     if (!credentials) return Promise.resolve(false)
 
-    const pending = reauthenticate(credentials)
-      .catch(() => false)
-      .finally(() => {
-        refreshInFlight = null
-      })
+    const pending = (changesInFlight > 0 ? settleChanges().then(signIn) : signIn()).finally(() => {
+      refreshInFlight = null
+    })
 
     refreshInFlight = pending
     return pending
   }
 
+  async function runChange<T>(
+    change: RuntimeCredentialChange,
+    operation: (token: string) => Promise<T>,
+    isUnauthorized: (result: T) => boolean,
+    succeeded: (result: T) => boolean,
+  ): Promise<{ result: T; signInAgain: boolean }> {
+    const before = credentials
+    let result = await operation(token ?? '')
+    if (isUnauthorized(result) && (await signIn())) result = await operation(token ?? '')
+    if (!succeeded(result) || !before || credentials !== before) return { result, signInAgain: false }
+    credentials = { username: change.username ?? before.username, password: change.password ?? before.password }
+    return { result, signInAgain: change.password !== undefined }
+  }
+
   async function changeOwnCredentials<T>(
     change: RuntimeCredentialChange,
-    operation: () => Promise<T>,
+    operation: (token: string) => Promise<T>,
+    isUnauthorized: (result: T) => boolean,
     succeeded: (result: T) => boolean,
   ): Promise<T> {
-    const before = credentials
-    const next = before
-      ? { username: change.username ?? before.username, password: change.password ?? before.password }
-      : null
-    pendingCredentials = next
-    try {
-      const result = await operation()
-      if (succeeded(result) && next && (credentials === before || credentials === next)) {
-        credentials = next
-        if (change.password !== undefined) {
-          if (refreshInFlight) await refreshInFlight
-          await refresh()
-        }
-      }
-      return result
-    } finally {
-      if (pendingCredentials === next) pendingCredentials = null
-    }
+    changesInFlight += 1
+    const run = changeChain.then(() => runChange(change, operation, isUnauthorized, succeeded))
+    changeChain = run.then(
+      () => {
+        changesInFlight -= 1
+      },
+      () => {
+        changesInFlight -= 1
+      },
+    )
+    const { result, signInAgain } = await run
+    if (signInAgain) await refresh()
+    return result
   }
 
   async function withAuth<T>(
