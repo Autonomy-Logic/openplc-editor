@@ -4,6 +4,7 @@ import {
   formatPlacementShortcut,
   getPlacementElementForShortcut,
   getPlacementElements,
+  ladderPlacementNode,
   getShortcutDigit,
   getShortcutModifier,
   isEditableEventTarget,
@@ -25,7 +26,16 @@ const key = (code: string, overrides: Partial<ShortcutKeyEvent> = {}): ShortcutK
 
 describe('placement-elements', () => {
   it('lists the ladder elements in menu order', () => {
-    expect(getPlacementElements('ld').map((e) => e.id)).toEqual(['contact', 'coil', 'block'])
+    expect(getPlacementElements('ld').map((e) => e.id)).toEqual([
+      'contact',
+      'contact-negated',
+      'contact-rising',
+      'contact-falling',
+      'coil',
+      'coil-set',
+      'coil-reset',
+      'block',
+    ])
     expect(getPlacementElements('ld')).toBe(LADDER_PLACEMENT_ELEMENTS)
   })
 
@@ -105,7 +115,11 @@ describe('placement-elements', () => {
       expect(getPlacementElementForShortcut('ld', key('Digit1'), 'alt')?.id).toBe('contact')
       expect(getPlacementElementForShortcut('ld', key('Digit2'), 'alt')?.id).toBe('coil')
       expect(getPlacementElementForShortcut('ld', key('Digit3'), 'alt')?.id).toBe('block')
-      expect(getPlacementElementForShortcut('ld', key('Digit4'), 'alt')).toBeUndefined()
+      expect(getPlacementElementForShortcut('ld', key('Digit4'), 'alt')?.id).toBe('contact-negated')
+      expect(getPlacementElementForShortcut('ld', key('Digit8'), 'alt')?.id).toBe('coil-reset')
+      expect(getPlacementElementForShortcut('ld', key('Digit9'), 'alt')).toBeUndefined()
+      expect(ladderPlacementNode('coil-set')).toEqual({ type: 'coil', variant: 'set' })
+      expect(ladderPlacementNode('contact-falling')).toEqual({ type: 'contact', variant: 'fallingEdge' })
     })
 
     it('maps the FBD shortcuts', () => {

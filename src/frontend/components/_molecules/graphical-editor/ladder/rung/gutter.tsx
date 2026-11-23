@@ -12,7 +12,8 @@ type RungGutterProps = {
   /** Y of the rung's main wire inside the rung container. */
   wireTop: number
   dragListeners?: SyntheticListenerMap
-  onSelect?: () => void
+  /** A click on the gutter; Shift held adds the rung to the selection. */
+  onSelect?: (event: MouseEvent<HTMLDivElement>) => void
   onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void
 }
 
@@ -27,6 +28,7 @@ export const RungGutter = ({ label, selected, wireTop, dragListeners, onSelect, 
       className={cn(
         'absolute bottom-0 left-0 top-0 select-none',
         dragListeners ? 'cursor-grab active:cursor-grabbing' : onSelect && 'cursor-pointer',
+        !selected && (dragListeners || onSelect) && 'hover:bg-brand-light dark:hover:bg-brand-medium-dark',
       )}
       style={{ width: LADDER_STYLE.gutter - 1, background: selected ? palette.brand : undefined }}
       onClick={onSelect}

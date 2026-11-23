@@ -1,4 +1,5 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
+import { EMPTY_LABEL_SOURCE, layoutRungOrStored } from '@root/middleware/shared/utils/ladder-layout'
 import { displayShift, hasBranchOnHandle, type PouPresentation } from '@root/middleware/shared/utils/ladder-layout'
 import type { Node, ReactFlowInstance } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
@@ -417,7 +418,63 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
     }
   })
 
-  return placeholderNodes
+  return withoutDuplicateMarkers(rung, placeholderNodes)
+}
+
+/** The serial marker of `position` related to node `nodeId`, if any. */
+const serialMarker = (nodes: readonly Node[], nodeId: string, position: 'left' | 'right'): Node | undefined =>
+  nodes.find((node) => {
+    if (node.type !== 'placeholder' || node.id.startsWith('placeholder_handle_')) return false
+    const data = node.data as { position?: string; relatedNode?: { id: string } }
+    return data.position === position && data.relatedNode?.id === nodeId
+  })
+
+/**
+ * The markers with one diamond per insertion point: when a node's only wire into its main input comes from the main
+ * output of a node that offers a right marker, the same point in the series, one of the two is dropped: after the left rail, the node's left marker, the rail's
+ * taking its place so it sits as far from the element as its other markers; else the source's right marker, the node's
+ * left marker moving halfway between the two so it is as far from both elements. No marker follows a coil, one on a
+ * block output included. Both stay before the right rail and the outputs drawn against it, which sit far from the
+ * element before them.
+ */
+const withoutDuplicateMarkers = (rung: RungLadderState, nodes: Node[]): Node[] => {
+  const dropped = new Set<string>()
+  const moved = new Map<string, { x: number; y: number }>()
+  for (const coil of rung.nodes) {
+    if (coil.type !== 'coil') continue
+    const after = serialMarker(nodes, coil.id, 'right')
+    if (after !== undefined) dropped.add(after.id)
+  }
+  const atRail = new Set(layoutRungOrStored(rung, EMPTY_LABEL_SOURCE).trailingOutputIds)
+  for (const node of rung.nodes) {
+    if (atRail.has(node.id) || node.id.startsWith('right-rail')) continue
+    const left = serialMarker(nodes, node.id, 'left')
+    if (left === undefined) continue
+    const input = (node.data as BasicNodeData).inputConnector?.id
+    const incoming = rung.edges.filter(
+      (edge) => edge.target === node.id && (input === undefined || edge.targetHandle === input),
+    )
+    if (incoming.length !== 1) continue
+    const source = rung.nodes.find((candidate) => candidate.id === incoming[0].source)
+    const output = (source?.data as BasicNodeData | undefined)?.outputConnector?.id
+    if (output !== undefined && incoming[0].sourceHandle !== output) continue
+    const right = serialMarker(nodes, incoming[0].source, 'right')
+    if (right === undefined) continue
+    if (incoming[0].source.startsWith('left-rail')) {
+      dropped.add(left.id)
+      moved.set(right.id, left.position)
+    } else {
+      dropped.add(right.id)
+      moved.set(left.id, { x: (left.position.x + right.position.x) / 2, y: left.position.y })
+    }
+  }
+  if (dropped.size === 0) return nodes
+  return nodes
+    .filter((node) => !dropped.has(node.id))
+    .map((node) => {
+      const position = moved.get(node.id)
+      return position === undefined ? node : { ...node, position: { ...position } }
+    })
 }
 
 /**

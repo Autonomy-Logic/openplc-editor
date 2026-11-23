@@ -13,7 +13,12 @@
     },
     "elements": {
       "contact": "Contact",
+      "contact-negated": "Negated Contact",
+      "contact-rising": "Rising Edge Contact",
+      "contact-falling": "Falling Edge Contact",
       "coil": "Coil",
+      "coil-set": "Set Coil",
+      "coil-reset": "Reset Coil",
       "block": "Block",
       "input-variable": "Input Variable",
       "output-variable": "Output Variable",

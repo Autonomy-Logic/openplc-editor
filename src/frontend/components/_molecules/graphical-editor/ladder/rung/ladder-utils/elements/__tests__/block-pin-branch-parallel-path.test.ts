@@ -64,12 +64,30 @@ const nodeNamed = (name: string): Node => {
   return found
 }
 
+/** The marker at `position` of the node named `name`; right of it is also the left marker of the node it feeds. */
 const related =
   (name: string, position: 'left' | 'right' | 'bottom'): Marker =>
-  (placeholder) =>
-    placeholder.data.position === position &&
-    placeholder.data.relatedNode !== undefined &&
-    variableName(placeholder.data.relatedNode.data) === name
+  (placeholder) => {
+    const relatedNode = placeholder.data.relatedNode
+    if (relatedNode === undefined) return false
+    if (placeholder.data.position === position && variableName(relatedNode.data) === name) return true
+    if (
+      position !== 'right' ||
+      placeholder.data.position !== 'left' ||
+      placeholder.id.startsWith('placeholder_handle_')
+    )
+      return false
+    const source = nodeNamed(name)
+    const output = (source.data.outputConnector as { id?: string } | undefined)?.id
+    const input = (relatedNode.data.inputConnector as { id?: string } | undefined)?.id
+    return rung().edges.some(
+      (edge) =>
+        edge.source === source.id &&
+        edge.target === relatedNode.id &&
+        edge.sourceHandle === output &&
+        edge.targetHandle === input,
+    )
+  }
 
 const leftRail: Marker = (placeholder) => placeholder.data.relatedNode?.id.startsWith('left-rail') ?? false
 
@@ -267,6 +285,42 @@ describe('Ladder: contacts added on the parallel path of a block pin branch', ()
         textWidthPx('???', LADDER_TYPOGRAPHY.nameSizePx),
       )
     }
+  })
+
+  it('keeps every insertion point around a block and its pin network, each with one marker on its own wire', () => {
+    blockRung('CTU', 'CTU0')
+    drop(pinOf('CTU0', 'R'), contact, 'r1')
+
+    const markers = renderPlaceholderElements(rung())
+      .filter((node) => node.type === 'placeholder' && !node.id.startsWith('placeholder_handle_'))
+      .map((node) => {
+        const data = node.data as { relatedNode?: Node; position?: string }
+        const name =
+          data.relatedNode?.type === 'powerRail' ? 'rail' : (variableName(data.relatedNode?.data ?? {}) ?? '')
+        return { at: `${name}:${data.position ?? ''}`, y: node.position.y }
+      })
+    const yOf = (at: string) => markers.find((marker) => marker.at === at)?.y
+    // Main wire: the rail's start marker, one marker between a and the block, both sides of the gap before the coil.
+    expect(markers.map((marker) => marker.at).sort()).toEqual(
+      ['CTU0:left', 'CTU0:right', 'qu:left', 'r1:left', 'r1:right', 'rail:right'].sort(),
+    )
+    expect(yOf('rail:right')).toBe(yOf('CTU0:left'))
+    // The R network keeps its own markers on its own wire.
+    expect(yOf('r1:left')).toBe(yOf('r1:right'))
+    expect(yOf('r1:left')).not.toBe(yOf('rail:right'))
+  })
+
+  it('offers no marker after a coil on a block output, as after any coil', () => {
+    blockRung('CTUD', 'CTUD0')
+    drop(pinOf('CTUD0', 'QD'), coil, 'qd')
+
+    const after = renderPlaceholderElements(rung()).filter(
+      (node) =>
+        node.type === 'placeholder' &&
+        (node.data as { position?: string }).position === 'right' &&
+        (node.data as { relatedNode?: Node }).relatedNode?.type === 'coil',
+    )
+    expect(after).toEqual([])
   })
 
   it('builds (i AND j) OR k on CTUD.LD (H02 steps 1-6)', () => {

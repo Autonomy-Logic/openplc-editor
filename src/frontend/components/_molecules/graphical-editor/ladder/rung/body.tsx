@@ -11,6 +11,7 @@ import { parseInt } from 'lodash'
 import {
   DragEvent,
   MouseEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type SyntheticEvent,
   useEffect,
@@ -45,7 +46,11 @@ import {
   findPlaceholderWithinRadius,
   selectOnlyPlaceholder,
 } from '../../../../../utils/graphical/ladder-placeholder-snap'
-import { isLadderPlacementElement, PLACEMENT_TARGET_ATTRIBUTE } from '../../../../../utils/graphical/placement-elements'
+import {
+  isLadderPlacementElement,
+  ladderPlacementNode,
+  PLACEMENT_TARGET_ATTRIBUTE,
+} from '../../../../../utils/graphical/placement-elements'
 import { syncNodesWithVariables } from '../../../../../utils/graphical/sync-nodes-with-variables'
 import { customNodeTypes } from '../../../../_atoms/graphical-editor/ladder'
 import { ladderEdgeTypes, ladderRouteEdgeData } from '../../../../_atoms/graphical-editor/ladder/route-edge'
@@ -71,6 +76,7 @@ import {
 import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
 import { useLadderLabelSource, useLadderPouCanvas } from './pou-canvas'
 import { computeRungDebugStates, poweredBlockIds, type RungDebugStates } from './rung-debug-states'
+import { RungMenu, type RungMenuItem } from './rung-menu'
 import { isSameSelection } from './selection'
 
 /** Whether the related target or one of its ancestors is inside the ladder viewport. */
@@ -101,6 +107,24 @@ type RungBodyProps = {
   className?: string
   nodeDivergences?: string[]
   isDebuggerActive?: boolean
+}
+
+/** The modifiers a contact or coil offers in its right-click menu, in menu order. */
+const ELEMENT_MODIFIERS: Record<'contact' | 'coil', readonly { variant: string; label: string }[]> = {
+  contact: [
+    { variant: 'default', label: 'Normally open' },
+    { variant: 'negated', label: 'Negated' },
+    { variant: 'risingEdge', label: 'Rising edge' },
+    { variant: 'fallingEdge', label: 'Falling edge' },
+  ],
+  coil: [
+    { variant: 'default', label: 'Normal' },
+    { variant: 'negated', label: 'Negated' },
+    { variant: 'set', label: 'Set' },
+    { variant: 'reset', label: 'Reset' },
+    { variant: 'risingEdge', label: 'Rising edge' },
+    { variant: 'fallingEdge', label: 'Falling edge' },
+  ],
 }
 
 /** Stroke width of an LD wire, and of one drawn in the energized colour. */
@@ -150,6 +174,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   const placement = useGraphicalPlacement()
   const armedElement = placement?.language === 'ld' && !isDebuggerActive ? placement.armed : null
   const [placementHover, setPlacementHover] = useState(false)
+  const [elementMenu, setElementMenu] = useState<{ at: { x: number; y: number }; nodeId: string } | null>(null)
   const swallowUntilRef = useRef(0)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
@@ -359,6 +384,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     newNodeType: string = 'mockNode',
     blockType: string | undefined,
     sourceRung: RungLadderState = rungLocal,
+    variant?: string,
   ) => {
     const { libraries, ladderFlows } = store.getState()
     let pouLibrary = undefined
@@ -424,11 +450,16 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }
     }
 
-    const { nodes, edges, newNode, handleBranches } = addNewElement(
+    const added = addNewElement(
       sourceRung,
       { elementType: newNodeType, blockVariant: pouLibrary },
       pouLabelSource(store.getState().project.data, pouName),
     )
+    const { edges, newNode, handleBranches } = added
+    const nodes =
+      variant === undefined || newNode === undefined
+        ? added.nodes
+        : added.nodes.map((node) => (node.id === newNode.id ? { ...node, data: { ...node.data, variant } } : node))
 
     captureAndPush(pouName)
 
@@ -775,6 +806,35 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     })
   }
 
+  /** A right click on a contact or coil opens its modifier menu; other nodes keep the rung's own right click. */
+  const handleNodeContextMenu = (event: ReactMouseEvent, node: FlowNode) => {
+    if (node.type !== 'contact' && node.type !== 'coil') return
+    event.preventDefault()
+    event.stopPropagation()
+    setElementMenu({ at: { x: event.clientX, y: event.clientY }, nodeId: node.id })
+  }
+
+  /** The modifier menu of the contact or coil `elementMenu` names: each modifier, the current one checked. */
+  const elementMenuItems = (): RungMenuItem[] => {
+    const node = rung.nodes.find((candidate) => candidate.id === elementMenu?.nodeId)
+    if (node === undefined || (node.type !== 'contact' && node.type !== 'coil')) return []
+    const current = typeof node.data.variant === 'string' ? node.data.variant : 'default'
+    return ELEMENT_MODIFIERS[node.type].map(({ variant, label }) => ({
+      label,
+      shortcut: variant === current ? '✓' : '',
+      onSelect: () => {
+        if (variant === current) return
+        captureAndPush(pouName)
+        ladderFlowActions.updateNode({
+          editorName: pouName,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: { ...node, data: { ...node.data, variant } },
+        })
+      },
+    }))
+  }
+
   const handlePlacementPointerDown = (event: ReactPointerEvent) => {
     if (!armedElement || !placement || event.button !== 0) return
     event.preventDefault()
@@ -791,7 +851,8 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     const element = placement.consume()
     if (!element || !isLadderPlacementElement(element)) return
     endPlacementHover()
-    handleAddNode(element, undefined, { ...rungLocal, nodes: selectOnlyPlaceholder(nodes, target.id) })
+    const { type, variant } = ladderPlacementNode(element)
+    handleAddNode(type, undefined, { ...rungLocal, nodes: selectOnlyPlaceholder(nodes, target.id) }, variant)
   }
 
   const swallowAfterPlacement = (event: SyntheticEvent) => {
@@ -844,6 +905,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
                 onNodeDrag: isDebuggerActive ? undefined : onNodeDrag,
                 onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
                 onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
+                onNodeContextMenu: isDebuggerActive ? undefined : handleNodeContextMenu,
 
                 onDragEnter: onDragEnterViewport,
                 onDragLeave: onDragLeaveViewport,
@@ -867,6 +929,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
           </LadderRungViewProvider>
         </div>
       </div>
+      {elementMenu && <RungMenu at={elementMenu.at} items={elementMenuItems()} onClose={() => setElementMenu(null)} />}
     </div>
   )
 }

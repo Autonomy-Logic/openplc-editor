@@ -84,18 +84,21 @@ const HEIGHT = LADDER_STYLE.symH
 const CENTER_X = WIDTH / 2
 const CENTER_Y = HEIGHT / 2
 const CONTACT_HALF = 5
+/** Half the bar gap of an edge contact, wider so its P or N letter stands clear of the bars. */
+const LETTER_CONTACT_HALF = 7.5
 const CONTACT_BRACKET = 3
 const COIL_HALF = 9
 const COIL_ARC_INSET = 4
 const COIL_ARC_BULGE = 2
 /** How far a coil's arcs reach above and below the symbol box, so its letter has room. */
 const COIL_OVERREACH = 2
-const CONTACT_LETTER_SIZE_PX = LADDER_TYPOGRAPHY.nameSizePx - 3
+const CONTACT_LETTER_SIZE_PX = LADDER_TYPOGRAPHY.nameSizePx - 2
 const COIL_LETTER_SIZE_PX = LADDER_TYPOGRAPHY.nameSizePx - 2
 
-const CONTACT_PATHS: readonly string[] = [
-  `M${CENTER_X - CONTACT_HALF - CONTACT_BRACKET} 0 H${CENTER_X - CONTACT_HALF} V${HEIGHT} H${CENTER_X - CONTACT_HALF - CONTACT_BRACKET}`,
-  `M${CENTER_X + CONTACT_HALF + CONTACT_BRACKET} 0 H${CENTER_X + CONTACT_HALF} V${HEIGHT} H${CENTER_X + CONTACT_HALF + CONTACT_BRACKET}`,
+/** The two brackets of a contact whose bars stand `half` px either side of its centre. */
+const contactPaths = (half: number): readonly string[] => [
+  `M${CENTER_X - half - CONTACT_BRACKET} 0 H${CENTER_X - half} V${HEIGHT} H${CENTER_X - half - CONTACT_BRACKET}`,
+  `M${CENTER_X + half + CONTACT_BRACKET} 0 H${CENTER_X + half} V${HEIGHT} H${CENTER_X + half + CONTACT_BRACKET}`,
 ]
 
 const COIL_PATHS: readonly string[] = [
@@ -120,13 +123,9 @@ function geometry(
 /** The geometry of a contact variant: two brackets, a diagonal when negated, and its P/N letter; the wire meets the bars. */
 function contactGeometry(variant: ContactVariant): SymbolGeometry {
   const lines = variant === 'negated' ? [NEGATION_LINE] : []
-  return geometry(
-    CONTACT_PATHS,
-    lines,
-    CENTER_X - CONTACT_HALF,
-    CONTACT_VARIANT_GLYPHS[variant],
-    CONTACT_LETTER_SIZE_PX,
-  )
+  const letter = CONTACT_VARIANT_GLYPHS[variant]
+  const half = letter ? LETTER_CONTACT_HALF : CONTACT_HALF
+  return geometry(contactPaths(half), lines, CENTER_X - half, letter, CONTACT_LETTER_SIZE_PX)
 }
 
 /** The geometry of a coil variant: two arcs, a diagonal when negated, and its S/R/P/N letter; the wire meets the arcs. */
