@@ -110,6 +110,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     ipAddress: null,
     runtimeUpdateInProgress: false,
     runtimeVersion: null,
+    accountRole: null,
     runtimeFeatures: null,
     selectedDevice: null,
     storedCredentials: null,
@@ -202,6 +203,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.plcStatus = null
           runtimeConnection.ipAddress = null
           runtimeConnection.runtimeVersion = null
+          runtimeConnection.accountRole = null
           runtimeConnection.runtimeFeatures = null
           runtimeConnection.selectedDevice = null
           runtimeConnection.storedCredentials = null
@@ -583,6 +585,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setRuntimeAccountRole: (role): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.accountRole = role
+        }),
+      )
+    },
     setRuntimeFeatures: (features): void => {
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
@@ -743,6 +752,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.plcStatus = null
           runtimeConnection.ipAddress = null
           runtimeConnection.runtimeVersion = null
+          runtimeConnection.accountRole = null
           runtimeConnection.runtimeFeatures = null
           runtimeConnection.selectedDevice = null
           runtimeConnection.storedCredentials = null

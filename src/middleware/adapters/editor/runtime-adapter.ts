@@ -182,6 +182,15 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
       }
     },
 
+    async updateOwnAccount(userId: number, params: UpdateUserParams) {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeUpdateOwnAccount(ip, userId, params)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
     async deleteUser(userId: number) {
       try {
         const ip = requireIp()
@@ -282,6 +291,10 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
     onTokenRefreshed(callback: (newToken: string) => void): Unsubscribe {
       const handler = (_event: unknown, newToken: string) => callback(newToken)
       return window.bridge.onRuntimeTokenRefreshed(handler)
+    },
+
+    onSessionEnded(callback: () => void): Unsubscribe {
+      return window.bridge.onRuntimeSessionEnded(() => callback())
     },
 
     async getNetworkInterfaces() {

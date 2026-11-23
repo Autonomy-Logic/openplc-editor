@@ -114,8 +114,7 @@ import type {
 import type { RuntimeHardwareIdResult, RuntimeLicenseSyncResult } from '@root/middleware/shared/ports/runtime-port'
 import type {
   RuntimeCapabilitiesResult,
-  RuntimeUser,
-  RuntimeUserRole,
+  RuntimeWireRole,
   UpdateUserParams,
 } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig, PackageInstallProgress } from '@root/middleware/shared/ports/types'
@@ -132,6 +131,12 @@ import {
   syncRuntimeLicenses,
   withRuntimeLicenseDevKey,
 } from '@root/middleware/shared/utils/licensing'
+import {
+  parseRuntimeJson,
+  parseRuntimeUser,
+  parseRuntimeUserList,
+  runtimeUpdateUserBody,
+} from '@root/middleware/shared/utils/runtime-users/wire'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -430,6 +435,9 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.webContents?.send('runtime:token-refreshed', newToken)
       this.deviceSession.getDebugClient()?.reauth?.(newToken)
     })
+    this.tokens.onSessionEnded(() => {
+      this.mainWindow?.webContents?.send('runtime:session-ended')
+    })
   }
 
   handleBootloaderGetCapabilities = (_event: IpcMainInvokeEvent, ipAddress: string, options?: unknown) => {
@@ -484,38 +492,47 @@ class MainProcessBridge implements MainIpcModule {
     ipAddress: string,
     username: string,
     password: string,
-    role?: RuntimeUserRole,
+    role?: RuntimeWireRole,
   ) => this.runtimeApi.createUser(ipAddress, username, password, role)
 
   handleRuntimeListUsers = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    const res = await this.makeRuntimeApiRequest<RuntimeUser[]>(ipAddress, '/api/get-users-info', (data) => {
-      const parsed: unknown = JSON.parse(data)
-      return Array.isArray(parsed) ? (parsed as RuntimeUser[]) : []
-    })
+    const res = await this.makeRuntimeApiRequest(ipAddress, '/api/get-users-info', (data) =>
+      parseRuntimeUserList(parseRuntimeJson(data)),
+    )
     return res.success ? { success: true, users: res.data } : { success: false, error: res.error }
   }
 
   handleRuntimeWhoAmI = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    const res = await this.makeRuntimeApiRequest<RuntimeUser>(
-      ipAddress,
-      '/api/whoami',
-      (data) => JSON.parse(data) as RuntimeUser,
+    const res = await this.makeRuntimeApiRequest(ipAddress, '/api/whoami', (data) =>
+      parseRuntimeUser(parseRuntimeJson(data)),
     )
-    return res.success ? { success: true, user: res.data } : { success: false, error: res.error }
+    if (!res.success) return { success: false, error: res.error }
+    return res.data ? { success: true, user: res.data } : { success: false, error: 'Unrecognised whoami reply' }
   }
 
-  handleRuntimeUpdateUser = async (
+  private updateRuntimeUser = async (ipAddress: string, userId: number, params: UpdateUserParams) => {
+    const body = JSON.stringify(runtimeUpdateUserBody(params))
+    const res = await this.makeRuntimeApiMutation('PUT', ipAddress, `/api/update-user/${userId}`, body)
+    return res.success ? { success: true } : { success: false, error: res.error }
+  }
+
+  handleRuntimeUpdateUser = (_event: IpcMainInvokeEvent, ipAddress: string, userId: number, params: UpdateUserParams) =>
+    this.updateRuntimeUser(ipAddress, userId, params)
+
+  handleRuntimeUpdateOwnAccount = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
     userId: number,
     params: UpdateUserParams,
   ) => {
-    const body: Record<string, string> = {}
-    if (params.username !== undefined) body.username = params.username
-    if (params.password !== undefined) body.password = params.password
-    if (params.currentPassword !== undefined) body.current_password = params.currentPassword
-    if (params.role !== undefined) body.role = params.role
-    const res = await this.makeRuntimeApiMutation('PUT', ipAddress, `/api/update-user/${userId}`, JSON.stringify(body))
+    const body = JSON.stringify(runtimeUpdateUserBody(params))
+    const res = await this.runtimeApi.makeOwnAccountMutation(
+      params,
+      'PUT',
+      ipAddress,
+      `/api/update-user/${userId}`,
+      body,
+    )
     return res.success ? { success: true } : { success: false, error: res.error }
   }
 
@@ -1043,6 +1060,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:list-users', this.handleRuntimeListUsers)
     this.registerHandle('runtime:whoami', this.handleRuntimeWhoAmI)
     this.registerHandle('runtime:update-user', this.handleRuntimeUpdateUser)
+    this.registerHandle('runtime:update-own-account', this.handleRuntimeUpdateOwnAccount)
     this.registerHandle('runtime:delete-user', this.handleRuntimeDeleteUser)
     this.registerHandle('runtime:login', this.handleRuntimeLogin)
     this.registerHandle('runtime:get-status', this.handleRuntimeGetStatus)

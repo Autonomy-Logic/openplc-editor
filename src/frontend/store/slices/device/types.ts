@@ -1,6 +1,7 @@
 import type { VppPackagePin } from '../../../../backend/shared/types/PLC/devices/configuration'
 import type { DeviceLicenseReport } from '../../../../middleware/shared/ports/device-port'
 import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/ethercat-types'
+import type { RuntimeUserRole } from '../../../../middleware/shared/ports/runtime-port'
 import type {
   BoardInfo,
   CommunicationPort,
@@ -100,6 +101,8 @@ export type RuntimeConnection = {
    *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
    *  when unknown. Gates version-dependent UI like User Management. */
   runtimeVersion: string | null
+  /** Role of the signed-in runtime account, from `whoami`, or null when unknown or not connected. */
+  accountRole: RuntimeUserRole | null
   /**
    * Features the connected runtime advertises in its hello
    * response, e.g. `["ethercat.dynamic_alloc"]`. `null` when
@@ -321,6 +324,7 @@ export type DeviceActions = {
   setRuntimeJwtToken: (token: string | null) => void
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
   setRuntimeVersion: (version: string | null) => void
+  setRuntimeAccountRole: (role: RuntimeUserRole | null) => void
   /** Record the EtherDOG features the runtime advertises.
    *  Pass `null` to clear (e.g. on disconnect), `[]` when the runtime
    *  does not publish a `features` array. */

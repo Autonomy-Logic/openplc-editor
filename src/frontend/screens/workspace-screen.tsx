@@ -75,6 +75,7 @@ import {
 import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monitor'
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
 import { useRestoreProjectTargetDevice } from '../hooks/use-restore-project-target-device'
+import { useRuntimeAccount } from '../hooks/use-runtime-account'
 import { useRuntimeCommercialLicenseOwner } from '../hooks/use-runtime-commercial-license'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
@@ -200,6 +201,7 @@ const WorkspaceScreen = () => {
   }, [projectPath, rawLoadedContent, loadedSerialized, initBaseline, store])
 
   useRuntimePolling()
+  useRuntimeAccount()
   useHoldHmiToolchain()
   useRuntimeCommercialLicenseOwner()
   useRestoreProjectTargetDevice()
