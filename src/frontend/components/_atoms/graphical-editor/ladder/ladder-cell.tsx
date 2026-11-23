@@ -66,6 +66,9 @@ export interface LadderCellVisualProps {
 /** Symbol colour on the brand-blue selection highlight, for contrast in both themes. */
 const SELECTED_SYMBOL_COLOUR = '#ffffff'
 
+/** Stroke width of the rung wire redrawn across a selected contact or coil's highlight, as the body draws wires. */
+const SELECTED_WIRE_STROKE = 1.25
+
 /** Space between a selected contact or coil's highlight and its symbol, in px. */
 const HIGHLIGHT_PAD = 3
 
@@ -108,6 +111,30 @@ export function LadderCellVisual({
           height: LADDER_STYLE.symH + 2 * HIGHLIGHT_PAD,
         }}
       />
+      {selected && (
+        <svg
+          aria-hidden
+          className='pointer-events-none absolute'
+          style={{ left: -HIGHLIGHT_PAD, top: 0, overflow: 'visible' }}
+          width={LADDER_STYLE.sym + 2 * HIGHLIGHT_PAD}
+          height={LADDER_STYLE.symH}
+        >
+          {[
+            [0, HIGHLIGHT_PAD + ladderSymbolInset(kind)],
+            [HIGHLIGHT_PAD + LADDER_STYLE.sym - ladderSymbolInset(kind), LADDER_STYLE.sym + 2 * HIGHLIGHT_PAD],
+          ].map(([x1, x2]) => (
+            <line
+              key={x1}
+              x1={x1}
+              x2={x2}
+              y1={LADDER_STYLE.symH / 2}
+              y2={LADDER_STYLE.symH / 2}
+              stroke={SELECTED_SYMBOL_COLOUR}
+              strokeWidth={SELECTED_WIRE_STROKE}
+            />
+          ))}
+        </svg>
+      )}
       <div className='relative'>
         <LadderSymbolGlyph
           kind={kind}
