@@ -1,4 +1,4 @@
-PROGRAM Aux
+PROGRAM Auxiliary
   VAR
     aux_a : BOOL;
     TON0 : TON;
@@ -21,7 +21,7 @@ PROGRAM Aux
   END_VAR
 
 {
-  "name": "Aux",
+  "name": "Auxiliary",
   "rungs": [
     {
       "id": "rung_Aux_17e6ef89-574d-4f5d-ac67-fc1ed68a2f94",
