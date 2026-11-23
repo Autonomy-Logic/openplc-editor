@@ -21,7 +21,7 @@ import {
 } from 'node:fs'
 import { connect, createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 
@@ -1206,6 +1206,9 @@ function readOptions(argv) {
     ['platform', 'installer', 'version', 'positive-control', 'trusted-keys', 'report'],
     argv,
   )
+  for (const option of ['installer', 'positive-control', 'trusted-keys', 'report']) {
+    if (typeof values[option] === 'string') values[option] = resolve(values[option])
+  }
   const problems = positionals.map((value) => `unexpected argument ${JSON.stringify(value)}`)
   if (!PLATFORMS.includes(values.platform)) {
     problems.push(`--platform: unknown platform ${JSON.stringify(values.platform)}, expected ${PLATFORMS.join(', ')}`)

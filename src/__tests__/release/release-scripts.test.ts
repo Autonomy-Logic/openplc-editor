@@ -1722,6 +1722,22 @@ describe('packaged-checks.mjs', () => {
       expect(result.output).toContain(options['--positive-control'])
     })
 
+    it('resolves relative file options against its own working folder, naming the absolute path', () => {
+      const options = inputs()
+      const relative = {
+        ...options,
+        '--installer': 'OpenPLC.Editor-4.3.5.AppImage',
+        '--positive-control': 'com.openplc.fx3u-compatible-2.1.0.vpp',
+        '--trusted-keys': 'trusted-keys.ts',
+        '--report': 'report.json',
+      }
+
+      const result = run('packaged-checks.mjs', argv(relative), { cwd: root, timeout: 60_000 })
+
+      expect(result.status).toBe(2)
+      expect(result.output).toContain(`--positive-control: ${options['--positive-control']} has sha256`)
+    })
+
     it('exits 2 for --version 4.4.0-rc1 without --allow-prerelease, naming --version, without a report', () => {
       const result = refusal(inputs({ '--version': '4.4.0-rc1' }))
 
