@@ -24,6 +24,7 @@ release/app/configs
 release/build
 release/relay
 release/yowasp-clang
+release/package-trust
 configs/dll
 
 .idea

@@ -48,7 +48,9 @@
     "src/frontend/services/__tests__/fixtures/",
     "src/backend/shared/wasm-toolchain/__tests__/fixtures/",
     "src/backend/shared/simulator/__tests__/fixtures/",
-    "src/backend/editor/wasm-toolchain/__tests__/fixtures/"
+    "src/backend/editor/wasm-toolchain/__tests__/fixtures/",
+    "src/backend/editor/package-trust/__tests__/fixtures/",
+    "src/__tests__/release/helpers/"
   ],
   "transformIgnorePatterns": [
     "node_modules/(?!strucpp)"

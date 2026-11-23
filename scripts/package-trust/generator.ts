@@ -1,0 +1,1015 @@
+import { createHash, createHmac, createPrivateKey, createPublicKey, type KeyObject, sign } from 'node:crypto'
+
+import ts from 'typescript'
+
+import { TRUST_REFUSAL } from '../../src/backend/editor/package-trust/types'
+import {
+  canonicalize,
+  MANIFEST_FILENAME,
+  SIGNATURE_FILENAME,
+} from '../../src/backend/shared/utils/vpp/package-verification-core'
+
+/** Fixed seed of every build that is not a release; the committed module is generated from it. */
+export const DEVELOPMENT_SEED: Uint8Array = Uint8Array.from(
+  Buffer.from('0235de812b3cd0d89f2174a27d840f3ba7ccb99832a0c558b4e408b03bdd5642', 'hex'),
+)
+
+/** Fixed public seed of the second build of the cross-seed check; never a release seed. */
+export const CROSS_SEED_PROBE: Uint8Array = Uint8Array.from(
+  Buffer.from('ca2b8498c991ccc73aa4fe134434256d27776505272851bf56ffdcb18f416c84', 'hex'),
+)
+
+/** The release seed: HMAC-SHA256 keyed by the UTF-8 bytes of @p secret over `<version>+<commit>`. */
+export function deriveReleaseSeed(secret: string, version: string, commit: string): Uint8Array {
+  return Uint8Array.from(createHmac('sha256', new TextEncoder().encode(secret)).update(`${version}+${commit}`).digest())
+}
+
+export type TrustModuleHook = 'import' | 'use'
+
+/** Where a generated module put its entry point, its checks and its encoded material. */
+export interface TrustModuleLayout {
+  /**
+   * Every check site, in execution order per hook, with the top-level function hosting it and the share literals of
+   * its two check-canary cases: the matching case, which must pass, and the mismatching one, which must fail.
+   */
+  sites: {
+    hook: TrustModuleHook
+    functionName: string
+    canaryCases: { matching: string[]; mismatching: string[] }
+  }[]
+  /** The exact text of every encoded-share string literal of the source. */
+  shareLiterals: string[]
+  /** The seeded name of the function the module exports as its default. */
+  entryName: string
+}
+
+/** True for a non-null, non-array object. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** The name of @p statement when it declares a decoder, `function <name>(parts: string[]): Uint8Array`; else null. */
+function decoderName(statement: ts.Statement): string | null {
+  if (!ts.isFunctionDeclaration(statement) || statement.name === undefined) return null
+  const [parameter] = statement.parameters
+  if (statement.parameters.length !== 1 || !ts.isIdentifier(parameter.name) || parameter.name.text !== 'parts') {
+    return null
+  }
+  const takesStrings =
+    parameter.type !== undefined &&
+    ts.isArrayTypeNode(parameter.type) &&
+    parameter.type.elementType.kind === ts.SyntaxKind.StringKeyword
+  const returnsBytes =
+    statement.type !== undefined &&
+    ts.isTypeReferenceNode(statement.type) &&
+    statement.type.typeArguments === undefined &&
+    ts.isIdentifier(statement.type.typeName) &&
+    statement.type.typeName.text === 'Uint8Array'
+  return takesStrings && returnsBytes ? statement.name.text : null
+}
+
+/**
+ * The share literals of a trust module @p source: in source order, the string-literal elements of every array literal
+ * passed as the only argument of a call to a top-level decoder (`function <name>(parts: string[]): Uint8Array`).
+ * Parses @p source without type checking and never evaluates it.
+ * @returns the literals; empty when the source calls no decoder with such an array
+ */
+export function shareLiteralsFromSource(source: string): string[] {
+  const file = ts.createSourceFile('package-trust-anchor.ts', source, ts.ScriptTarget.ES2022, false, ts.ScriptKind.TS)
+  const decoders = new Set(file.statements.map(decoderName).filter((name) => name !== null))
+  const literals: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      decoders.has(node.expression.text) &&
+      node.arguments.length === 1 &&
+      ts.isArrayLiteralExpression(node.arguments[0])
+    ) {
+      for (const element of node.arguments[0].elements) if (ts.isStringLiteral(element)) literals.push(element.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return literals
+}
+
+export type TrustModuleHeader = { mode: 'development' } | { mode: 'release'; version: string; commit: string }
+
+export interface GenerateTrustModuleOptions {
+  /** 32 bytes; every random choice of the module derives from it. */
+  seed: Uint8Array
+  /** keyId -> PEM Ed25519 public key. */
+  keys: Record<string, string>
+  /** Module specifier of `src/backend/editor/package-trust/types` from where the module is written. */
+  typesImport: string
+  /** Module specifier of `src/backend/shared/utils/vpp/verify-package-signature` from where the module is written. */
+  verifierImport: string
+  header: TrustModuleHeader
+}
+
+const PRINT_WIDTH = 120
+const REFUSED_VERDICT = `[false, '${TRUST_REFUSAL}']`
+const HEADER_PREFIX = '// Generated by scripts/package-trust/cli.ts'
+const RELEASE_HEADER =
+  /^\/\/ Generated by scripts\/package-trust\/cli\.ts for release (\S+) at commit ([0-9a-f]+)\. Do not edit\.$/
+const DEVELOPMENT_HEADER = `${HEADER_PREFIX} from the development seed. Do not edit.`
+const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex')
+const ALPHANUMERIC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+const LOWERCASE = 'abcdefghijklmnopqrstuvwxyz'
+const DIGITS = '0123456789'
+const COMMIT_PATTERN = /^[0-9a-f]{40}([0-9a-f]{24})?$/
+const SPECIFIER_PATTERN = /^[\w./@-]+$/
+const MISMATCHES = ['hash', 'extra', 'missing', 'id', 'version', 'reorder'] as const
+
+/** The first line of a generated module. */
+export function moduleHeader(header: TrustModuleHeader): string {
+  if (header.mode === 'development') return DEVELOPMENT_HEADER
+  return `${HEADER_PREFIX} for release ${header.version} at commit ${header.commit}. Do not edit.`
+}
+
+/** The header of a generated module from its first line; null when the line is no module header. */
+export function parseModuleHeader(firstLine: string): TrustModuleHeader | null {
+  if (firstLine === DEVELOPMENT_HEADER) return { mode: 'development' }
+  const release = RELEASE_HEADER.exec(firstLine)
+  return release ? { mode: 'release', version: release[1], commit: release[2] } : null
+}
+
+/** Deterministic random bytes: HMAC-SHA256 keyed by the seed over a block counter. */
+interface Drbg {
+  bytes(count: number): Uint8Array
+  /** A uniform integer in [0, bound). */
+  below(bound: number): number
+  shuffle<T>(items: readonly T[]): T[]
+}
+
+function createDrbg(seed: Uint8Array): Drbg {
+  let counter = 0
+  let pool = new Uint8Array(0)
+  const bytes = (count: number): Uint8Array => {
+    const out = new Uint8Array(count)
+    let filled = 0
+    while (filled < count) {
+      if (pool.length === 0) {
+        pool = Uint8Array.from(createHmac('sha256', seed).update(`block-${counter}`).digest())
+        counter += 1
+      }
+      const take = Math.min(pool.length, count - filled)
+      out.set(pool.subarray(0, take), filled)
+      pool = pool.subarray(take)
+      filled += take
+    }
+    return out
+  }
+  const below = (bound: number): number => {
+    const limit = Math.floor(0x100000000 / bound) * bound
+    for (;;) {
+      const value = Buffer.from(bytes(4)).readUInt32BE(0)
+      if (value < limit) return value % bound
+    }
+  }
+  const shuffle = <T>(items: readonly T[]): T[] => {
+    const out = [...items]
+    for (let index = out.length - 1; index > 0; index -= 1) {
+      const other = below(index + 1)
+      const kept = out[index]
+      out[index] = out[other]
+      out[other] = kept
+    }
+    return out
+  }
+  return { bytes, below, shuffle }
+}
+
+/** How one decoder function reads its shares: alphabet, digits per byte and how shares combine. */
+interface Decoder {
+  name: string
+  alphabet: string
+  radix: 16 | 32
+  combine: 'xor' | 'add'
+  shareCount: number
+}
+
+interface KeyMaterial {
+  id: Uint8Array
+  der: Uint8Array
+}
+
+interface Canary {
+  message: Uint8Array
+  valid: Uint8Array
+  invalid: Uint8Array
+  publicDer: Uint8Array
+}
+
+/** A top-level declaration of the module, with the share literals it holds. */
+interface Declaration {
+  lines: string[]
+  literals: string[]
+}
+
+/** The names the declarations of one module refer to each other by. */
+interface ModuleNames {
+  fsType: string
+  snapshotType: string
+  keyMap: string
+}
+
+function keyMaterial(keys: Record<string, string>): KeyMaterial[] {
+  const ids = Object.keys(keys).sort()
+  if (ids.length === 0) throw new Error('No trusted key to embed')
+  return ids.map((id) => {
+    if (id.length === 0) throw new Error('A trusted key has an empty key id')
+    let key: KeyObject
+    try {
+      key = createPublicKey(keys[id])
+    } catch {
+      throw new Error(`Trusted key ${JSON.stringify(id)} is not a PEM public key`)
+    }
+    if (key.asymmetricKeyType !== 'ed25519') throw new Error(`Trusted key ${JSON.stringify(id)} is not Ed25519`)
+    return {
+      id: new TextEncoder().encode(id),
+      der: Uint8Array.from(key.export({ format: 'der', type: 'spki' })),
+    }
+  })
+}
+
+/** A neutral identifier: two letters, a digit and three letters or digits, unused so far. */
+function neutralName(drbg: Drbg, used: Set<string>): string {
+  for (;;) {
+    const tail = LOWERCASE + DIGITS
+    const name =
+      LOWERCASE[drbg.below(26)] +
+      LOWERCASE[drbg.below(26)] +
+      DIGITS[drbg.below(10)] +
+      tail[drbg.below(36)] +
+      tail[drbg.below(36)] +
+      tail[drbg.below(36)]
+    if (!used.has(name)) {
+      used.add(name)
+      return name
+    }
+  }
+}
+
+/** @p length random letters and digits. */
+function randomWord(drbg: Drbg, length: number): string {
+  return Array.from({ length }, () => ALPHANUMERIC[drbg.below(ALPHANUMERIC.length)]).join('')
+}
+
+const toHex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex')
+
+const sha256Hex = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex')
+
+function createDecoder(drbg: Drbg, used: Set<string>): Decoder {
+  const radix = drbg.below(2) === 0 ? 16 : 32
+  return {
+    name: neutralName(drbg, used),
+    alphabet: drbg
+      .shuffle([...ALPHANUMERIC])
+      .slice(0, radix)
+      .join(''),
+    radix,
+    combine: drbg.below(2) === 0 ? 'xor' : 'add',
+    shareCount: 2 + drbg.below(2),
+  }
+}
+
+/** @p bytes in the decoder's alphabet: two digits per byte (radix 16) or 5-bit groups, high bits first (radix 32). */
+function encodeShare(bytes: Uint8Array, decoder: Decoder): string {
+  if (decoder.radix === 16) {
+    return [...bytes].map((byte) => decoder.alphabet[byte >> 4] + decoder.alphabet[byte & 15]).join('')
+  }
+  let text = ''
+  let buffer = 0
+  let bits = 0
+  for (const byte of bytes) {
+    buffer = ((buffer << 8) | byte) & 0xfff
+    bits += 8
+    while (bits >= 5) {
+      bits -= 5
+      text += decoder.alphabet[(buffer >> bits) & 31]
+    }
+  }
+  if (bits > 0) text += decoder.alphabet[(buffer << (5 - bits)) & 31]
+  return text
+}
+
+/** Splits @p data into the decoder's number of random shares that combine back into it, each encoded. */
+function encodeShares(drbg: Drbg, data: Uint8Array, decoder: Decoder): string[] {
+  const masks = Array.from({ length: decoder.shareCount - 1 }, () => drbg.bytes(data.length))
+  const last = data.map((byte, index) =>
+    decoder.combine === 'xor'
+      ? masks.reduce((value, mask) => value ^ mask[index], byte)
+      : masks.reduce((value, mask) => value - mask[index], byte) & 255,
+  )
+  return [...masks, last].map((share) => encodeShare(share, decoder))
+}
+
+function decoderLines(decoder: Decoder): string[] {
+  const assign = decoder.combine === 'xor' ? '^=' : '+='
+  const head = [`function ${decoder.name}(parts: string[]): Uint8Array {`, `  const a = '${decoder.alphabet}'`]
+  if (decoder.radix === 16) {
+    return [
+      ...head,
+      '  const o = new Uint8Array(parts[0].length / 2)',
+      '  for (const t of parts) {',
+      '    for (let i = 0; i < o.length; i += 1) {',
+      '      const h = a.indexOf(t[2 * i])',
+      '      const l = a.indexOf(t[2 * i + 1])',
+      "      if (h < 0 || l < 0) throw new Error('invalid encoding')",
+      `      o[i] ${assign} h * 16 + l`,
+      '    }',
+      '  }',
+      '  return o',
+      '}',
+    ]
+  }
+  return [
+    ...head,
+    '  const o = new Uint8Array(Math.floor((parts[0].length * 5) / 8))',
+    '  for (const t of parts) {',
+    '    let b = 0',
+    '    let n = 0',
+    '    let i = 0',
+    '    for (const c of t) {',
+    '      const v = a.indexOf(c)',
+    "      if (v < 0) throw new Error('invalid encoding')",
+    '      b = ((b << 5) | v) & 4095',
+    '      n += 5',
+    '      if (n >= 8) {',
+    '        n -= 8',
+    `        if (i < o.length) o[i] ${assign} (b >> n) & 255`,
+    '        i += 1',
+    '      }',
+    '    }',
+    '  }',
+    '  return o',
+    '}',
+  ]
+}
+
+/** Emits `const <variable> = <decoder>([...])` holding @p data as shares, laid out as Prettier prints it. */
+function shareStatement(
+  drbg: Drbg,
+  decoder: Decoder,
+  indent: string,
+  variable: string,
+  data: Uint8Array,
+  literals: string[],
+): string[] {
+  const shares = encodeShares(drbg, data, decoder)
+  literals.push(...shares)
+  const quoted = shares.map((share) => `'${share}'`)
+  const single = `${indent}const ${variable} = ${decoder.name}([${quoted.join(', ')}])`
+  if (single.length <= PRINT_WIDTH) return [single]
+  return [
+    `${indent}const ${variable} = ${decoder.name}([`,
+    ...quoted.map((share) => `${indent}  ${share},`),
+    `${indent}])`,
+  ]
+}
+
+function createCanary(drbg: Drbg, privateKey: KeyObject, publicDer: Uint8Array): Canary {
+  const message = drbg.bytes(32)
+  const valid = Uint8Array.from(sign(null, message, privateKey))
+  const invalid = Uint8Array.from(valid)
+  invalid[drbg.below(invalid.length)] ^= 1 << drbg.below(8)
+  return { message, valid, invalid, publicDer }
+}
+
+/**
+ * The two synthetic cases of one site's check canary, as the UTF-8 JSON `[signature document, [path, hash] pairs,
+ * manifest, canonical payload text]`: one the site's checks must accept, and one they must refuse because of a
+ * mismatch picked from a changed hash, an extra or a missing file, a changed manifest id or version, or a payload text
+ * whose keys are not in canonical order.
+ */
+function checkCanaryCases(drbg: Drbg): { matching: Uint8Array; mismatching: Uint8Array } {
+  const hash = (): string => toHex(drbg.bytes(8))
+  const fileName = (extension: string): string => `${randomWord(drbg, 3)}/${randomWord(drbg, 5)}.${extension}`
+  const count = 2 + drbg.below(2)
+  const names = new Set<string>()
+  while (names.size < count) names.add(fileName('c'))
+  const files = Object.fromEntries([...names].map((name) => [name, hash()]))
+  const packageId = `com.${randomWord(drbg, 4)}.${randomWord(drbg, 4)}`
+  const version = `${drbg.below(10)}.${drbg.below(10)}.${drbg.below(10)}`
+  const fields = drbg.shuffle<[string, unknown]>([
+    ['formatVersion', '1.0'],
+    ['alg', 'ed25519'],
+    ['keyId', randomWord(drbg, 6)],
+    ['packageId', packageId],
+    ['version', version],
+    ['signedAt', '2026-01-01T00:00:00.000Z'],
+    ['files', files],
+  ])
+  const payload = Object.fromEntries(fields)
+  const document = Object.fromEntries(drbg.shuffle<[string, unknown]>([...fields, ['signature', randomWord(drbg, 8)]]))
+  const pairs = drbg.shuffle(Object.entries(files))
+  const manifest = { package: { id: packageId, version } }
+  const canonical = canonicalize(payload)
+  const encode = (value: unknown[]): Uint8Array => new TextEncoder().encode(JSON.stringify(value))
+
+  let mismatching: unknown[]
+  switch (MISMATCHES[drbg.below(MISMATCHES.length)]) {
+    case 'hash': {
+      const [[name, value], ...rest] = pairs
+      mismatching = [document, [[name, (value[0] === '0' ? '1' : '0') + value.slice(1)], ...rest], manifest, canonical]
+      break
+    }
+    case 'extra':
+      mismatching = [document, [...pairs, [fileName('h'), hash()]], manifest, canonical]
+      break
+    case 'missing':
+      mismatching = [document, pairs.slice(1), manifest, canonical]
+      break
+    case 'id':
+      mismatching = [document, pairs, { package: { id: `${packageId}x`, version } }, canonical]
+      break
+    case 'version':
+      mismatching = [document, pairs, { package: { id: packageId, version: `${version}.1` } }, canonical]
+      break
+    case 'reorder': {
+      const reordered = Object.keys(payload)
+        .sort()
+        .reverse()
+        .map((key) => [key, payload[key]])
+      mismatching = [document, pairs, manifest, JSON.stringify(Object.fromEntries(reordered))]
+      break
+    }
+  }
+  return { matching: encode([document, pairs, manifest, canonical]), mismatching: encode(mismatching) }
+}
+
+/** The own-property reader every site declares. */
+const OWN_LINES = [
+  '  const ow = (v: object, k: string): unknown => {',
+  '    if (!Object.prototype.hasOwnProperty.call(v, k)) return undefined',
+  '    return Reflect.get(v, k)',
+  '  }',
+]
+
+/** The canonical JSON of a site: recursive, or an explicit stack. */
+const CANONICAL_VARIANTS: string[][] = [
+  [
+    '  const cn = (v: unknown): string => {',
+    "    if (v === null || typeof v !== 'object') return JSON.stringify(v)",
+    "    if (Array.isArray(v)) return `[${v.map((x) => cn(x)).join(',')}]`",
+    '    const d: object = v',
+    '    const w: string[] = []',
+    '    for (const k of Object.keys(d).sort()) {',
+    '      w.push(`${JSON.stringify(k)}:${cn(ow(d, k))}`)',
+    '    }',
+    "    return `{${w.join(',')}}`",
+    '  }',
+  ],
+  [
+    '  const cn = (v: unknown): string => {',
+    '    const w: string[] = []',
+    '    const t: (string | [unknown])[] = [[v]]',
+    '    while (t.length > 0) {',
+    '      const x = t.pop()',
+    '      if (x === undefined) break',
+    "      if (typeof x === 'string') {",
+    '        w.push(x)',
+    '        continue',
+    '      }',
+    '      const [y] = x',
+    "      if (y === null || typeof y !== 'object') {",
+    '        w.push(JSON.stringify(y))',
+    '        continue',
+    '      }',
+    '      const l: (string | [unknown])[] = []',
+    '      if (Array.isArray(y)) {',
+    '        const a: unknown[] = y',
+    "        l.push('[')",
+    '        a.forEach((u, i) => {',
+    "          if (i > 0) l.push(',')",
+    '          l.push([u])',
+    '        })',
+    "        l.push(']')",
+    '      } else {',
+    '        const d: object = y',
+    "        l.push('{')",
+    '        const n = Object.keys(d).sort()',
+    '        n.forEach((k, i) => {',
+    "          l.push(`${i > 0 ? ',' : ''}${JSON.stringify(k)}:`)",
+    '          l.push([ow(d, k)])',
+    '        })',
+    "        l.push('}')",
+    '      }',
+    '      for (let i = l.length - 1; i >= 0; i -= 1) t.push(l[i])',
+    '    }',
+    "    return w.join('')",
+    '  }',
+  ],
+]
+
+/** The signature-document parser of a site: the payload without `signature`, the signature and the checked fields. */
+const PARSE_LINES = [
+  '  const pr = (v: unknown): [Record<string, unknown>, string, object, string, string, string, string] | null => {',
+  "    if (typeof v !== 'object' || v === null || Array.isArray(v)) return null",
+  '    const d: object = v',
+  "    const g = ow(d, 'signature')",
+  "    const a = ow(d, 'alg')",
+  "    const i = ow(d, 'keyId')",
+  "    const n = ow(d, 'packageId')",
+  "    const w = ow(d, 'version')",
+  "    const f = ow(d, 'files')",
+  "    if (typeof g !== 'string' || g.length === 0) return null",
+  "    if (typeof a !== 'string' || typeof i !== 'string' || typeof n !== 'string' || typeof w !== 'string') return null",
+  "    if (typeof ow(d, 'formatVersion') !== 'string' || typeof ow(d, 'signedAt') !== 'string') return null",
+  "    if (typeof f !== 'object' || f === null || Array.isArray(f)) return null",
+  '    const h: object = f',
+  "    if (Object.keys(h).some((k) => typeof ow(h, k) !== 'string')) return null",
+  "    const y = Object.keys(d).filter((k) => k !== 'signature')",
+  '    return [Object.fromEntries(y.map((k): [string, unknown] => [k, ow(d, k)])), g, h, a, i, n, w]',
+  '  }',
+]
+
+/** The file-set check of a site: actual to signed, signed to actual, or sorted pairs compared. */
+const FILE_SET_VARIANTS: string[][] = [
+  [
+    '  const fl = (f: object, a: Map<string, string>): boolean => {',
+    '    if (a.size !== Object.keys(f).length) return false',
+    '    for (const [k, h] of a) {',
+    '      if (ow(f, k) !== h) return false',
+    '    }',
+    '    return true',
+    '  }',
+  ],
+  [
+    '  const fl = (f: object, a: Map<string, string>): boolean => {',
+    '    if (a.size !== Object.keys(f).length) return false',
+    '    for (const k of Object.keys(f)) {',
+    '      if (a.get(k) !== ow(f, k)) return false',
+    '    }',
+    '    return true',
+    '  }',
+  ],
+  [
+    '  const fl = (f: object, a: Map<string, string>): boolean => {',
+    '    const c = (l: [string, unknown], r: [string, unknown]): number => {',
+    '      if (l[0] === r[0]) return 0',
+    '      return l[0] < r[0] ? -1 : 1',
+    '    }',
+    '    const x: [string, unknown][] = [...a.entries()]',
+    '    const y: [string, unknown][] = []',
+    '    for (const k of Object.keys(f)) {',
+    '      y.push([k, ow(f, k)])',
+    '    }',
+    '    x.sort(c)',
+    '    y.sort(c)',
+    '    if (x.length !== y.length) return false',
+    '    return x.every((e, i) => e[0] === y[i][0] && e[1] === y[i][1])',
+    '  }',
+  ],
+]
+
+/** The manifest identity check, the Ed25519 primitive and the check-canary case runner of a site. */
+const SITE_TAIL_HELPERS = [
+  '  const mf = (i: string, w: string, m: unknown): boolean => {',
+  "    if (typeof m !== 'object' || m === null || Array.isArray(m)) return false",
+  "    const k = ow(m, 'package')",
+  "    if (typeof k !== 'object' || k === null || Array.isArray(k)) return false",
+  "    return ow(k, 'id') === i && ow(k, 'version') === w",
+  '  }',
+  '  const ed = (m: Uint8Array, d: Uint8Array, g: Uint8Array): boolean => {',
+  '    try {',
+  "      const y = createPublicKey({ key: Buffer.from(d), format: 'der', type: 'spki' })",
+  "      if (y.asymmetricKeyType !== 'ed25519') return false",
+  '      return verify(null, m, y, g)',
+  '    } catch {',
+  '      return false',
+  '    }',
+  '  }',
+  '  const rc = (u: Uint8Array): boolean => {',
+  "    const c: unknown = JSON.parse(Buffer.from(u).toString('utf8'))",
+  '    if (!Array.isArray(c)) return false',
+  '    const q: unknown[] = c',
+  '    const [d, a, m, t] = q',
+  '    const p = pr(d)',
+  '    if (p === null || !Array.isArray(a)) return false',
+  '    const l: unknown[] = a',
+  '    const h = new Map<string, string>()',
+  '    for (const e of l) {',
+  '      if (!Array.isArray(e)) return false',
+  '      const r: unknown[] = e',
+  '      const [k, v] = r',
+  "      if (typeof k !== 'string' || typeof v !== 'string') return false",
+  '      h.set(k, v)',
+  '    }',
+  '    return cn(p[0]) === t && fl(p[2], h) && mf(p[5], p[6], m)',
+  '  }',
+]
+
+interface SiteDeclaration extends Declaration {
+  canaryCases: { matching: string[]; mismatching: string[] }
+}
+
+function siteDeclaration(
+  drbg: Drbg,
+  name: string,
+  decoder: Decoder,
+  keys: KeyMaterial[],
+  canary: Canary,
+  names: ModuleNames,
+): SiteDeclaration {
+  const literals: string[] = []
+  const share = (variable: string, data: Uint8Array, into: string[] = []): string[] => {
+    const lines = shareStatement(drbg, decoder, '  ', variable, data, into)
+    literals.push(...into)
+    return lines
+  }
+
+  const hashed = drbg.bytes(16 + drbg.below(17))
+  const sha256Block = [
+    ...share('h0', hashed),
+    "  const h1 = createHash('sha256').update(h0).digest('hex')",
+    `  if (h1 !== '${sha256Hex(hashed)}') return false`,
+  ]
+
+  const cases = checkCanaryCases(drbg)
+  const matching: string[] = []
+  const mismatching: string[] = []
+  const checkBlock = [
+    ...share('m0', cases.matching, matching),
+    ...share('m1', cases.mismatching, mismatching),
+    '  if (!rc(m0) || rc(m1)) return false',
+  ]
+
+  const ed25519Block = [
+    ...keys.flatMap((key, index) => [...share(`b${index}`, key.id), ...share(`d${index}`, key.der)]),
+    ...share('c0', canary.message),
+    ...share('c1', canary.valid),
+    ...share('c2', canary.invalid),
+    ...share('c3', canary.publicDer),
+    ...keys.map((_key, index) => `  if (ed(c0, d${index}, c2)) return false`),
+    '  if (!ed(c0, c3, c1)) return false',
+  ]
+
+  const canonical = CANONICAL_VARIANTS[drbg.below(CANONICAL_VARIANTS.length)]
+  const fileSet = FILE_SET_VARIANTS[drbg.below(FILE_SET_VARIANTS.length)]
+  const canaries = drbg.shuffle([sha256Block, checkBlock, ed25519Block])
+  const lines = [
+    `function ${name}(s: ${names.snapshotType}): boolean {`,
+    ...OWN_LINES,
+    ...canonical,
+    ...PARSE_LINES,
+    ...fileSet,
+    ...SITE_TAIL_HELPERS,
+    ...canaries.flat(),
+    '  const p = pr(s[1])',
+    "  if (p === null || p[3] !== 'ed25519') return false",
+    '  let k: Uint8Array | null = null',
+    ...keys.map((_key, index) => `  if (p[4] === Buffer.from(b${index}).toString('utf8')) k = d${index}`),
+    '  if (k === null) return false',
+    "  const u = new Uint8Array(Buffer.from(cn(p[0]), 'utf8'))",
+    "  const g = new Uint8Array(Buffer.from(p[1], 'base64'))",
+    '  if (!ed(u, k, g)) return false',
+    '  if (!fl(p[2], s[0])) return false',
+    '  return mf(p[5], p[6], s[2])',
+    '}',
+  ]
+  return { lines, literals, canaryCases: { matching, mismatching } }
+}
+
+function keyMapDeclaration(drbg: Drbg, name: string, decoder: Decoder, keys: KeyMaterial[]): Declaration {
+  const literals: string[] = []
+  const share = (variable: string, data: Uint8Array): string[] =>
+    shareStatement(drbg, decoder, '  ', variable, data, literals)
+  const lines = [
+    `function ${name}(): Record<string, string> {`,
+    '  const r: Record<string, string> = {}',
+    '  Object.setPrototypeOf(r, null)',
+    ...keys.flatMap((key, index) => [
+      ...share(`b${index}`, key.id),
+      ...share(`d${index}`, key.der),
+      `  const k${index} = createPublicKey({ key: Buffer.from(d${index}), format: 'der', type: 'spki' })`,
+      `  r[Buffer.from(b${index}).toString('utf8')] = k${index}.export({ format: 'pem', type: 'spki' }).toString()`,
+    ]),
+    '  return r',
+    '}',
+  ]
+  return { lines, literals }
+}
+
+/** How a snapshot reader walks the package: recursion or a stack, each file checked while walking or after. */
+interface ReaderVariant {
+  stack: boolean
+  afterWalk: boolean
+}
+
+function readerWalkLines(variant: ReaderVariant): string[] {
+  const fileStep = variant.afterWalk ? 'l.push([p, q])' : null
+  const collected = variant.afterWalk ? ['  for (const [p, q] of l) {', '    if (!a(p, q)) return null', '  }'] : []
+  const listing = variant.afterWalk ? ['  const l: [string, string][] = []'] : []
+  if (variant.stack) {
+    const entry =
+      fileStep === null
+        ? ['      } else if (!t.isFile() || !a(p, q)) {', '        return null', '      }']
+        : ['      } else if (t.isFile()) {', `        ${fileStep}`, '      } else {', '        return null', '      }']
+    return [
+      ...listing,
+      "  const s: [string, string][] = [[dir, '']]",
+      '  while (s.length > 0) {',
+      '    const e = s.pop()',
+      '    if (e === undefined) break',
+      '    for (const n of f.readdirSync(e[0])) {',
+      '      const p = join(e[0], n)',
+      "      const q = e[1] === '' ? n : `${e[1]}/${n}`",
+      '      const t = f.lstatSync(p)',
+      '      if (t.isDirectory()) {',
+      '        s.push([p, q])',
+      ...entry,
+      '    }',
+      '  }',
+      ...collected,
+    ]
+  }
+  const entry =
+    fileStep === null
+      ? ['    } else if (!t.isFile() || !a(p, q)) {', '      return false', '    }']
+      : ['    } else if (t.isFile()) {', `      ${fileStep}`, '    } else {', '      return false', '    }']
+  return [
+    ...listing,
+    '  const w = (x: string, r: string): boolean => {',
+    '    for (const n of f.readdirSync(x)) {',
+    '      const p = join(x, n)',
+    "      const q = r === '' ? n : `${r}/${n}`",
+    '      const t = f.lstatSync(p)',
+    '      if (t.isDirectory()) {',
+    '        if (!w(p, q)) return false',
+    ...entry.map((line) => `  ${line}`),
+    '    }',
+    '    return true',
+    '  }',
+    "  if (!w(dir, '')) return null",
+    ...collected,
+  ]
+}
+
+function readerDeclaration(name: string, variant: ReaderVariant, names: ModuleNames): Declaration {
+  const lines = [
+    `function ${name}(f: ${names.fsType}, dir: string): ${names.snapshotType} | null {`,
+    '  const h = new Map<string, string>()',
+    '  const c: [unknown, unknown] = [undefined, undefined]',
+    '  const j = (b: Uint8Array): unknown => {',
+    '    try {',
+    "      return JSON.parse(Buffer.from(b).toString('utf8'))",
+    '    } catch {',
+    '      return undefined',
+    '    }',
+    '  }',
+    '  const g = (r: string): boolean => {',
+    '    if (r.length === 0 || r.length > 512) return false',
+    "    if (r.includes('\\u0000') || r.includes('\\\\')) return false",
+    "    if (r.startsWith('/') || /^[A-Za-z]:/.test(r)) return false",
+    "    return !r.split('/').some((x) => x === '..' || x === '.' || x === '')",
+    '  }',
+    '  const a = (x: string, r: string): boolean => {',
+    `    if (r === '${SIGNATURE_FILENAME}') {`,
+    '      c[0] = j(f.readFileSync(x))',
+    '      return true',
+    '    }',
+    '    if (!g(r)) return false',
+    '    const b = f.readFileSync(x)',
+    "    h.set(r, createHash('sha256').update(b).digest('hex'))",
+    `    if (r === '${MANIFEST_FILENAME}') c[1] = j(b)`,
+    '    return true',
+    '  }',
+    ...readerWalkLines(variant),
+    '  return [h, c[0], c[1]]',
+    '}',
+  ]
+  return { lines, literals: [] }
+}
+
+/** The in-memory entries a reader canary reads, as [POSIX path, hex content]. */
+function readerCanaryEntries(drbg: Drbg): [string, string][] {
+  const names = new Set<string>()
+  const count = 2 + drbg.below(3)
+  while (names.size < count) {
+    const depth = drbg.below(3)
+    const segments = Array.from({ length: depth + 1 }, () => randomWord(drbg, 3 + drbg.below(3)))
+    names.add(segments.join('/'))
+  }
+  const json = (value: unknown): string => toHex(new TextEncoder().encode(JSON.stringify(value)))
+  const entries: [string, string][] = [...names].map((name) => [name, toHex(drbg.bytes(drbg.below(25)))])
+  entries.push([SIGNATURE_FILENAME, json({ [randomWord(drbg, 4)]: randomWord(drbg, 6) })])
+  entries.push([MANIFEST_FILENAME, json({ package: { id: randomWord(drbg, 6), version: '1.0.0' } })])
+  return drbg.shuffle(entries)
+}
+
+function readerCanaryDeclaration(drbg: Drbg, name: string, reader: string, names: ModuleNames): Declaration {
+  const entries = readerCanaryEntries(drbg)
+  const root = randomWord(drbg, 6)
+  const textOf = (hex: string): string => Buffer.from(hex, 'hex').toString('utf8')
+  const contentOf = (path: string): string => entries.find(([entry]) => entry === path)?.[1] ?? ''
+  const hashed = entries
+    .filter(([path]) => path !== SIGNATURE_FILENAME)
+    .map(([path, hex]): [string, string] => [path, sha256Hex(new Uint8Array(Buffer.from(hex, 'hex')))])
+  const lines = [
+    `function ${name}(): boolean {`,
+    `  const r = '${root}'`,
+    '  const e: [string, string][] = [',
+    ...entries.map(([path, hex]) => `    ['${path}', '${hex}'],`),
+    '  ]',
+    '  const d = new Map<string, string[]>([[r, []]])',
+    '  const b = new Map<string, Uint8Array>()',
+    '  for (const [p, x] of e) {',
+    "    const s = p.split('/')",
+    '    let c = r',
+    '    for (let i = 0; i < s.length; i += 1) {',
+    '      const n = join(c, s[i])',
+    '      const l = d.get(c)',
+    '      if (l !== undefined && !l.includes(s[i])) l.push(s[i])',
+    "      if (i === s.length - 1) b.set(n, new Uint8Array(Buffer.from(x, 'hex')))",
+    '      else if (!d.has(n)) d.set(n, [])',
+    '      c = n',
+    '    }',
+    '  }',
+    `  const f: ${names.fsType} = {`,
+    '    readdirSync: (p) => d.get(p) ?? [],',
+    '    lstatSync: (p) => ({ isFile: () => b.has(p), isDirectory: () => d.has(p) }),',
+    '    readFileSync: (p) => b.get(p) ?? new Uint8Array(0),',
+    '  }',
+    `  const z = ${reader}(f, r)`,
+    `  if (z === null || z[0].size !== ${hashed.length}) return false`,
+    '  const w: [string, string][] = [',
+    ...hashed.map(([path, digest]) => `    ['${path}', '${digest}'],`),
+    '  ]',
+    '  for (const [p, h] of w) {',
+    '    if (z[0].get(p) !== h) return false',
+    '  }',
+    `  if (JSON.stringify(z[1]) !== '${textOf(contentOf(SIGNATURE_FILENAME))}') return false`,
+    `  return JSON.stringify(z[2]) === '${textOf(contentOf(MANIFEST_FILENAME))}'`,
+    '}',
+  ]
+  return { lines, literals: [] }
+}
+
+function hookDeclaration(
+  name: string,
+  readerCanary: string,
+  reader: string,
+  siteNames: string[],
+  names: ModuleNames,
+): Declaration {
+  const lines = [
+    `function ${name}(dir: string): TrustVerdict {`,
+    '  try {',
+    `    if (!${readerCanary}()) return ${REFUSED_VERDICT}`,
+    `    const n: ${names.fsType} = {`,
+    '      readdirSync: (p) => fs.readdirSync(p),',
+    '      lstatSync: (p) => fs.lstatSync(p),',
+    '      readFileSync: (p) => new Uint8Array(fs.readFileSync(p)),',
+    '    }',
+    `    const s = ${reader}(n, dir)`,
+    `    if (s === null) return ${REFUSED_VERDICT}`,
+    '    let r = true',
+    `    for (const f of [${siteNames.join(', ')}]) {`,
+    '      try {',
+    '        if (!f(s)) r = false',
+    '      } catch {',
+    '        r = false',
+    '      }',
+    '    }',
+    '    const d = s[1]',
+    `    if (!r || typeof d !== 'object' || d === null) return ${REFUSED_VERDICT}`,
+    "    const i: unknown = Object.prototype.hasOwnProperty.call(d, 'packageId') ? Reflect.get(d, 'packageId') : undefined",
+    "    const v: unknown = Object.prototype.hasOwnProperty.call(d, 'version') ? Reflect.get(d, 'version') : undefined",
+    `    if (typeof i !== 'string' || typeof v !== 'string') return ${REFUSED_VERDICT}`,
+    '    return [true, i, v]',
+    '  } catch {',
+    `    return ${REFUSED_VERDICT}`,
+    '  }',
+    '}',
+  ]
+  return { lines, literals: [] }
+}
+
+function entryDeclaration(name: string, keyMap: string, hookNames: [string, string]): Declaration {
+  const lines = [
+    `function ${name}(dir: string, atImport: boolean): TrustVerdict {`,
+    '  try {',
+    `    const v = verifyPackageSignature(dir, ${keyMap}())`,
+    `    if (!v.valid) return [false, typeof v.error === 'string' ? v.error : '${TRUST_REFUSAL}']`,
+    '  } catch {',
+    `    return ${REFUSED_VERDICT}`,
+    '  }',
+    `  return atImport ? ${hookNames[0]}(dir) : ${hookNames[1]}(dir)`,
+    '}',
+  ]
+  return { lines, literals: [] }
+}
+
+function typeDeclarations(names: ModuleNames): string[] {
+  return [
+    `interface ${names.fsType} {`,
+    '  readdirSync(p: string): string[]',
+    '  lstatSync(p: string): { isFile(): boolean; isDirectory(): boolean }',
+    '  readFileSync(p: string): Uint8Array',
+    '}',
+    '',
+    `type ${names.snapshotType} = [Map<string, string>, unknown, unknown]`,
+  ]
+}
+
+function importLines(options: GenerateTrustModuleOptions): string[] {
+  const relative: [string, string][] = [
+    [options.typesImport, `import type { TrustVerdict } from '${options.typesImport}'`],
+    [options.verifierImport, `import { verifyPackageSignature } from '${options.verifierImport}'`],
+  ]
+  return [
+    "import { createHash, createPublicKey, verify } from 'node:crypto'",
+    "import * as fs from 'node:fs'",
+    "import { join } from 'node:path'",
+    '',
+    ...relative.sort(([a], [b]) => (a < b ? -1 : 1)).map(([, line]) => line),
+  ]
+}
+
+function validateOptions(options: GenerateTrustModuleOptions): void {
+  if (options.seed.length !== 32) throw new Error('The seed must be 32 bytes')
+  if (!SPECIFIER_PATTERN.test(options.typesImport)) throw new Error(`Invalid types import: ${options.typesImport}`)
+  if (!SPECIFIER_PATTERN.test(options.verifierImport)) {
+    throw new Error(`Invalid verifier import: ${options.verifierImport}`)
+  }
+  if (options.header.mode === 'release') {
+    if (!/^\S+$/.test(options.header.version)) throw new Error(`Invalid release version: ${options.header.version}`)
+    if (!COMMIT_PATTERN.test(options.header.commit)) throw new Error(`Invalid commit: ${options.header.commit}`)
+  }
+}
+
+/**
+ * Generates the trust module source for @p options and its layout. Deterministic: the same options give the same
+ * source. Key ids and key bytes appear only as encoded shares. The module exports one function, its default, under a
+ * seeded name. Writes nothing.
+ */
+export function generatePackageTrustModule(options: GenerateTrustModuleOptions): {
+  source: string
+  layout: TrustModuleLayout
+} {
+  validateOptions(options)
+  const keys = keyMaterial(options.keys)
+  const drbg = createDrbg(options.seed)
+  const used = new Set<string>()
+
+  const canaryPrivate = createPrivateKey({
+    key: Buffer.from([...ED25519_PKCS8_PREFIX, ...drbg.bytes(32)]),
+    format: 'der',
+    type: 'pkcs8',
+  })
+  const canaryPublicDer = Uint8Array.from(createPublicKey(canaryPrivate).export({ format: 'der', type: 'spki' }))
+
+  const hooks: TrustModuleHook[] = ['import', 'use']
+  const siteNames = hooks.flatMap((hook) =>
+    Array.from({ length: 2 + drbg.below(3) }, () => ({ hook, functionName: neutralName(drbg, used) })),
+  )
+  const hookNames: [string, string] = [neutralName(drbg, used), neutralName(drbg, used)]
+  const readerNames = hooks.map(() => neutralName(drbg, used))
+  const readerCanaryNames = hooks.map(() => neutralName(drbg, used))
+  const entryName = neutralName(drbg, used)
+  const names: ModuleNames = {
+    fsType: neutralName(drbg, used),
+    snapshotType: neutralName(drbg, used),
+    keyMap: neutralName(drbg, used),
+  }
+
+  const declarations: Declaration[] = []
+  const sites: TrustModuleLayout['sites'] = []
+  for (const site of siteNames) {
+    const decoder = createDecoder(drbg, used)
+    declarations.push({ lines: decoderLines(decoder), literals: [] })
+    const canary = createCanary(drbg, canaryPrivate, canaryPublicDer)
+    const declaration = siteDeclaration(drbg, site.functionName, decoder, keys, canary, names)
+    declarations.push(declaration)
+    sites.push({ ...site, canaryCases: declaration.canaryCases })
+  }
+  const keyMapDecoder = createDecoder(drbg, used)
+  declarations.push({ lines: decoderLines(keyMapDecoder), literals: [] })
+  declarations.push(keyMapDeclaration(drbg, names.keyMap, keyMapDecoder, keys))
+  hooks.forEach((hook, index) => {
+    const variant: ReaderVariant = { stack: drbg.below(2) === 0, afterWalk: drbg.below(2) === 0 }
+    declarations.push(readerDeclaration(readerNames[index], variant, names))
+    declarations.push(readerCanaryDeclaration(drbg, readerCanaryNames[index], readerNames[index], names))
+    const bound = siteNames.filter((site) => site.hook === hook).map((site) => site.functionName)
+    declarations.push(hookDeclaration(hookNames[index], readerCanaryNames[index], readerNames[index], bound, names))
+  })
+  declarations.push(entryDeclaration(entryName, names.keyMap, hookNames))
+
+  const ordered = drbg.shuffle(declarations)
+  const lines = [
+    moduleHeader(options.header),
+    ...importLines(options),
+    '',
+    ...typeDeclarations(names),
+    '',
+    ...ordered.flatMap((declaration) => [...declaration.lines, '']),
+    `export default ${entryName}`,
+  ]
+  return {
+    source: `${lines.join('\n')}\n`,
+    layout: { sites, shareLiterals: ordered.flatMap((declaration) => declaration.literals), entryName },
+  }
+}
