@@ -246,7 +246,7 @@ Every run, tag or dispatch:
 - each build job runs `scripts/release/read-fuses.mjs` on every executable it built and
   `scripts/release/scan-trust-literals.mjs` on its unpacked output, before it uploads anything;
 - the `packaged-checks` job runs `scripts/release/packaged-checks.mjs` (positive controls only, no negative control)
-  on the macOS arm64 DMG, the Windows x64 installer and the Linux x64 AppImage, on `macos-14`, `windows-2022` and
+  on the macOS arm64 DMG, the Windows x64 installer and the Linux x64 AppImage, on `macos-latest`, `windows-2022` and
   `ubuntu-22.04`, with `--allow-prerelease`.
 
 `create-release` runs on tags only, after `packaged-checks` and `cross-seed`. It runs `scripts/release/check-upload-set.mjs` with
