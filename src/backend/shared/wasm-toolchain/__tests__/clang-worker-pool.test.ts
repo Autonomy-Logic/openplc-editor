@@ -635,13 +635,16 @@ describe('ClangWorkerPool while held', () => {
     const mechanism = new CountingClangMechanism()
     mechanism.memory = 64 * GIB
     mechanism.coreCount = 16
+    mechanism.answer = succeed
     const pool = new ClangWorkerPool(mechanism)
 
-    for (let i = 0; i < 4; i++) void pool.run(job(`u${i}.c`))
+    const runs = Array.from({ length: 4 }, (_, i) => pool.run(job(`u${i}.c`)))
     await flushMicrotasks()
 
     expect(pool.concurrency).toBe(1)
     expect(mechanism.started).toBe(1)
+    await Promise.all(runs)
+    await pool.release()
   })
 
   it('grows one worker at a time while jobs wait, to the limit the free memory allows', async () => {
@@ -668,14 +671,17 @@ describe('ClangWorkerPool while held', () => {
   it('stays on one worker where the platform cannot tell its free memory', async () => {
     const mechanism = new CountingClangMechanism()
     mechanism.coreCount = 8
+    mechanism.answer = succeed
     const pool = new ClangWorkerPool(mechanism)
     pool.setHeld(true)
 
-    for (let i = 0; i < 4; i++) void pool.run(job(`u${i}.c`))
+    const runs = Array.from({ length: 4 }, (_, i) => pool.run(job(`u${i}.c`)))
     await flushMicrotasks()
 
     expect(pool.concurrency).toBe(1)
     expect(mechanism.started).toBe(1)
+    await Promise.all(runs)
+    await pool.release()
   })
 
   it('stops growing, and keeps the workers it has, when a further worker cannot be started', async () => {
