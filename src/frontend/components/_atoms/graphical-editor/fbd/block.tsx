@@ -27,9 +27,11 @@ import {
   getVariableRestrictionType,
   inOutVariableNames,
 } from '../utils'
+import { FbdBlockFrame } from './block-visual'
 import { buildBlockNode } from './buildNodes'
 import { CustomHandle, type CustomHandleProps } from './handle'
 import { BasicNodeData, BlockNodeData, BlockProps } from './utils'
+import { FBD_BLOCK_TYPE_STYLE, FBD_PIN_STYLE, useFbdPinColour } from './utils/block-style'
 import {
   DEFAULT_BLOCK_CONNECTOR_Y,
   DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
@@ -52,7 +54,7 @@ export type { BlockNode, BlockNodeData } from './utils/types'
  */
 const connectorLabelTop = (handles: CustomHandleProps[] | undefined, connector: string, index: number): number =>
   (handles?.find((handle) => handle.id === connector)?.relPosition?.y ??
-    DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
+    DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 8
 
 export const BlockNodeElement = <T extends object>({
   nodeId,
@@ -296,6 +298,8 @@ export const BlockNodeElement = <T extends object>({
     })
   }
 
+  const pinColour = useFbdPinColour()
+
   const handleFocusInput = (e: FocusEvent<HTMLInputElement, Element>) => {
     e.target.select()
     setValidBlockNameValue(blockNameValue)
@@ -303,20 +307,13 @@ export const BlockNodeElement = <T extends object>({
   }
 
   return (
-    <div
-      className={cn(
-        'relative flex flex-col rounded-md border border-neutral-850 bg-white text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
-        {
-          'hover:border-transparent hover:ring-2 hover:ring-brand': !disabled,
-          'border-transparent ring-1 ring-red-500': wrongVariable || wrongName,
-          'border-transparent ring-2 ring-brand': selected,
-        },
-      )}
-      style={{
-        width: width,
-        height: height,
-        transform: `scale(${scale})`,
-      }}
+    <FbdBlockFrame
+      width={width}
+      height={height}
+      scale={scale}
+      selected={selected}
+      invalid={wrongVariable || wrongName}
+      disabled={disabled}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -325,7 +322,8 @@ export const BlockNodeElement = <T extends object>({
         onChange={(e) => setBlockNameValue(e.target.value.toUpperCase())}
         maxLength={20}
         placeholder='???'
-        className='absolute top-2 w-full bg-transparent text-center text-xs outline-none'
+        className='absolute bg-transparent outline-none'
+        style={FBD_BLOCK_TYPE_STYLE}
         disabled={disabled}
         onFocus={handleFocusInput}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
@@ -341,8 +339,13 @@ export const BlockNodeElement = <T extends object>({
       {inputConnectors.map((connector, index) => (
         <div
           key={index}
-          className='absolute text-xs'
-          style={{ top: connectorLabelTop(data.inputHandles, connector, index), left: 6 }}
+          className='absolute flex items-center'
+          style={{
+            ...FBD_PIN_STYLE,
+            color: pinColour,
+            top: connectorLabelTop(data.inputHandles, connector, index),
+            left: 6,
+          }}
         >
           {connector}
           {inOutConnectors.has(connector) && <InOutPinMarker />}
@@ -351,13 +354,18 @@ export const BlockNodeElement = <T extends object>({
       {outputConnectors.map((connector, index) => (
         <div
           key={index}
-          className='absolute text-xs'
-          style={{ top: connectorLabelTop(data.outputHandles, connector, index), right: 6 }}
+          className='absolute'
+          style={{
+            ...FBD_PIN_STYLE,
+            color: pinColour,
+            top: connectorLabelTop(data.outputHandles, connector, index),
+            right: 6,
+          }}
         >
           {connector}
         </div>
       ))}
-    </div>
+    </FbdBlockFrame>
   )
 }
 
@@ -915,8 +923,8 @@ const Block = <T extends object>(block: BlockProps<T>) => {
               scrollLimiter: 14,
             }}
             ref={inputVariableRef}
-            textAreaClassName='text-center text-xs leading-3'
-            highlightClassName='text-center text-xs leading-3'
+            textAreaClassName="text-center text-xs leading-3 [font-family:'JetBrains_Mono',ui-monospace,monospace]"
+            highlightClassName="text-center text-xs leading-3 [font-family:'JetBrains_Mono',ui-monospace,monospace]"
           />
         )}
       </div>

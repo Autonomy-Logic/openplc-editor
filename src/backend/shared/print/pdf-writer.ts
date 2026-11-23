@@ -72,6 +72,8 @@ export async function createPdfLibBackend(fonts: EmbeddedFontSet): Promise<PdfBa
     sansBold: await doc.embedFont(fonts.sansBold, { subset: true }),
     mono: await doc.embedFont(fonts.mono, { subset: true }),
     monoBold: await doc.embedFont(fonts.monoBold, { subset: true }),
+    ldMono: await doc.embedFont(fonts.ldMono, { subset: true }),
+    ldMonoSemibold: await doc.embedFont(fonts.ldMonoSemibold, { subset: true }),
   }
 
   let page: PDFPage | undefined

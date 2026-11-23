@@ -7,6 +7,8 @@ import type {
 } from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
 import type { RungLadderState } from '@root/frontend/store/slices'
 import { createTestStore } from '@root/frontend/store/testing'
+import { EMPTY_LABEL_SOURCE } from '@root/middleware/shared/utils/ladder-layout/labels'
+import { layoutRung, rungLayoutDiffers } from '@root/middleware/shared/utils/ladder-layout/layout'
 import type { Node } from '@xyflow/react'
 
 import { createBlockSignatureResolver } from '../../block-signatures'
@@ -234,7 +236,7 @@ describe('parseLadderXml rebuilds rungs the way the editor draws them', () => {
   it('lays every rung out from its own origin, with straight wires between elements', () => {
     for (const rung of body.rungs) {
       const leftRail = rung.nodes.find((n) => n.id === `left-rail-${rung.id}`)
-      expect(leftRail?.position).toEqual({ x: 0, y: 30 })
+      expect(leftRail?.position.x).toBe(0)
       for (const edge of rung.edges) {
         if (
           VERTICAL_PARALLEL_HANDLES.has(edge.sourceHandle ?? '') ||
@@ -247,6 +249,15 @@ describe('parseLadderXml rebuilds rungs the way the editor draws them', () => {
         expect({ edge: edge.id, y: to }).toEqual({ edge: edge.id, y: from })
       }
     }
+  })
+})
+
+describe('parseLadderXml stores the layout engine output', () => {
+  it('gives every rebuilt rung the geometry layoutRung computes with an empty label source', () => {
+    const { body } = parseProgram(EXPORTED_LD)
+    expect(body.rungs.map((rung) => rungLayoutDiffers(rung, layoutRung(rung, EMPTY_LABEL_SOURCE)))).toEqual(
+      body.rungs.map(() => false),
+    )
   })
 })
 

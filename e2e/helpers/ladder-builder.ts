@@ -330,17 +330,22 @@ export class LadderBuilder {
     return rung
   }
 
-  /** Types the rung comment into the rung header's comment field and commits it. */
+  /** Opens Edit comment from the rung gutter's menu, types the comment and commits it. */
   private async setComment(rung: Locator, comment: string, context: string): Promise<void> {
-    const field = rung.getByPlaceholder('Start typing to add a comment to this rung')
-    await field.click()
+    await rung.locator('[aria-label="Rung gutter"]').click({ button: 'right' })
+    await this.page.locator('[aria-label="Rung menu"]').getByText('Edit comment', { exact: true }).click()
+    const field = rung.locator('[aria-label="Rung comment field"]')
     await field.fill(comment)
-    await field.blur()
-    await waitForApp(this.page, async () => (await field.inputValue()) === comment, {
-      timeout: 10_000,
-      failure: BUILD_FAILURE,
-      message: `${context}: the rung comment field does not show the comment`,
-    })
+    await field.press('Enter')
+    await waitForApp(
+      this.page,
+      async () => (await rung.locator('[aria-label="Rung comment"]').innerText()) === comment,
+      {
+        timeout: 10_000,
+        failure: BUILD_FAILURE,
+        message: `${context}: the rung does not show the comment`,
+      },
+    )
   }
 
   /** Runs one step on `rung`. */
@@ -519,7 +524,10 @@ export class LadderBuilder {
    * Types `value` into `field`; a literal is committed with Enter, a variable through the autocomplete: the existing
    * variable when this program already has it, otherwise Add variable.
    */
-  private async fill(field: Locator, value: string, context: string): Promise<void> {
+  private async fill(testId: string, value: string, context: string): Promise<void> {
+    const name = this.page.locator(`[data-testid="${testId}"]`)
+    const field = this.page.locator(`[data-testid="${testId}-field"]`)
+    if ((await field.count()) === 0) await name.dispatchEvent('click')
     await field.click()
     await this.page.keyboard.press(SELECT_ALL)
     await this.page.keyboard.type(value, { delay: 5 })
@@ -538,32 +546,33 @@ export class LadderBuilder {
       })
       await choice.first().click()
       this.variables.add(value.toLowerCase())
-      await this.page.keyboard.press('Escape')
+      if ((await field.count()) > 0) await field.press('Enter')
     }
-    await waitForApp(this.page, async () => (await field.inputValue()) === value, {
+    await waitForApp(this.page, async () => (await field.count()) === 0 && (await name.textContent()) === value, {
       timeout: 10_000,
       failure: BUILD_FAILURE,
-      message: `${context}: the field does not show ${value}`,
+      message: `${context}: the element does not show ${value}`,
     })
   }
 
   /** Names a dropped contact or coil through its variable field. */
   private async nameElement(rung: Locator, ref: Ref, name: string, context: string): Promise<void> {
-    await this.fill(this.node(rung, ref, context).locator('textarea').first(), name, `${context} ${ref}`)
+    const id = this.id(ref, context)
+    await this.fill(`ld-name-${id}`, name, `${context} ${ref}`)
   }
 
   /**
    * The variable field of a block pin: the variable node beside the block whose centre is level with the pin's label,
    * on the label's side of the block.
    */
-  private async pinField(rung: Locator, blockRef: Ref, pin: string, context: string): Promise<Locator> {
+  private async pinField(rung: Locator, blockRef: Ref, pin: string, context: string): Promise<string> {
     const block = this.node(rung, blockRef, context)
     const blockBox = await boxOf(block, `${context}: ${blockRef}`)
     const label = block.getByText(pin, { exact: true }).first()
     if ((await label.count()) === 0) throw new Error(`${context}: ${blockRef} shows no pin ${pin}`)
     const labelCentre = centre(await boxOf(label, `${context}: pin label ${pin}`))
     const isInput = labelCentre.x < centre(blockBox).x
-    let best: { field: Locator; distance: number } | undefined
+    let best: { field: string; distance: number } | undefined
     for (const variable of await rung.locator('.react-flow__node-variable').all()) {
       const box = await variable.boundingBox()
       if (box === null) continue
@@ -573,7 +582,7 @@ export class LadderBuilder {
       if (!beside) continue
       const distance = Math.abs(centre(box).y - labelCentre.y)
       if (best === undefined || distance < best.distance) {
-        best = { field: variable.locator('textarea').first(), distance }
+        best = { field: `ld-name-${(await variable.getAttribute('data-id')) ?? ''}`, distance }
       }
     }
     if (best === undefined || best.distance > 12) {
@@ -592,7 +601,7 @@ export class LadderBuilder {
   private async setModifier(rung: Locator, step: DropStep, modifier: CoilModifier, context: string): Promise<void> {
     const where = `${context} ${step.as} modifier ${modifier}`
     const title = step.drop === 'contact' ? 'Edit Contact Values' : 'Edit Coil Values'
-    await this.node(rung, step.as, where).locator('svg').first().dblclick()
+    await this.node(rung, step.as, where).dblclick()
     const dialog = this.page.getByRole('dialog').filter({ hasText: title })
     await waitForApp(this.page, async () => (await dialog.count()) > 0, {
       timeout: 10_000,
@@ -613,7 +622,7 @@ export class LadderBuilder {
 
   /** Opens Block Properties of a block by double-clicking it. */
   private async openBlockProperties(rung: Locator, ref: Ref, context: string): Promise<Locator> {
-    await this.node(rung, ref, context).locator('button').first().dblclick()
+    await this.node(rung, ref, context).dblclick()
     const dialog = this.page.getByRole('dialog').filter({ hasText: 'Block Properties' })
     await waitForApp(this.page, async () => (await dialog.count()) > 0, {
       timeout: 10_000,

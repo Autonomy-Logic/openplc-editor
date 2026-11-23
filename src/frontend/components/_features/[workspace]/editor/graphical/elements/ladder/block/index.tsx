@@ -13,6 +13,7 @@ import {
   removeLastExtensibleInput,
 } from '@root/frontend/utils/PLC/extensible-block-variables'
 import { PLCPou } from '@root/middleware/shared/ports'
+import { pouLabelSource, relayoutRung } from '@root/middleware/shared/utils/ladder-layout'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -29,7 +30,6 @@ import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_ato
 import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types/block'
 import { getBlockDocumentation, getVariableRestrictionType } from '../../../../../../../_atoms/graphical-editor/utils'
 import { InputWithRef } from '../../../../../../../_atoms/input'
-import { updateDiagramElementsPosition } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { reconcileBranchesIfNeeded } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
 import { useBoundEditorModel, useBoundPou } from '../../../active-context'
@@ -560,14 +560,14 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       })
     }
 
-    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+    const { nodes: variableNodes, edges: variableEdges } = relayoutRung(
       {
         ...rung,
         nodes: newNodes,
         edges: newEdges,
         ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
-      [rung.defaultBounds[0], rung.defaultBounds[1]],
+      pouLabelSource(store.getState().project.data, pouName),
     )
 
     setNodes({

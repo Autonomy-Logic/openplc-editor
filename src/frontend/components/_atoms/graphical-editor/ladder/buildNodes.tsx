@@ -21,9 +21,6 @@ import {
   DEFAULT_POWER_RAIL_CONNECTOR_Y,
   DEFAULT_POWER_RAIL_HEIGHT,
   DEFAULT_POWER_RAIL_WIDTH,
-  DEFAULT_VARIABLE_CONNECTOR_Y,
-  DEFAULT_VARIABLE_HEIGHT,
-  DEFAULT_VARIABLE_WIDTH,
 } from './utils/constants'
 import type {
   BlockBuilderProps,
@@ -36,8 +33,6 @@ import type {
   PlaceholderBuilderProps,
   PlaceholderNode,
   PowerRailBuilderProps,
-  VariableBuilderProps,
-  VariableNode,
 } from './utils/types'
 
 /**
@@ -57,7 +52,7 @@ export const buildBlockNode = <T extends object | undefined>({
   handleX,
   handleY,
   variant,
-  executionControl = false,
+  executionControl,
 }: BlockBuilderProps<T>) => {
   const original = [...((variant as BlockVariant)?.variables ?? [])]
   const outIndex = original.findIndex((v) => v.name === 'OUT')
@@ -594,76 +589,5 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
     draggable: false,
     selectable: false,
     selected: false,
-  }
-}
-
-export const buildVariableNode = ({
-  id,
-  posX,
-  posY,
-  handleX,
-  handleY,
-  variant,
-  block,
-  variable,
-}: VariableBuilderProps): VariableNode => {
-  const inputHandle =
-    variant === 'output'
-      ? buildHandle({
-          id: 'input',
-          position: Position.Left,
-          isConnectable: false,
-          type: 'target',
-          glbX: handleX,
-          glbY: handleY,
-          relX: 0,
-          relY: DEFAULT_VARIABLE_CONNECTOR_Y,
-        })
-      : undefined
-  const outputHandle =
-    variant === 'input'
-      ? buildHandle({
-          id: 'output',
-          position: Position.Right,
-          isConnectable: false,
-          type: 'source',
-          glbX: handleX + DEFAULT_VARIABLE_WIDTH,
-          glbY: handleY,
-          relX: DEFAULT_VARIABLE_WIDTH,
-          relY: DEFAULT_VARIABLE_CONNECTOR_Y,
-        })
-      : undefined
-
-  return {
-    id,
-    type: 'variable',
-    position: {
-      x: posX,
-      y: posY,
-    },
-    width: DEFAULT_VARIABLE_WIDTH,
-    height: DEFAULT_VARIABLE_HEIGHT,
-    measured: {
-      width: DEFAULT_VARIABLE_WIDTH,
-      height: DEFAULT_VARIABLE_HEIGHT,
-    },
-    data: {
-      handles: [inputHandle, outputHandle].filter((handle) => handle !== undefined),
-      inputHandles: [inputHandle].filter((handle) => handle !== undefined),
-      outputHandles: [outputHandle].filter((handle) => handle !== undefined),
-      inputConnector: inputHandle,
-      outputConnector: outputHandle,
-      numericId: generateNumericUUID(),
-      variable: variable ?? { name: '' },
-      executionOrder: 0,
-      variant,
-      block,
-      draggable: false,
-      selectable: true,
-      deletable: false,
-    },
-    deletable: false,
-    selectable: true,
-    draggable: false,
   }
 }

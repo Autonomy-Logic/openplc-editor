@@ -393,6 +393,47 @@ There is **no URL-based router**. Navigation is tab-driven via the Zustand `tabs
 
 Flow state is stored per-POU in dedicated slices (`ladder`, `fbd`). Flows must be relinked to current variables after variable table changes.
 
+**LD layout engine** (`src/middleware/shared/utils/ladder-layout/`, byte-identical on openplc-web). Every stored LD
+coordinate is engine output: `layoutRung(rung, labelSource)` computes the geometry (columns sized from names and
+locations, a location line reserved on every contact and coil, block header band and pin rows) and
+`applyRungLayout` stores it, with the natural size as `defaultBounds` and `reactFlowViewport`. Editing paths call
+`relayoutRung(rung, labelSource)`, which also rebuilds the pin variable boxes. Every layout caller passes a
+`LadderLabelSource` (`pouLabelSource(project, pou)`); a caller without one passes `EMPTY_LABEL_SOURCE`. The input pin networks of a main-series
+block start at the left rail, each column sharing one width with the main series before the block. In a parallel
+group every branch spans the longest branch: a shorter branch ends in a straight branch filler to one vertical
+closing junction (before the coils in a trailing coil group). Branch fillers and junction lines are derived from the
+layout (`RungLayout.branchFillers`, `parallelEdgeRoute`) and never stored. Geometry decides the order of the
+compiled statements, so any layout change must keep the ST-order corpus green
+(`st-transpiler/__tests__/ld-relayout-corpus.test.ts`).
+
+**LD screen drawing.** The LD editor lays every rung of the POU out once (`useLadderPouCanvasValue`,
+`_molecules/graphical-editor/ladder/rung/pou-canvas.ts`), and each rung body gives its layout, the label source and
+the theme palette (`LADDER_PALETTE`) to the node atoms through `LadderRungViewProvider`
+(`_atoms/graphical-editor/ladder/rung-view.tsx`). The atoms draw the layout's labels as SVG text in JetBrains Mono,
+never as HTML; a name becomes a one-line `<input>` when clicked or when its element is placed. Every edge
+`parallelEdgeRoute` routes is drawn as the straight polyline of the `ladderRoute` edge type (`route-edge.tsx`); other
+edges stay xyflow `smoothstep`. Rendering itself writes no geometry: the panel size comes from the layout, and xyflow's
+measurements stay local; the LD editor stores the layout on any rung whose stored geometry drifted from it (a
+rename, an instance name, a changed location, a new rung: `withLaidOutGeometry`). The LD diff view lays both sides out the same way with the project's current
+variables, and marks an element whose position or size alone changed only in a rung pair that is a pure re-layout
+(`graphical-diff.ts`).
+
+**LD POU canvas.** A POU is one canvas (`ld-pou-canvas`) that scrolls sideways as one, with a 44 px left gutter.
+`presentPou(layouts, visibleWidth)` (`ladder-layout/presentation.ts`) puts one right rail for every rung 24 px from
+the editor's right edge when every rung fits, else right after the widest rung, and right-justifies each rung's
+trailing outputs against it as display-only x shifts (`dxByNode`). xyflow gets `toDisplayNodes(...)`; every position
+it reports goes through `toCanonicalPosition` before reaching rung state, copycats and placeholders shift with the node
+they stand for (`withTransientShifts`), and hit-tests compare displayed positions with the pointer. The shifts and the
+editor width are never stored.
+
+**LD print.** The PDF draws Ladder from the same engine (`backend/shared/print/ladder-painter.ts`, with the POU's
+`LadderLabelSource` carried in the `ld` `PrintPou`), in `LADDER_PALETTE.paper`: one content block per rung (comment
+lines wrapped, number, rows) so pages break only between rungs, then the End row. `ladder-print-plan.ts` picks the
+scale: 100% when the widest rung fits, else one POU scale down to 80%, then a rung wraps between top-level segments
+onto rows joined by lettered markers (A..Z, AA), its outputs on the last row; a rung with a part too wide for a row,
+or taller than the page, is scaled alone. Gutter, rails, number and comment use the POU scale, so the rails of every
+rung meet. Scale to fit keeps one scale for the widest rung, no floor, no wrap.
+
 ### Compilation Pipeline
 
 Orchestrated by `CompilerModule` (`src/backend/editor/compiler/compiler-module.ts`):

@@ -1,0 +1,2 @@
+
+  Lamp := Motor;
