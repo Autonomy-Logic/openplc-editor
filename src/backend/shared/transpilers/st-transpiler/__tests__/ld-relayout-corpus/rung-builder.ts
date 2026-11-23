@@ -78,7 +78,7 @@ function blockTemplate(rung: RungLadderState, typeName: BlockTemplateName): Temp
 
 /** B10 rung 3: a two-branch parallel group of contacts. */
 function ctuRungParallel(data: PLCProjectData): RungLadderState {
-  return savedRungs(data, 'Aux')[2]
+  return savedRungs(data, 'Auxiliary')[2]
 }
 
 function parallelNode(rung: RungLadderState, type: 'open' | 'close'): Node {
@@ -95,7 +95,7 @@ function templates(): Templates {
   const basic = loadCorpusProject('ld-corpus-basic')
   const [b01] = savedRungs(basic, 'Main')
   const b08 = savedRungs(basic, 'Blocks')[3]
-  const ctuRung = savedRungs(basic, 'Aux')[1]
+  const ctuRung = savedRungs(basic, 'Auxiliary')[1]
   cached = {
     leftRail: nodeOfType(b01, 'powerRail', 'left'),
     rightRail: nodeOfType(b01, 'powerRail', 'right'),

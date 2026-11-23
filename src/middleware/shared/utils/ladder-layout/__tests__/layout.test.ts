@@ -542,8 +542,8 @@ describe('parallel groups', () => {
   const basic = loadCorpusProject('ld-corpus-basic')
 
   it('stacks branches 12 px apart and pads the group 8 px at its opening junction (B10 rung 3: aux_c | aux_d, then TOF0)', () => {
-    const rung = loadedRungs(basic, 'Aux')[2]
-    const layout = layoutRung(rung, corpusLabelSource(basic, 'Aux'))
+    const rung = loadedRungs(basic, 'Auxiliary')[2]
+    const layout = layoutRung(rung, corpusLabelSource(basic, 'Auxiliary'))
     const c = geometry(layout, nodeByName(rung, 'aux_c').id)
     const d = geometry(layout, nodeByName(rung, 'aux_d').id)
     const tof = geometry(layout, nodeByName(rung, 'TOF0').id)

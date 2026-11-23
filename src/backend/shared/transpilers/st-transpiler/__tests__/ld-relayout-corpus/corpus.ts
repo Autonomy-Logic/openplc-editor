@@ -48,7 +48,7 @@ export const CORPUS_COVERAGE: readonly CorpusScenario[] = [
   { id: 'B05', name: 'in-out-pins', project: 'ld-corpus-basic', pou: 'Blocks', rungs: [3] },
   { id: 'B08', name: 'block-then-coil-same-band', project: 'ld-corpus-basic', pou: 'Blocks', rungs: [4] },
   { id: 'B09', name: 'pin-variable-row0-vs-coil', project: 'ld-corpus-basic', pou: 'Blocks', rungs: [5] },
-  { id: 'B10', name: 'multi-rung-boundary-sinks', project: 'ld-corpus-basic', pou: 'Aux', rungs: [1, 2, 3, 4] },
+  { id: 'B10', name: 'multi-rung-boundary-sinks', project: 'ld-corpus-basic', pou: 'Auxiliary', rungs: [1, 2, 3, 4] },
   { id: 'H01', name: 'ctu-cu-r-separate-networks', project: 'ld-corpus-hard', pou: 'Counters', rungs: [1] },
   { id: 'H02', name: 'ctud-four-input-networks', project: 'ld-corpus-hard', pou: 'Counters', rungs: [2] },
   { id: 'H03', name: 'sr-rs-separate-networks', project: 'ld-corpus-hard', pou: 'Counters', rungs: [3, 4] },
