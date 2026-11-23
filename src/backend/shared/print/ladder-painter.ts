@@ -227,14 +227,13 @@ function rowOps(
   railX: number,
 ): DrawOp[] {
   const row = rows[rowIndex]
-  const isLast = rowIndex === rows.length - 1
   const rowOf = rowOfNode(layout, rows)
   const first = layout.segments[row.segmentIndexes[0] ?? -1]
   const rowShift = (row.startMarker !== undefined ? MARKER_SPACE : 0) - (first?.x ?? 0)
   const railShift = railX - layout.size.width
   const trailing = new Set(layout.trailingOutputIds)
   const dxOf = (id: string): number => {
-    if (id === layout.rightRailId || (isLast && trailing.has(id))) return railShift
+    if (id === layout.rightRailId || (trailing.has(id) && rowOf.get(id) === rowIndex)) return railShift
     return rowOf.has(id) ? rowShift : 0
   }
   const onRow = (id: string): boolean => rowOf.get(id) === rowIndex

@@ -42,6 +42,9 @@ const CENTRED_BASELINE = T.nameSizePx * 0.36
 const CELL_BELOW = 3
 /** Space between a pin variable column and the next column, beyond the stub. */
 const SIDE_COLUMN_PAD = 5
+
+/** What an unnamed element shows; a pin variable column is never narrower, so its name field has room. */
+export const EMPTY_NAME_PLACEHOLDER = '???'
 /** Gap between the stub end and a pin variable's text. */
 const SIDE_LABEL_GAP = 4
 /** Gap between an instance name's baseline and the block box. */
@@ -135,17 +138,33 @@ const isCoilGroup = (group: LdGroup): boolean =>
 const isTrailingOutput = (element: LdElement): boolean =>
   element.kind === 'cell' ? element.node.type === 'coil' : element.kind === 'group' && isCoilGroup(element)
 
+/** Index where a series' trailing outputs (coils, coil groups) start; its length when it has none. */
+function tailStart(elements: readonly LdElement[]): number {
+  let from = elements.length
+  while (from > 0 && isTrailingOutput(elements[from - 1])) from--
+  return from
+}
+
+/** True for a group that is not all coils but whose every branch ends in coils. */
+const isOutputGroup = (group: LdGroup): boolean =>
+  !isCoilGroup(group) && group.branches.every((branch) => branch.length > 0 && tailStart(branch) < branch.length)
+
 /** Measures and places one rung's elements, collecting geometry, labels, groups and fillers. */
 class RungLayoutBuilder {
   readonly nodes = new Map<string, NodeGeometry>()
   readonly labels = new Map<string, LabelBox[]>()
   readonly parallels: ParallelGroupLayout[] = []
   readonly fillers: BranchFiller[] = []
+  /** The trailing coils of block output networks that end on the right rail, and where their columns end. */
+  readonly outputTails: { nodeIds: readonly string[]; right: number }[] = []
   readonly railHandleY = new Map<string, number>()
   private readonly cellExtents = new Map<LdCell, Extent>()
   private readonly blockMeasures = new Map<LdBlock, BlockMeasure>()
   private readonly groupMeasures = new Map<LdGroup, GroupMeasure>()
   private readonly endAligned = new Set<LdGroup>()
+  private readonly splitAligned = new Set<LdGroup>()
+  /** The branch-end coils and closing junctions of a trailing output group, which move with the right rail. */
+  readonly splitTailIds: string[] = []
   private readonly railStarted = new Set<LdBlock>()
   private readonly cellTop: number
   private readonly cellBottom: number
@@ -158,6 +177,48 @@ class RungLayoutBuilder {
     this.cellTop = s.symH / 2 + s.labGap + LOCATION_LINE + NAME_LINE
     this.cellBottom = s.symH / 2 + CELL_BELOW
     this.firstRow = s.blkHead + s.P / 2
+  }
+
+  /**
+   * Lays out a trailing output group with each branch's contacts at its start and its end coils against the closing
+   * junction, the last coil of every branch in the widest one's column.
+   */
+  alignSplit(group: LdGroup): void {
+    this.splitAligned.add(group)
+    const last = group.branches
+      .map((branch) => branch[branch.length - 1])
+      .filter((element): element is LdCell => element?.kind === 'cell')
+    const widest = Math.max(0, ...last.map((cell) => this.cell(cell).w))
+    for (const cell of last) this.cellExtents.set(cell, { ...this.cell(cell), w: widest })
+    this.groupMeasures.clear()
+  }
+
+  /**
+   * Gives every coil that ends at the right rail one column, the widest one's: the main series' last coil, the last
+   * coil of each branch of a trailing group and of each block output network that reaches the rail, so their centred
+   * symbols line up vertically.
+   */
+  alignRailCoils(main: readonly LdElement[]): void {
+    const coils: LdCell[] = []
+    const lastCoil = (elements: readonly LdElement[]): void => {
+      const last = elements[elements.length - 1]
+      if (last?.kind === 'cell' && last.node.type === 'coil') coils.push(last)
+    }
+    const last = main[main.length - 1]
+    if (last?.kind === 'group') last.branches.forEach(lastCoil)
+    else lastCoil(main)
+    for (const element of main) {
+      if (element.kind !== 'block') continue
+      for (const row of element.rows) {
+        const network = row.output?.network
+        if (network?.railHandleId !== undefined) lastCoil(network.elements)
+      }
+    }
+    if (coils.length < 2) return
+    const widest = Math.max(...coils.map((coil) => this.cell(coil).w))
+    for (const coil of coils) this.cellExtents.set(coil, { ...this.cell(coil), w: widest })
+    this.blockMeasures.clear()
+    this.groupMeasures.clear()
   }
 
   alignToEnd(group: LdGroup): void {
@@ -205,6 +266,35 @@ class RungLayoutBuilder {
     }
     this.blockMeasures.clear()
     this.groupMeasures.clear()
+  }
+
+  /** Moves the nodes `ids`, their labels and the groups made only of them `dx` to the right. */
+  shift(ids: ReadonlySet<string>, dx: number): void {
+    for (const id of ids) {
+      const geometry = this.nodes.get(id)
+      if (geometry !== undefined)
+        this.nodes.set(id, { ...geometry, position: { ...geometry.position, x: geometry.position.x + dx } })
+      const labels = this.labels.get(id)
+      if (labels !== undefined)
+        this.labels.set(
+          id,
+          labels.map((label) => ({ ...label, x: label.x + dx })),
+        )
+    }
+    this.parallels.forEach((group, index) => {
+      if (!group.openNodeIds.every((id) => ids.has(id))) return
+      this.parallels[index] = {
+        ...group,
+        openX: group.openX + dx,
+        closeX: group.closeX + dx,
+        branches: group.branches.map((branch) => ({ ...branch, startX: branch.startX + dx, endX: branch.endX + dx })),
+      }
+      this.fillers.forEach((filler, at) => {
+        if (group.closeNodeIds.includes(filler.closeNodeId)) {
+          this.fillers[at] = { ...filler, x1: filler.x1 + dx, x2: filler.x2 + dx }
+        }
+      })
+    })
   }
 
   /** Width and extents above and below the wire of a series; a block's pin networks clear what precedes it. */
@@ -276,7 +366,11 @@ class RungLayoutBuilder {
     if (pin?.variable === undefined) return { kind: 'none' }
     const name = nameOf(pin.variable)
     const location = locationOf(name, this.src)
-    const width = Math.max(textWidthPx(name, T.nameSizePx), textWidthPx(location, T.locationSizePx))
+    const width = Math.max(
+      textWidthPx(name, T.nameSizePx),
+      textWidthPx(location, T.locationSizePx),
+      textWidthPx(EMPTY_NAME_PLACEHOLDER, T.nameSizePx),
+    )
     return { kind: 'variable', node: pin.variable, name, location, width }
   }
 
@@ -556,10 +650,21 @@ class RungLayoutBuilder {
       case 'none':
         return []
       case 'network': {
+        const { elements, railHandleId } = content.network
         const startX = side === 'right' ? edgeX + s.stub : (railStart ?? edgeX - s.stub - content.extent.w)
-        const placed = this.placeSeries(content.network.elements, startX, pinY, depth)
-        if (content.network.railHandleId !== undefined) this.railHandleY.set(content.network.railHandleId, pinY)
-        return placed.nodeIds
+        if (railHandleId !== undefined) this.railHandleY.set(railHandleId, pinY)
+        let tailFrom = elements.length
+        if (side === 'right' && railHandleId !== undefined) {
+          while (tailFrom > 0 && isTrailingOutput(elements[tailFrom - 1])) tailFrom--
+        }
+        if (tailFrom === elements.length) return this.placeSeries(elements, startX, pinY, depth).nodeIds
+        const lead = elements.slice(0, tailFrom)
+        const tail = elements.slice(tailFrom)
+        const leadWidth = this.series(lead).w
+        const leadIds = this.placeSeries(lead, startX, pinY, depth).nodeIds
+        const tailIds = this.placeSeries(tail, startX + leadWidth, pinY, depth).nodeIds
+        this.outputTails.push({ nodeIds: tailIds, right: startX + leadWidth + this.series(tail).w })
+        return [...leadIds, ...tailIds]
       }
       case 'variable': {
         const width = sideWidth - s.stub
@@ -609,7 +714,7 @@ class RungLayoutBuilder {
   private placeGroup(group: LdGroup, x: number, y: number, depth: number): Placed {
     const s = this.s
     const m = this.group(group)
-    const alignment = this.endAligned.has(group) ? 'end' : 'start'
+    const alignment = this.endAligned.has(group) ? 'end' : this.splitAligned.has(group) ? 'split' : 'start'
     const openX = x
     const closeX = x + m.w
     const branchY = m.offsets.map((offset) => y + offset)
@@ -630,12 +735,36 @@ class RungLayoutBuilder {
     group.opens.forEach((node, index) => this.placeJunction(node, openX, branchY[index]))
     group.closes.forEach((node, index) => this.placeJunction(node, closeX, branchY[index]))
     group.branches.forEach((branch, index) => {
+      const closeNodeId = group.closes[Math.min(index, group.closes.length - 1)].id
+      if (alignment === 'split') {
+        const from = tailStart(branch)
+        const startX = openX + s.parPad
+        const lead = this.placeSeries(branch.slice(0, from), startX, branchY[index], depth + 1)
+        const tail = branch.slice(from)
+        const placedTail = this.placeSeries(tail, closeX - this.series(tail).w, branchY[index], depth + 1)
+        branches.push({
+          nodeIds: [...lead.nodeIds, ...placedTail.nodeIds],
+          y: branchY[index],
+          startX,
+          endX: placedTail.exitX,
+        })
+        nodeIds.push(...lead.nodeIds, ...placedTail.nodeIds)
+        this.splitTailIds.push(...placedTail.nodeIds)
+        this.fillers.push({
+          closeNodeId,
+          branchIndex: index,
+          side: 'before',
+          y: branchY[index],
+          x1: from === 0 ? openX : lead.exitX,
+          x2: placedTail.entryX,
+        })
+        return
+      }
       const startX = alignment === 'end' ? closeX - m.branches[index].w : openX + s.parPad
       const placed = this.placeSeries(branch, startX, branchY[index], depth + 1)
       const endX = branch.length === 0 ? startX : placed.exitX
       branches.push({ nodeIds: placed.nodeIds, y: branchY[index], startX, endX })
       nodeIds.push(...placed.nodeIds)
-      const closeNodeId = group.closes[Math.min(index, group.closes.length - 1)].id
       this.fillers.push(
         alignment === 'end'
           ? {
@@ -650,6 +779,7 @@ class RungLayoutBuilder {
       )
     })
     nodeIds.push(...group.closes.map((node) => node.id))
+    if (alignment === 'split') this.splitTailIds.push(...group.closes.map((node) => node.id))
     return { entryX: openX, exitX: closeX, nodeIds }
   }
 
@@ -711,6 +841,11 @@ export function layoutRung(
   while (trailingFrom > 0 && isTrailingOutput(main[trailingFrom - 1])) trailingFrom--
   for (const element of main.slice(trailingFrom)) if (element.kind === 'group') builder.alignToEnd(element)
   builder.alignInputNetworks(main)
+  const lastElement = main[main.length - 1]
+  if (trailingFrom === main.length && lastElement?.kind === 'group' && isOutputGroup(lastElement)) {
+    builder.alignSplit(lastElement)
+  }
+  builder.alignRailCoils(main)
 
   const extent = builder.series(main)
   const mainWireY = style.padT + extent.top
@@ -719,11 +854,17 @@ export function layoutRung(
 
   const { columns } = builder.placeSeries(main, 0, mainWireY, 0)
   const trailing = columns.slice(trailingFrom)
-  const trailingOutputIds = trailing.flatMap((column) => column.nodeIds)
+  const tailIds: string[] = []
+  for (const tail of builder.outputTails) {
+    builder.shift(new Set(tail.nodeIds), width - tail.right)
+    tailIds.push(...tail.nodeIds)
+  }
+  const mainOutputIds = trailing.flatMap((column) => column.nodeIds)
+  const trailingOutputIds = [...mainOutputIds, ...tailIds, ...builder.splitTailIds]
   const segments: LayoutSegment[] = columns.slice(0, trailingFrom)
   if (trailing.length > 0) {
     segments.push({
-      nodeIds: trailingOutputIds,
+      nodeIds: mainOutputIds,
       x: trailing[0].x,
       width: trailing.reduce((sum, column) => sum + column.width, 0),
     })

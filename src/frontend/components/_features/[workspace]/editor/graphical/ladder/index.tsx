@@ -59,6 +59,36 @@ const EMPTY_DIVERGENCES: string[] = []
 
 /** The visible width of the element in `ref`, followed as it resizes; 0 until it is measured. Display only. */
 
+/**
+ * Height of the space below a ladder diagram that lets its last rung scroll up to the top of the scroll container `ref`:
+ * the container's height less the last rung's and the End row's, followed as either resizes. Display only.
+ */
+function useScrollPastEnd(ref: RefObject<HTMLElement | null>, content: RefObject<HTMLElement | null>): number {
+  const [height, setHeight] = useState(0)
+  useEffect(() => {
+    const container = ref.current
+    const diagram = content.current
+    if (!container || !diagram) return
+    const measure = () => {
+      const rungs = diagram.querySelectorAll('[aria-label="Rung container"]')
+      const last = rungs.length > 0 ? rungs[rungs.length - 1] : undefined
+      const end = diagram.querySelector('[aria-label="Create new rung"]')
+      const tail = (last?.getBoundingClientRect().height ?? 0) + (end?.getBoundingClientRect().height ?? 0)
+      setHeight(Math.max(0, container.clientHeight - tail - DIAGRAM_GAP))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(container)
+    observer.observe(diagram)
+    return () => observer.disconnect()
+  }, [ref, content])
+  return height
+}
+
+/** Gap between the diagram and what follows it in the editor column (`gap-4`), in px. */
+const DIAGRAM_GAP = 16
+
 /** Stroke width of the POU's power rails, as each rung draws them. */
 const RAIL_STROKE = 2.5
 function useVisibleWidth(ref: RefObject<HTMLElement | null>): number {
@@ -185,6 +215,8 @@ export default function LadderEditor() {
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   const viewportWidth = useVisibleWidth(scrollableRef)
+  const diagramRef = useRef<HTMLDivElement>(null)
+  const scrollPastEnd = useScrollPastEnd(scrollableRef, diagramRef)
   const pouCanvas = useLadderPouCanvasValue(pouName, rungs, viewportWidth)
   // A rung drag starts after 4 px, so a click on the gutter still selects the rung.
   const rungDragSensors = useSensors(
@@ -347,7 +379,7 @@ export default function LadderEditor() {
             onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
           >
-            <div className='relative h-fit'>
+            <div ref={diagramRef} className='relative h-fit'>
               {/* One pair of power rails for the whole POU, so the rungs read as one continuous flow. */}
               {[0, pouCanvas.presentation.railX].map((x) => (
                 <div
@@ -392,6 +424,7 @@ export default function LadderEditor() {
             </div>
           </DndContext>
         </LadderPouCanvasProvider>
+        <div aria-hidden className='shrink-0' style={{ height: scrollPastEnd }} />
         <Portal.Root>
           {blockElement && (
             <BlockElement

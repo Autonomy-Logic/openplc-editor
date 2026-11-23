@@ -527,7 +527,7 @@ export class LadderBuilder {
   private async fill(testId: string, value: string, context: string): Promise<void> {
     const name = this.page.locator(`[data-testid="${testId}"]`)
     const field = this.page.locator(`[data-testid="${testId}-field"]`)
-    if ((await field.count()) === 0) await name.click()
+    if ((await field.count()) === 0) await name.dispatchEvent('click')
     await field.click()
     await this.page.keyboard.press(SELECT_ALL)
     await this.page.keyboard.type(value, { delay: 5 })
@@ -601,7 +601,7 @@ export class LadderBuilder {
   private async setModifier(rung: Locator, step: DropStep, modifier: CoilModifier, context: string): Promise<void> {
     const where = `${context} ${step.as} modifier ${modifier}`
     const title = step.drop === 'contact' ? 'Edit Contact Values' : 'Edit Coil Values'
-    await this.node(rung, step.as, where).locator('svg').first().dblclick()
+    await this.node(rung, step.as, where).dblclick()
     const dialog = this.page.getByRole('dialog').filter({ hasText: title })
     await waitForApp(this.page, async () => (await dialog.count()) > 0, {
       timeout: 10_000,
@@ -622,7 +622,7 @@ export class LadderBuilder {
 
   /** Opens Block Properties of a block by double-clicking it. */
   private async openBlockProperties(rung: Locator, ref: Ref, context: string): Promise<Locator> {
-    await this.node(rung, ref, context).locator('button').first().dblclick()
+    await this.node(rung, ref, context).dblclick()
     const dialog = this.page.getByRole('dialog').filter({ hasText: 'Block Properties' })
     await waitForApp(this.page, async () => (await dialog.count()) > 0, {
       timeout: 10_000,

@@ -7,6 +7,7 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { FBDBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
 import { ConnectorSVGComponent, ContinuationSVGComponent } from './svg'
+import { FBD_MONO_CLASS } from './utils/block-style'
 import {
   CONNECTION_ELEMENT_HEIGHT,
   CONNECTION_ELEMENT_WIDTH,
@@ -173,10 +174,10 @@ const ConnectionElement = (block: ConnectionProps) => {
             className={cn('flex w-full flex-row items-center')}
           >
             <HighlightedTextArea
-              textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
+              textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', FBD_MONO_CLASS, {
                 'text-red-500': inputError,
               })}
-              highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
+              highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', FBD_MONO_CLASS, {})}
               scrollableIndicatorClassName={cn({
                 '-right-2': data.variant === 'continuation',
                 '-left-2': data.variant === 'connector',

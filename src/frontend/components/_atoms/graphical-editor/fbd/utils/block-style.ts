@@ -23,3 +23,9 @@ export const FBD_PIN_STYLE: CSSProperties = {
 
 /** The theme colour of an FBD pin name. */
 export const useFbdPinColour = (): string => useLadderThemePalette().muted
+
+/** Class giving FBD text the LD typeface. */
+export const FBD_MONO_CLASS = "[font-family:'JetBrains_Mono',ui-monospace,monospace]"
+
+/** Inset of a slim variable or connector shape from the top and bottom of its node, which keeps its stored size. */
+export const FBD_SLIM_INSET = 5

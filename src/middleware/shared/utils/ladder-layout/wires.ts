@@ -59,7 +59,8 @@ function withoutRepeats(points: readonly WirePoint[]): WirePoint[] {
 
 /**
  * Orthogonal points of an edge that leaves an opening parallel node or ends on a closing one; undefined for any
- * other edge. dx is a display-only x shift per node id (default 0); every point of the route takes its group's shift.
+ * other edge. dx is a display-only x shift per node id (default 0): each end takes its node's shift, the corner its
+ * junction's.
  */
 export function parallelEdgeRoute(
   layout: RungLayout,
@@ -73,10 +74,9 @@ export function parallelEdgeRoute(
   const source = handlePoint(layout, edge.source, edge.sourceHandle)
   const target = handlePoint(layout, edge.target, edge.targetHandle)
   if (source === undefined || target === undefined) return undefined
-  const points =
-    closing !== undefined
-      ? [source, { x: closing.closeX, y: source.y }, target]
-      : [source, { x: opening?.openX ?? source.x, y: target.y }, target]
-  const shift = dx(closing !== undefined ? edge.target : edge.source)
-  return withoutRepeats(points).map((point) => ({ x: point.x + shift, y: point.y }))
+  const junction = closing !== undefined ? edge.target : edge.source
+  const corner =
+    closing !== undefined ? { x: closing.closeX, y: source.y } : { x: opening?.openX ?? source.x, y: target.y }
+  const at = (point: WirePoint, id: string): WirePoint => ({ x: point.x + dx(id), y: point.y })
+  return withoutRepeats([at(source, edge.source), at(corner, junction), at(target, edge.target)])
 }

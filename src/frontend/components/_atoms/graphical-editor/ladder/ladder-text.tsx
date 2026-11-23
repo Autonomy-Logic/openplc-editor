@@ -32,6 +32,8 @@ export interface LadderTextProps {
   fontWeight?: number
   /** Draws the text only while the pointer is over it. */
   hoverOnly?: boolean
+  /** Tooltip of the text. */
+  hint?: string
   onClick?: (event: MouseEvent<SVGTextElement>) => void
 }
 
@@ -94,19 +96,31 @@ function SearchHighlights({ label, text }: { label: LabelBox; text: string }) {
 }
 
 /** One label drawn as SVG text content at its baseline, in node coordinates; never as markup. */
-export function LadderText({ label, text, fill, testId, fontWeight, hoverOnly = false, onClick }: LadderTextProps) {
+export function LadderText({
+  label,
+  text,
+  fill,
+  testId,
+  fontWeight,
+  hoverOnly = false,
+  hint,
+  onClick,
+}: LadderTextProps) {
   return (
     <LadderTextLayer>
       {!hoverOnly && <SearchHighlights label={label} text={text ?? label.text} />}
-      <text
-        {...textAttributes(label, fill, fontWeight)}
-        className={hoverOnly ? 'opacity-0 hover:opacity-100' : undefined}
-        data-testid={testId}
-        onClick={onClick}
-        style={{ whiteSpace: 'pre', pointerEvents: onClick ? 'auto' : 'none', cursor: onClick ? 'text' : undefined }}
-      >
-        {text ?? label.text}
-      </text>
+      <g>
+        {hint !== undefined && <title>{hint}</title>}
+        <text
+          {...textAttributes(label, fill, fontWeight)}
+          className={hoverOnly ? 'opacity-0 hover:opacity-100' : undefined}
+          data-testid={testId}
+          onClick={onClick}
+          style={{ whiteSpace: 'pre', pointerEvents: onClick ? 'auto' : 'none', cursor: onClick ? 'text' : undefined }}
+        >
+          {text ?? label.text}
+        </text>
+      </g>
     </LadderTextLayer>
   )
 }
@@ -161,6 +175,8 @@ export interface LadderNameFieldProps {
   placeholder?: string
   /** Shows the placeholder of an empty name only while the pointer is over it. */
   placeholderOnHover?: boolean
+  /** Tooltip of the name and its field, such as the type a pin expects. */
+  hint?: string
   fontWeight?: number
   editable: boolean
   editing: boolean
@@ -205,6 +221,7 @@ export function LadderNameField({
   fill,
   placeholder = '???',
   placeholderOnHover = false,
+  hint,
   fontWeight,
   editable,
   editing,
@@ -235,6 +252,7 @@ export function LadderNameField({
         <input
           className='nodrag nopan absolute z-10 rounded-[2px] px-[3px] outline-none'
           data-testid={`${testId}-field`}
+          title={hint}
           autoFocus
           spellCheck={false}
           value={value}
@@ -281,6 +299,7 @@ export function LadderNameField({
           fill={text === '' ? palette.muted : fill}
           fontWeight={fontWeight}
           hoverOnly={placeholderOnHover && text === ''}
+          hint={hint}
           testId={testId}
           onClick={editable ? open : undefined}
         />

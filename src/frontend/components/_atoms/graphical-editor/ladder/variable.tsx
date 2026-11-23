@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { LADDER_TYPOGRAPHY } from '@root/middleware/shared/utils/ladder-layout'
+import { EMPTY_NAME_PLACEHOLDER, LADDER_TYPOGRAPHY } from '@root/middleware/shared/utils/ladder-layout'
 import { memo, useEffect, useRef, useState } from 'react'
 
 import { PLCVariable } from '../../../../../middleware/shared/ports'
@@ -354,7 +354,7 @@ const VariableElement = (block: VariableProps) => {
           nodeId={id}
           side={data.variant}
           variableName={data.variable.name}
-          placeholder={placeholder}
+          placeholder={EMPTY_NAME_PLACEHOLDER}
           width={width ?? DEFAULT_VARIABLE_WIDTH}
           badge={
             isDebuggerVisible && isAVariable ? (
@@ -372,7 +372,7 @@ const VariableElement = (block: VariableProps) => {
               testId={`ld-name-${id}`}
               palette={palette}
               fill={nameFill}
-              placeholder={placeholder}
+              hint={placeholder}
               placeholderOnHover
               fontWeight={isForced ? LADDER_TYPOGRAPHY.semiboldWeight : undefined}
               editable={!isDebuggerVisible}

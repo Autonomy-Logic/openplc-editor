@@ -1,6 +1,11 @@
 import { emitLdBody } from '@root/backend/shared/transpilers/st-transpiler/walker/ld'
 import type { RFEdge, RFNode } from '@root/backend/shared/transpilers/st-transpiler/walker/types'
-import { EMPTY_LABEL_SOURCE, layoutRung } from '@root/middleware/shared/utils/ladder-layout'
+import {
+  EMPTY_LABEL_SOURCE,
+  LADDER_TYPOGRAPHY,
+  layoutRung,
+  textWidthPx,
+} from '@root/middleware/shared/utils/ladder-layout'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
@@ -242,6 +247,26 @@ describe('Ladder: contacts added on the parallel path of a block pin branch', ()
       return geometry === undefined ? Number.NaN : geometry.position.x + geometry.width / 2
     }
     expect(centre('reset_counter')).toBeCloseTo(centre('a'), 6)
+  })
+
+  it('puts a coil on a block output against the rail with the main coil, and leaves room to name an empty pin', () => {
+    blockRung('CTUD', 'CTUD0')
+    drop(pinOf('CTUD0', 'QD'), coil, 'qd_long_name')
+
+    const layout = layoutRung(rung(), EMPTY_LABEL_SOURCE)
+    const centre = (name: string) => {
+      const geometry = layout.nodes.get(nodeNamed(name).id)
+      return geometry === undefined ? Number.NaN : geometry.position.x + geometry.width / 2
+    }
+    expect(centre('qd_long_name')).toBeCloseTo(centre('qu'), 6)
+    expect(layout.trailingOutputIds).toContain(nodeNamed('qd_long_name').id)
+    const pinBoxes = rung().nodes.filter((node) => node.type === 'variable')
+    expect(pinBoxes.length).toBeGreaterThan(0)
+    for (const box of pinBoxes) {
+      expect(layout.nodes.get(box.id)?.width ?? 0).toBeGreaterThanOrEqual(
+        textWidthPx('???', LADDER_TYPOGRAPHY.nameSizePx),
+      )
+    }
   })
 
   it('builds (i AND j) OR k on CTUD.LD (H02 steps 1-6)', () => {

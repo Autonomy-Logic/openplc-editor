@@ -592,8 +592,16 @@ describe('trailingOutputIds names the outputs right-justified later (BDD-19)', (
     expect(trailing(seriesRung('r4', [contact('s', 'Start'), ton('t', 'Timer1', { PT: 'P', ET: 'E' })]))).toEqual([])
   })
 
-  it('contact, a parallel group holding coils and TON, TOF and CTU (H06): nothing, the group stays in flow', () => {
-    expect(trailing(loadedRungs(hard, 'Parallel')[1])).toEqual([])
+  it('contact, a parallel group whose branches end in coils after TON, TOF and CTU (H06): the branch-end coils', () => {
+    const rung = loadedRungs(hard, 'Parallel')[1]
+    const coils = rung.nodes.filter((node) => node.type === 'coil').map((node) => node.id)
+    expect(new Set(trailing(rung))).toEqual(new Set(coils))
+    const layout = layoutRung(rung, EMPTY_LABEL_SOURCE)
+    const centres = coils.map((id) => {
+      const geometry = layout.nodes.get(id)
+      return geometry === undefined ? Number.NaN : geometry.position.x + geometry.width / 2
+    })
+    expect(new Set(centres).size).toBe(1)
   })
 
   it('a block followed by a coil (B08): the coil only', () => {

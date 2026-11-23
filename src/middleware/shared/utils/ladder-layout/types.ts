@@ -52,8 +52,11 @@ export interface ParallelGroupLayout {
   yBottom: number
   /** 0 when not inside another group's branch; +1 per enclosing group. */
   depth: number
-  /** 'end' only for a trailing all-coil group of trailingOutputIds. */
-  alignment: 'start' | 'end'
+  /**
+   * 'end' only for a trailing all-coil group of trailingOutputIds; 'split' for a trailing group whose branches all end
+   * in coils: contacts at the start, the end coils against the closing junction.
+   */
+  alignment: 'start' | 'end' | 'split'
   /** Top to bottom. */
   branches: readonly ParallelBranchLayout[]
 }
@@ -67,11 +70,11 @@ export interface BranchFiller {
   closeNodeId: string
   /** Index in its group's branches. */
   branchIndex: number
-  /** 'before' only in an 'end' group. */
+  /** 'before' only in an 'end' or 'split' group. */
   side: 'after' | 'before'
   /** The branch's wire y. */
   y: number
-  /** 'after': the branch's endX; 'before': the group's openX. */
+  /** 'after': the branch's endX; 'before': the group's openX, or the exit of a split branch's last contact. */
   x1: number
   /** 'after': the group's closeX; 'before': the input handle x of the branch's first element. */
   x2: number

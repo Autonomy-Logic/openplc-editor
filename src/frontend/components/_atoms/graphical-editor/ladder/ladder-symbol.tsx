@@ -48,3 +48,38 @@ export function LadderSymbolGlyph({
     </svg>
   )
 }
+
+/** A contact or coil symbol drawn alone at `scale`, with a stub of rung wire on each side, as the element dialogs preview it. */
+export function LadderSymbolPreview({
+  kind,
+  stroke,
+  scale = 3,
+}: {
+  kind: LadderSymbolKind
+  stroke: string
+  scale?: number
+}) {
+  const symbol = ladderSymbol(kind)
+  const stub = 10
+  const width = symbol.width + 2 * stub
+  const y = symbol.height / 2
+  return (
+    <svg
+      width={width * scale}
+      height={(symbol.height + 6) * scale}
+      viewBox={`${-stub} -3 ${width} ${symbol.height + 6}`}
+      aria-label='Symbol preview'
+    >
+      <line x1={-stub} y1={y} x2={symbol.wireInset} y2={y} stroke={stroke} strokeWidth={1.25} />
+      <line
+        x1={symbol.width - symbol.wireInset}
+        y1={y}
+        x2={symbol.width + stub}
+        y2={y}
+        stroke={stroke}
+        strokeWidth={1.25}
+      />
+      <LadderSymbolGlyph kind={kind} stroke={stroke} energized={false} />
+    </svg>
+  )
+}

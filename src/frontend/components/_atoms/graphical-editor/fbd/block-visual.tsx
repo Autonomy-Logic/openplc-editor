@@ -4,7 +4,7 @@ import { type MouseEventHandler, ReactNode } from 'react'
 import { cn } from '../../../../utils/cn'
 import { InOutPinMarker } from '../in-out-pin-marker'
 import { useLadderThemePalette } from '../ladder/rung-view'
-import { FBD_BLOCK_TYPE_STYLE, FBD_PIN_STYLE, useFbdPinColour } from './utils/block-style'
+import { FBD_BLOCK_TYPE_STYLE, FBD_PIN_STYLE, FBD_SLIM_INSET, useFbdPinColour } from './utils/block-style'
 import {
   DEFAULT_BLOCK_CONNECTOR_Y,
   DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
@@ -161,5 +161,30 @@ export const BlockNodeVisual = ({
         </div>
       ))}
     </FbdBlockFrame>
+  )
+}
+
+/**
+ * The slim shape of an FBD variable: a box inset from the top and bottom of its node, so the node and its handles keep
+ * their size and place; thin border and theme colours as an LD block, the selection ring on the shape.
+ */
+export const FbdSlimFrame = ({ selected = false, borderColour }: { selected?: boolean; borderColour?: string }) => {
+  const palette = useLadderThemePalette()
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute inset-x-0 rounded-[2px] border group-hover:ring-2 group-hover:ring-brand',
+        {
+          'ring-2 ring-brand': selected,
+        },
+      )}
+      style={{
+        top: FBD_SLIM_INSET,
+        bottom: FBD_SLIM_INSET,
+        borderColor: borderColour ?? palette.wire,
+        background: palette.blockFill,
+      }}
+    />
   )
 }
