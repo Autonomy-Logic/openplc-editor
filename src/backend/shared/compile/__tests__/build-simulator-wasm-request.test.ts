@@ -1,5 +1,6 @@
 import {
   buildSimulatorWasmRequest,
+  SIMULATOR_C_FLAGS,
   SIMULATOR_CXX_FLAGS,
   SIMULATOR_LINK_FLAGS,
   SIMULATOR_MODULE,
@@ -52,6 +53,23 @@ describe('buildSimulatorWasmRequest', () => {
       'wasm-sim/core/api/Stream.cpp',
       'wasm-sim/core/api/String.cpp',
     ])
+  })
+
+  it('compiles the runtime C units as C with the C flags, as arduino-cli does', () => {
+    const built = buildSimulatorWasmRequest(
+      firmware({
+        'examples/Baremetal/license_platform.c': '// licence ids',
+        'examples/Baremetal/license_platform.h': '// header',
+        'src/helpers.c': '// program helper',
+      }),
+    )
+    if (!built.ok) throw new Error(built.error)
+    expect(built.request.units.filter((unit) => unit.language === 'c').map((unit) => unit.source)).toEqual([
+      'examples/Baremetal/license_platform.c',
+      'src/helpers.c',
+    ])
+    expect(built.request.cFlags).toEqual(SIMULATOR_C_FLAGS)
+    expect(SIMULATOR_C_FLAGS).not.toContain('-include')
   })
 
   it('turns the sketch into a C++ unit with Arduino.h, its prototypes and line markers', () => {
