@@ -20,6 +20,8 @@ beforeEach(() => {
     }),
     runtimeWhoAmI: jest.fn().mockResolvedValue({ success: true, user: { id: 1, username: 'admin', role: 'admin' } }),
     runtimeUpdateUser: jest.fn().mockResolvedValue({ success: true }),
+    runtimeUpdateOwnAccount: jest.fn().mockResolvedValue({ success: true }),
+    onRuntimeSessionEnded: jest.fn().mockImplementation(() => jest.fn()),
     runtimeDeleteUser: jest.fn().mockResolvedValue({ success: true }),
     runtimeGetStatus: jest.fn().mockResolvedValue({ success: true, status: 'RUNNING' }),
     runtimeStartPlc: jest.fn().mockResolvedValue({ success: true }),
@@ -190,6 +192,30 @@ describe('updateUser', () => {
     ;(window.bridge.runtimeUpdateUser as jest.Mock).mockRejectedValue(new Error('update failed'))
     const result = await adapter.updateUser(7, { username: 'x' })
     expect(result).toEqual({ success: false, error: 'update failed' })
+  })
+})
+
+describe('updateOwnAccount', () => {
+  it('delegates to the bridge with IP, id and params verbatim', async () => {
+    const params = { password: 'np', currentPassword: 'op' }
+    const result = await adapter.updateOwnAccount(7, params)
+    expect(window.bridge.runtimeUpdateOwnAccount).toHaveBeenCalledWith('192.168.1.100', 7, params)
+    expect(result).toEqual({ success: true })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.runtimeUpdateOwnAccount as jest.Mock).mockRejectedValue(new Error('gone'))
+    expect(await adapter.updateOwnAccount(7, { password: 'x' })).toEqual({ success: false, error: 'gone' })
+  })
+})
+
+describe('onSessionEnded', () => {
+  it('subscribes through the bridge and calls back with no arguments', () => {
+    const callback = jest.fn()
+    adapter.onSessionEnded?.(callback)
+    const handler = (window.bridge.onRuntimeSessionEnded as jest.Mock).mock.calls[0][0] as (event: unknown) => void
+    handler({})
+    expect(callback).toHaveBeenCalledWith()
   })
 })
 
