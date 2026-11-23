@@ -430,15 +430,21 @@ const serialMarker = (nodes: readonly Node[], nodeId: string, position: 'left' |
   })
 
 /**
- * The markers with one diamond per insertion point: when a node's only wire in comes from a node that offers a right
- * marker, the same point in the series, one of the two is dropped: after the left rail, the node's left marker, the rail's
+ * The markers with one diamond per insertion point: when a node's only wire into its main input comes from the main
+ * output of a node that offers a right marker, the same point in the series, one of the two is dropped: after the left rail, the node's left marker, the rail's
  * taking its place so it sits as far from the element as its other markers; else the source's right marker, the node's
- * left marker moving halfway between the two so it is as far from both elements. Both stay before the right rail and the outputs drawn against it, which sit far from the
+ * left marker moving halfway between the two so it is as far from both elements. No marker follows a coil, one on a
+ * block output included. Both stay before the right rail and the outputs drawn against it, which sit far from the
  * element before them.
  */
 const withoutDuplicateMarkers = (rung: RungLadderState, nodes: Node[]): Node[] => {
   const dropped = new Set<string>()
   const moved = new Map<string, { x: number; y: number }>()
+  for (const coil of rung.nodes) {
+    if (coil.type !== 'coil') continue
+    const after = serialMarker(nodes, coil.id, 'right')
+    if (after !== undefined) dropped.add(after.id)
+  }
   const atRail = new Set(layoutRungOrStored(rung, EMPTY_LABEL_SOURCE).trailingOutputIds)
   for (const node of rung.nodes) {
     if (atRail.has(node.id) || node.id.startsWith('right-rail')) continue
@@ -449,6 +455,9 @@ const withoutDuplicateMarkers = (rung: RungLadderState, nodes: Node[]): Node[] =
       (edge) => edge.target === node.id && (input === undefined || edge.targetHandle === input),
     )
     if (incoming.length !== 1) continue
+    const source = rung.nodes.find((candidate) => candidate.id === incoming[0].source)
+    const output = (source?.data as BasicNodeData | undefined)?.outputConnector?.id
+    if (output !== undefined && incoming[0].sourceHandle !== output) continue
     const right = serialMarker(nodes, incoming[0].source, 'right')
     if (right === undefined) continue
     if (incoming[0].source.startsWith('left-rail')) {
