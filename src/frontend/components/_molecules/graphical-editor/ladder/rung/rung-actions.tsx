@@ -13,7 +13,7 @@ export type RungAction = {
 
 type RungActionsProps = {
   actions: readonly RungAction[]
-  /** Kept visible, as while its menu is open; otherwise it shows while the pointer is over the rung. */
+  /** Kept visible, as while the rung menu is open; otherwise it shows while the pointer is over the rung. */
   pinned?: boolean
   /** X of the toolbar's right edge, in px from the rung's left: just inside the right rail. */
   right: number
@@ -22,7 +22,7 @@ type RungActionsProps = {
 
 const ICON = { width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: 1.4 } as const
 
-/** The rung toolbar's icons: comment, duplicate, collapse, expand, delete and more. */
+/** The rung toolbar's icons: comment, duplicate, collapse, expand and delete. */
 const RUNG_ACTION_ICONS = {
   comment: (
     <svg viewBox='0 0 16 16' {...ICON}>
@@ -48,13 +48,6 @@ const RUNG_ACTION_ICONS = {
   delete: (
     <svg viewBox='0 0 16 16' {...ICON}>
       <path d='M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8.5h4.8l.6-8.5' />
-    </svg>
-  ),
-  more: (
-    <svg viewBox='0 0 16 16' width={14} height={14} fill='currentColor'>
-      <circle cx='3.5' cy='8' r='1.3' />
-      <circle cx='8' cy='8' r='1.3' />
-      <circle cx='12.5' cy='8' r='1.3' />
     </svg>
   ),
 } as const

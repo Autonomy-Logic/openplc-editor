@@ -124,14 +124,6 @@ const Rung = ({
       disabled: isEditingLocked,
       onClick: () => openModal('confirm-delete-element', rung),
     },
-    {
-      label: 'More rung actions',
-      icon: 'more',
-      onClick: (event) => {
-        const box = event.currentTarget.getBoundingClientRect()
-        setMenuAt({ x: box.left, y: box.bottom + 4 })
-      },
-    },
   ]
 
   const handleContextMenu = (event: MouseEvent<HTMLDivElement>) => {
