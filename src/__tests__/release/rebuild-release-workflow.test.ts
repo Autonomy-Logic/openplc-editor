@@ -826,12 +826,12 @@ describe('rebuild-release.yml: packaged-checks', () => {
     return str(step.if).includes('negative_controls')
   }
 
-  it('runs on macos-14, windows-2022 and ubuntu-22.04 through its matrix', () => {
+  it('runs on macos-latest, windows-2022 and ubuntu-22.04 through its matrix', () => {
     const entry = checks()
     const runners = strings(record(entry.body.strategy).matrix).filter((value) => RUNNER_LABEL.test(value))
 
     expect(str(entry.body['runs-on'])).toContain('matrix.')
-    expect([...new Set(runners)].sort()).toEqual(['macos-14', 'ubuntu-22.04', 'windows-2022'])
+    expect([...new Set(runners)].sort()).toEqual(['macos-latest', 'ubuntu-22.04', 'windows-2022'])
   })
 
   it('tests the Apple silicon DMG, the x64 Windows installer and the x64 AppImage, never an ARM64 installer', () => {
