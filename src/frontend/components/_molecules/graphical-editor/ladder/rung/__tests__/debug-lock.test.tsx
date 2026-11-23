@@ -62,6 +62,21 @@ describe('rung gutter, menu and End rung', () => {
     expect(menuItem('Collapse rung').hasAttribute('disabled')).toBe(false)
   })
 
+  it('duplicates a rung from its hover toolbar, which keeps only collapse and the menu during a debug session', async () => {
+    const { store, view, rungs } = await open()
+    const toolbar = () => within(within(view.container).getAllByRole('toolbar', { name: 'Rung actions' })[0])
+    fireEvent.click(toolbar().getByRole('button', { name: 'Duplicate rung' }))
+    await settle()
+    expect(rungs()).toHaveLength(2)
+
+    act(() => store.getState().workspaceActions.setDebuggerVisible(true))
+    await settle()
+    const disabled = (name: string) => toolbar().getByRole<HTMLButtonElement>('button', { name }).disabled
+    expect(
+      ['Edit comment', 'Duplicate rung', 'Delete rung', 'Collapse rung', 'More rung actions'].map(disabled),
+    ).toEqual([true, true, true, false, false])
+  })
+
   it('adds a rung from the End rung, and disables it during a debug session', async () => {
     const { store, view, rungs } = await open()
     const create = within(view.container).getByLabelText<HTMLButtonElement>('Create new rung button')

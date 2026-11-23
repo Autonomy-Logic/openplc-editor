@@ -1,5 +1,5 @@
 import * as Portal from '@radix-ui/react-portal'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { cn } from '../../../../../utils/cn'
 
@@ -19,9 +19,28 @@ type RungMenuProps = {
   onClose: () => void
 }
 
-/** The right-click menu of a rung, at the pointer; closes on a choice, Escape or a click outside. */
+/** Space kept between a menu and the window's edges, in px. */
+const MENU_MARGIN = 8
+
+/**
+ * The right-click menu of a rung, at the pointer, moved left or up to stay inside the window; closes on a choice, Escape
+ * or a click outside.
+ */
 export const RungMenu = ({ at, items, onClose }: RungMenuProps) => {
-  const ref = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [place, setPlace] = useState(at)
+
+  const placeInside = useCallback(
+    (element: HTMLDivElement | null) => {
+      ref.current = element
+      if (element === null) return
+      const box = element.getBoundingClientRect()
+      const x = Math.max(MENU_MARGIN, Math.min(at.x, window.innerWidth - box.width - MENU_MARGIN))
+      const y = Math.max(MENU_MARGIN, Math.min(at.y, window.innerHeight - box.height - MENU_MARGIN))
+      setPlace((current) => (current.x === x && current.y === y ? current : { x, y }))
+    },
+    [at],
+  )
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -41,11 +60,11 @@ export const RungMenu = ({ at, items, onClose }: RungMenuProps) => {
   return (
     <Portal.Root>
       <div
-        ref={ref}
+        ref={placeInside}
         role='menu'
         aria-label='Rung menu'
         className='fixed z-50 w-48 rounded-md border border-neutral-200 bg-white p-1 text-xs shadow-lg dark:border-neutral-800 dark:bg-neutral-950'
-        style={{ left: at.x, top: at.y }}
+        style={{ left: place.x, top: place.y }}
       >
         {items.map((item, index) =>
           item === null ? (

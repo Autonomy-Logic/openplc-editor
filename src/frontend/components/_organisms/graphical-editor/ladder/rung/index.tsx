@@ -22,6 +22,7 @@ import { RungBody } from '../../../../_molecules/graphical-editor/ladder/rung/bo
 import { RungCommentLine } from '../../../../_molecules/graphical-editor/ladder/rung/comment-line'
 import { RungGutter } from '../../../../_molecules/graphical-editor/ladder/rung/gutter'
 import { useLadderPouCanvas } from '../../../../_molecules/graphical-editor/ladder/rung/pou-canvas'
+import { type RungAction, RungActions } from '../../../../_molecules/graphical-editor/ladder/rung/rung-actions'
 import { RungMenu, type RungMenuItem } from '../../../../_molecules/graphical-editor/ladder/rung/rung-menu'
 
 /** Height of a collapsed rung's single line, in px. */
@@ -81,8 +82,8 @@ const Rung = ({
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
 
   const comment = rung.comment ?? ''
-  const showComment = comment !== '' || editingComment
-  const wireTop = isOpen ? (showComment ? LADDER_STYLE.commentH : 0) + BODY_TOP + mainWireY : COLLAPSED_HEIGHT / 2
+  const wireTop = isOpen ? LADDER_STYLE.commentH + BODY_TOP + mainWireY : COLLAPSED_HEIGHT / 2
+  const railX = LADDER_STYLE.gutter + (canvas?.presentation.railX ?? 0)
 
   const toggleOpen = () => updateModelLadder({ openRung: { rungId: rung.id, open: !isOpen } })
   const setEditing = (editing: boolean) => onEditingCommentChange?.(rung.id, editing && !isEditingLocked)
@@ -107,6 +108,32 @@ const Rung = ({
     },
   ]
 
+  const actions: RungAction[] = [
+    { label: 'Edit comment', icon: 'comment', disabled: isEditingLocked, onClick: () => setEditing(true) },
+    {
+      label: 'Duplicate rung',
+      icon: 'duplicate',
+      disabled: isEditingLocked,
+      onClick: () => duplicateRung({ editorName, rungId: rung.id }),
+    },
+    { label: isOpen ? 'Collapse rung' : 'Expand rung', icon: isOpen ? 'collapse' : 'expand', onClick: toggleOpen },
+    {
+      label: 'Delete rung',
+      icon: 'delete',
+      danger: true,
+      disabled: isEditingLocked,
+      onClick: () => openModal('confirm-delete-element', rung),
+    },
+    {
+      label: 'More rung actions',
+      icon: 'more',
+      onClick: (event) => {
+        const box = event.currentTarget.getBoundingClientRect()
+        setMenuAt({ x: box.left, y: box.bottom + 4 })
+      },
+    },
+  ]
+
   const handleContextMenu = (event: MouseEvent<HTMLDivElement>) => {
     event.preventDefault()
     // The canvas opens the radial menu on a right click; the rung menu replaces it here.
@@ -118,7 +145,11 @@ const Rung = ({
   return (
     <div
       aria-label='Rung container'
-      className={cn('relative w-full', !isOpen && 'border-y border-neutral-200 dark:border-neutral-800', className)}
+      className={cn(
+        'group relative w-full',
+        !isOpen && 'border-y border-neutral-200 dark:border-neutral-800',
+        className,
+      )}
       id={id}
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
@@ -129,14 +160,12 @@ const Rung = ({
     >
       {isOpen ? (
         <>
-          {showComment && (
-            <RungCommentLine
-              comment={comment}
-              editing={editingComment}
-              onEditingChange={setEditing}
-              onCommit={(value) => addComment({ editorName, rungId: rung.id, comment: value })}
-            />
-          )}
+          <RungCommentLine
+            comment={comment}
+            editing={editingComment}
+            onEditingChange={setEditing}
+            onCommit={(value) => addComment({ editorName, rungId: rung.id, comment: value })}
+          />
           <RungBody rung={rung} nodeDivergences={nodeDivergences} isDebuggerActive={isDebuggerActive} />
         </>
       ) : (
@@ -165,6 +194,14 @@ const Rung = ({
         onSelect={(event) => onSelect?.(rung.id, { extend: event.shiftKey })}
         onContextMenu={handleContextMenu}
       />
+      {index >= 0 && !editingComment && (
+        <RungActions
+          actions={actions}
+          pinned={menuAt !== null}
+          right={railX - 6}
+          top={isOpen ? 1 : (COLLAPSED_HEIGHT - 20) / 2}
+        />
+      )}
       {menuAt && <RungMenu at={menuAt} items={menuItems} onClose={closeMenu} />}
     </div>
   )

@@ -30,7 +30,7 @@ type RungCommentLineProps = {
   onEditingChange: (editing: boolean) => void
 }
 
-/** The rung comment: one muted line above the rung, or a field while it is being edited. */
+/** The rung comment: one muted line above the rung, "Add comment" on hover when empty, or a field while editing. */
 export const RungCommentLine = ({ comment, editing, onCommit, onEditingChange }: RungCommentLineProps) => {
   const searchQuery = useOpenPLCStore((state) => state.searchQuery)
   const [value, setValue] = useState(comment)
@@ -76,7 +76,18 @@ export const RungCommentLine = ({ comment, editing, onCommit, onEditingChange }:
       style={style}
       onDoubleClick={() => onEditingChange(true)}
     >
-      {highlighted(commentFirstLine(comment), searchQuery)}
+      {comment === '' ? (
+        <button
+          type='button'
+          aria-label='Add comment'
+          className='opacity-0 transition-opacity focus-visible:opacity-60 group-hover:opacity-60'
+          onClick={() => onEditingChange(true)}
+        >
+          Add comment
+        </button>
+      ) : (
+        highlighted(commentFirstLine(comment), searchQuery)
+      )}
     </div>
   )
 }
