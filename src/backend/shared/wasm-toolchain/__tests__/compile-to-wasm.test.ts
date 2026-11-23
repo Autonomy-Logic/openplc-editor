@@ -338,7 +338,50 @@ describe('compileToWasm', () => {
     const log: Array<[string, string]> = []
     const result = await compileToWasm(request(), { runner, log: (m, l) => log.push([m, l]) })
     expect(result.ok).toBe(true)
-    expect(log).toEqual([['core/core.c:1:1: warning: unused', 'warning']])
+    expect(log.filter(([, level]) => level !== 'info')).toEqual([['core/core.c:1:1: warning: unused', 'warning']])
+  })
+
+  it('logs what it compiles, each file as it ends and the link, and keeps them out of the diagnostics', async () => {
+    const log: Array<[string, string]> = []
+    const result = await compileToWasm(request(), { runner: new FakeRunner(1), log: (m, l) => log.push([m, l]) })
+    expect(result.ok).toBe(true)
+    expect(log[0]).toEqual(['Compiling 2 of 2 files...', 'info'])
+    expect(log.slice(1, 3).map(([m]) => m.replace(/^Compiled \S+ /, 'Compiled * '))).toEqual([
+      'Compiled * (1/2)',
+      'Compiled * (2/2)',
+    ])
+    expect(
+      log
+        .slice(1, 3)
+        .map(([m]) => m.split(' ')[1])
+        .sort(),
+    ).toEqual(['app/main.cpp', 'core/core.c'])
+    expect(log[3]).toEqual(['Linking module.wasm...', 'info'])
+    expect(log).toHaveLength(4)
+    expect(result.diagnostics).toEqual([])
+  })
+
+  it('counts the reused files and logs only the ones it compiles', async () => {
+    const cache = new RecordingCache()
+    await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
+    const edited = request()
+    edited.files['app/main.cpp'] = 'int main_entry() { return 2; }'
+    const log: string[] = []
+    await compileToWasm(edited, { runner: runnerWithIncludes(), cache, log: (m) => log.push(m) })
+    expect(log).toEqual([
+      'Compiling 1 of 2 files (1 reused)...',
+      'Compiled app/main.cpp (1/1)',
+      'Linking module.wasm...',
+    ])
+  })
+
+  it('logs nothing when the whole module comes from the cache', async () => {
+    const cache = new RecordingCache()
+    await compileToWasm(request(), { runner: new FakeRunner(), cache })
+    const log: string[] = []
+    const result = await compileToWasm(request(), { runner: new FakeRunner(), cache, log: (m) => log.push(m) })
+    expect(result.ok).toBe(true)
+    expect(log).toEqual([])
   })
 
   it('does not cache the object of a failed unit', async () => {
