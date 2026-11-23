@@ -547,7 +547,7 @@ class RungLayoutBuilder {
     this.label(node.id, {
       text: name,
       x: centreX,
-      y: glyphTop - s.labGap - LOCATION_LINE - NAME_BASELINE_RISE,
+      y: glyphTop - s.labGap - (location === '' ? 0 : LOCATION_LINE) - NAME_BASELINE_RISE,
       sizePx: T.nameSizePx,
       weight: 400,
       anchor: 'middle',

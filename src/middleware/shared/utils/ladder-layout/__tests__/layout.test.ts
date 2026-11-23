@@ -290,10 +290,13 @@ describe('location lines (BDD-16, AC05)', () => {
     }
   })
 
-  it('gives "Stop" no location text and keeps the names "Start", "Stop" and "Motor" on one baseline', () => {
+  it('gives "Stop" no location text and draws its name on the location line, right above its symbol', () => {
     expect(labels(located, 'stop').filter((box) => box.role === 'location' && box.text !== '')).toEqual([])
-    const baselines = ['start', 'stop', 'motor'].map((id) => label(located, id, 'name').y)
-    expect(new Set(baselines).size).toBe(1)
+    expect(label(located, 'start', 'name').y).toBe(label(located, 'motor', 'name').y)
+    const stopName = label(located, 'stop', 'name').y
+    expect(stopName).toBeGreaterThan(label(located, 'start', 'name').y)
+    expect(stopName).toBeGreaterThan(label(located, 'start', 'location').y - LADDER_TYPOGRAPHY.locationSizePx)
+    expect(stopName).toBeLessThan(geometry(located, 'stop').position.y)
   })
 
   it('widens a column to a location wider than its name', () => {
