@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 
+import type { RuntimeLogsResult } from '../../middleware/shared/ports/runtime-port'
 import type { PlcStatus } from '../../middleware/shared/ports/types'
 import { useRuntime } from '../../middleware/shared/providers'
+import { isHmiRole } from '../../middleware/shared/utils/runtime-users/roles'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 
 // Unified polling interval for both status and logs (in milliseconds).
@@ -78,6 +80,7 @@ export const useRuntimePolling = () => {
         jwtToken: curToken,
         includeTimingStatsInPolling,
         includeEthercatStatsInPolling,
+        accountRole,
       },
       workspace: { plcLogsLastId, plcLogs },
       workspaceActions,
@@ -131,14 +134,15 @@ export const useRuntimePolling = () => {
       // A rejected ethercat call is swallowed to null so a single transient
       // ethercat error doesn't reject the whole Promise.all and tear down a
       // healthy runtime connection via handlePollFailure().
+      const engineering = !isHmiRole(accountRole)
       const ethercatPromise =
-        includeEthercatStatsInPolling && runtime.getEthercatRuntimeStatus
+        engineering && includeEthercatStatsInPolling && runtime.getEthercatRuntimeStatus
           ? runtime.getEthercatRuntimeStatus().catch(() => null)
           : Promise.resolve(null)
 
       const [statusResult, logsResult, ethercatResult] = await Promise.all([
         runtime.getStatus(includeTimingStatsInPolling),
-        runtime.getLogs(minId),
+        engineering ? runtime.getLogs(minId) : Promise.resolve<RuntimeLogsResult>({ success: false }),
         ethercatPromise,
       ])
 

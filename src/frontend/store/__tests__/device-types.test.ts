@@ -101,6 +101,7 @@ describe('Device slice types', () => {
         license: null,
         ipAddress: null,
         runtimeVersion: null,
+        accountRole: null,
         runtimeFeatures: null,
         selectedDevice: null,
         storedCredentials: null,
@@ -147,6 +148,7 @@ describe('Device slice types', () => {
         license: 'commercial',
         ipAddress: '192.168.1.1',
         runtimeVersion: 'v4.1.9',
+        accountRole: null,
         runtimeFeatures: null,
         selectedDevice: {
           orchestratorId: 'o',
@@ -192,6 +194,7 @@ describe('Device slice types', () => {
           license: null,
           ipAddress: null,
           runtimeVersion: null,
+          accountRole: null,
           runtimeFeatures: null,
           selectedDevice: null,
           storedCredentials: null,

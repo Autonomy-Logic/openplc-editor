@@ -113,8 +113,12 @@ export class FakeRuntime {
       createUser: () => unexpected(log, 'runtime.createUser'),
       getRuntimeCapabilities: () => unexpected(log, 'runtime.getRuntimeCapabilities'),
       listUsers: () => unexpected(log, 'runtime.listUsers'),
-      whoAmI: () => unexpected(log, 'runtime.whoAmI'),
+      whoAmI: () => {
+        record(log, 'runtime.whoAmI')
+        return Promise.resolve({ success: true, user: { id: 1, username: 'engineer', role: 'engineer' } })
+      },
       updateUser: () => unexpected(log, 'runtime.updateUser'),
+      updateOwnAccount: () => unexpected(log, 'runtime.updateOwnAccount'),
       deleteUser: () => unexpected(log, 'runtime.deleteUser'),
       getStatus: () => unexpected(log, 'runtime.getStatus'),
       startPlc: () => unexpected(log, 'runtime.startPlc'),

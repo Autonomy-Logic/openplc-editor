@@ -108,7 +108,7 @@ export class RuntimeApiClient {
     login: async (credentials) => {
       if (!this.runtimeIp) return { success: false, error: 'No runtime address configured' }
       const result = await this.performAuthentication(this.runtimeIp, credentials.username, credentials.password)
-      return { success: result.success, token: result.accessToken, error: result.error }
+      return { success: result.success, token: result.accessToken, error: result.error, statusCode: result.statusCode }
     },
   })
 
@@ -308,7 +308,7 @@ export class RuntimeApiClient {
     ipAddress: string,
     username: string,
     password: string,
-  ): Promise<{ success: boolean; accessToken?: string; error?: string }> {
+  ): Promise<{ success: boolean; accessToken?: string; error?: string; statusCode?: number }> {
     try {
       const res = await this.httpRequest({
         method: 'POST',
@@ -318,10 +318,10 @@ export class RuntimeApiClient {
       })
       if (res.statusCode === 200) {
         const parsed = LoginResponseSchema.safeParse(parseJsonOrNull(res.data))
-        if (!parsed.success) return { success: false, error: 'Invalid response format' }
+        if (!parsed.success) return { success: false, error: 'Invalid response format', statusCode: res.statusCode }
         return { success: true, accessToken: parsed.data.access_token }
       }
-      return { success: false, error: res.data }
+      return { success: false, error: res.data, statusCode: res.statusCode }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
