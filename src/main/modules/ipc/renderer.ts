@@ -53,7 +53,7 @@ import type {
   ListUsersResult,
   RuntimeHardwareIdResult,
   RuntimeLicenseSyncResult,
-  RuntimeUserRole,
+  RuntimeWireRole,
   UpdateUserParams,
   UsersInfoResult,
   WhoAmIResult,
@@ -706,7 +706,7 @@ const rendererProcessBridge = {
     ipAddress: string,
     username: string,
     password: string,
-    role?: RuntimeUserRole,
+    role?: RuntimeWireRole,
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:create-user', ipAddress, username, password, role),
   runtimeListUsers: (ipAddress: string): Promise<ListUsersResult> =>
@@ -718,6 +718,12 @@ const rendererProcessBridge = {
     params: UpdateUserParams,
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:update-user', ipAddress, userId, params),
+  runtimeUpdateOwnAccount: (
+    ipAddress: string,
+    userId: number,
+    params: UpdateUserParams,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:update-own-account', ipAddress, userId, params),
   runtimeDeleteUser: (ipAddress: string, userId: number): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:delete-user', ipAddress, userId),
   runtimeLogin: (
@@ -836,6 +842,10 @@ const rendererProcessBridge = {
   onRuntimeTokenRefreshed: (callback: (_event: IpcRendererEvent, newToken: string) => void) => {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)
+  },
+  onRuntimeSessionEnded: (callback: (_event: IpcRendererEvent) => void) => {
+    ipcRenderer.on('runtime:session-ended', callback)
+    return () => ipcRenderer.removeListener('runtime:session-ended', callback)
   },
 
   etherCATGetInterfaces: (

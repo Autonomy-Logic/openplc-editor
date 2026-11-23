@@ -28,6 +28,14 @@ export interface TokenLoginResult {
   success: boolean
   token?: string
   error?: string
+  /** HTTP status of the runtime's reply, when it replied. 401 means it refused the credentials. */
+  statusCode?: number
+}
+
+/** Credentials an own-account change replaces; absent fields keep their current value. */
+export interface RuntimeCredentialChange {
+  username?: string
+  password?: string
 }
 
 export interface TokenLoginTransport {
@@ -75,13 +83,29 @@ export interface RuntimeTokenManager {
    * in sync.
    */
   onTokenChanged(callback: (newToken: string) => void): () => void
+  /**
+   * Subscribe to the end of the session: a re-authentication the runtime refused (401), as when the account was
+   * deleted or its password changed elsewhere. The token and credentials are forgotten first.
+   */
+  onSessionEnded(callback: () => void): () => void
+  /**
+   * Run a change to the signed-in account. On success adopt the changed credentials and, when the password changed,
+   * sign in again with them. A re-authentication that runs meanwhile also tries the new credentials.
+   */
+  changeOwnCredentials<T>(
+    change: RuntimeCredentialChange,
+    operation: () => Promise<T>,
+    succeeded: (result: T) => boolean,
+  ): Promise<T>
 }
 
 export function createRuntimeTokenManager(transport: TokenLoginTransport): RuntimeTokenManager {
   let token: string | null = null
   let credentials: RuntimeCredentials | null = null
+  let pendingCredentials: RuntimeCredentials | null = null
   let refreshInFlight: Promise<boolean> | null = null
   const subscribers = new Set<(newToken: string) => void>()
+  const sessionEndedSubscribers = new Set<() => void>()
 
   function getToken(): string | null {
     return token
@@ -103,6 +127,33 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
   function clear(): void {
     token = null
     credentials = null
+    pendingCredentials = null
+  }
+
+  function adoptToken(fresh: string): void {
+    token = fresh
+    subscribers.forEach((cb) => cb(fresh))
+  }
+
+  function endSession(): void {
+    clear()
+    sessionEndedSubscribers.forEach((cb) => cb())
+  }
+
+  async function reauthenticate(current: RuntimeCredentials): Promise<boolean> {
+    const pending = pendingCredentials
+    const candidates = pending ? [pending, current] : [current]
+    for (const candidate of candidates) {
+      const result = await transport.login(candidate)
+      if (result.success && result.token) {
+        credentials = candidate
+        adoptToken(result.token)
+        return true
+      }
+      if (result.statusCode !== 401) return false
+    }
+    if (credentials === current) endSession()
+    return false
   }
 
   function refresh(): Promise<boolean> {
@@ -111,17 +162,7 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
     if (refreshInFlight) return refreshInFlight
     if (!credentials) return Promise.resolve(false)
 
-    const pending = transport
-      .login(credentials)
-      .then((result) => {
-        if (result.success && result.token) {
-          token = result.token
-          const fresh = result.token
-          subscribers.forEach((cb) => cb(fresh))
-          return true
-        }
-        return false
-      })
+    const pending = reauthenticate(credentials)
       .catch(() => false)
       .finally(() => {
         refreshInFlight = null
@@ -129,6 +170,31 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
 
     refreshInFlight = pending
     return pending
+  }
+
+  async function changeOwnCredentials<T>(
+    change: RuntimeCredentialChange,
+    operation: () => Promise<T>,
+    succeeded: (result: T) => boolean,
+  ): Promise<T> {
+    const before = credentials
+    const next = before
+      ? { username: change.username ?? before.username, password: change.password ?? before.password }
+      : null
+    pendingCredentials = next
+    try {
+      const result = await operation()
+      if (succeeded(result) && next && (credentials === before || credentials === next)) {
+        credentials = next
+        if (change.password !== undefined) {
+          if (refreshInFlight) await refreshInFlight
+          await refresh()
+        }
+      }
+      return result
+    } finally {
+      if (pendingCredentials === next) pendingCredentials = null
+    }
   }
 
   async function withAuth<T>(
@@ -149,5 +215,23 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
     }
   }
 
-  return { getToken, getUsername, hasToken, setSession, clear, refresh, withAuth, onTokenChanged }
+  function onSessionEnded(callback: () => void): () => void {
+    sessionEndedSubscribers.add(callback)
+    return () => {
+      sessionEndedSubscribers.delete(callback)
+    }
+  }
+
+  return {
+    getToken,
+    getUsername,
+    hasToken,
+    setSession,
+    clear,
+    refresh,
+    withAuth,
+    onTokenChanged,
+    onSessionEnded,
+    changeOwnCredentials,
+  }
 }

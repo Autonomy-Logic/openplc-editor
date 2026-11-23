@@ -142,7 +142,7 @@ describe('RuntimeUserModal — password dirty tracking', () => {
         title='New user'
         submitLabel='Create'
         showRole
-        initialRole='user'
+        initialRole='engineer'
         onSubmit={onSubmit}
       />,
     )
@@ -152,7 +152,12 @@ describe('RuntimeUserModal — password dirty tracking', () => {
     fireEvent.click(screen.getByText('Create'))
 
     await waitFor(() => expect(submitCalls).toHaveLength(1))
-    expect(submitCalls[0]).toMatchObject({ username: 'bob', password: 'secret', role: 'user', passwordChanged: true })
+    expect(submitCalls[0]).toMatchObject({
+      username: 'bob',
+      password: 'secret',
+      role: 'engineer',
+      passwordChanged: true,
+    })
     await waitFor(() => expect(openChanges).toContain(false))
   })
 })

@@ -12,6 +12,7 @@ import {
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
 import { commercialLicenseConsoleLines, demoModeConsoleLines } from '@root/middleware/shared/utils/licensing'
+import { engineeringActionRefusal } from '@root/middleware/shared/utils/runtime-users/roles'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -43,6 +44,7 @@ import {
   showDeviceDialog,
   showDeviceInput,
 } from '../../../services/device-link-resolution'
+import { refreshRuntimeAccount } from '../../../services/runtime-account'
 import { executeSaveProject } from '../../../services/save-actions'
 import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
@@ -132,12 +134,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const plcStateControlSupported = resolveTargetCapabilities(currentBoardInfo).plcStateControl
   const plcTransitioning = plcStatus === 'TRANSITIONING'
-  const plcControlBlocked = !plcStateControlSupported || deviceConnectionStatus !== 'connected' || plcTransitioning
+  const accountRole = useOpenPLCStore((state) => state.runtimeConnection.accountRole)
+  const uploadRefusal = engineeringActionRefusal(accountRole, 'upload')
+  const startStopRefusal = engineeringActionRefusal(accountRole, 'start-stop')
+  const debuggerRefusal = engineeringActionRefusal(accountRole, 'debugger')
+
+  const plcControlBlocked =
+    !plcStateControlSupported || deviceConnectionStatus !== 'connected' || plcTransitioning || startStopRefusal !== null
   const plcControlBlockedReason = !plcStateControlSupported
     ? 'This target does not support Start/Stop from the editor'
-    : deviceConnectionStatus !== 'connected'
-      ? 'Connect to the target first'
-      : 'PLC is changing state...'
+    : startStopRefusal !== null
+      ? startStopRefusal
+      : deviceConnectionStatus !== 'connected'
+        ? 'Connect to the target first'
+        : 'PLC is changing state...'
 
   const simulatorRun = useSimulatorDebugRun({
     debugSession,
@@ -211,6 +221,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleBuild = useCallback(
     async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }): Promise<boolean> => {
       if (isCompiling) return false
+
+      const uploadRefusal = engineeringActionRefusal(store.getState().runtimeConnection.accountRole, 'upload')
+      if (uploadRefusal !== null && !isSimulatorBoard && !(overrides?.compileOnly ?? false)) {
+        addLog({ level: 'error', message: `${uploadRefusal}.` })
+        return false
+      }
 
       requestConsoleFollow()
 
@@ -897,6 +913,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     if (isDebuggerProcessing) return
 
+    const roleRefusal = engineeringActionRefusal(store.getState().runtimeConnection.accountRole, 'debugger')
+    if (roleRefusal !== null) {
+      consoleActions.addLog({ level: 'error', message: `${roleRefusal}.` })
+      return
+    }
+
     if (aiChangesUnreviewed(store)) {
       consoleActions.addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
       return
@@ -1010,6 +1032,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           setIsDebuggerProcessing(false)
           return
         }
+        if (isRuntime) {
+          const account = await refreshRuntimeAccount(store, runtime)
+          const refusal = engineeringActionRefusal(account?.role, 'debugger')
+          if (refusal !== null) {
+            addLog({ level: 'error', message: `${refusal}.` })
+            setIsDebuggerProcessing(false)
+            return
+          }
+        }
         boardTarget = store.getState().deviceDefinitions.configuration.deviceBoard
         boardInfo = store.getState().deviceAvailableOptions.availableBoards.get(boardTarget)
       }
@@ -1079,9 +1110,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             uploadAvailable={(() => {
               const caps = resolveTargetCapabilities(currentBoardInfo)
               if (caps.directUsbUpload) return true
-              return connectionStatus === 'connected'
+              return connectionStatus === 'connected' && uploadRefusal === null
             })()}
-            uploadDisabledReason='must be connected to the device to upload'
+            uploadDisabledReason={uploadRefusal ?? 'must be connected to the device to upload'}
             onSelect={(option: BuildOption) => {
               switch (option) {
                 case 'build-only':
@@ -1125,12 +1156,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
             </PlayButton>
           </TooltipSidebarWrapperButton>
-          <TooltipSidebarWrapperButton tooltipContent='Debugger'>
+          <TooltipSidebarWrapperButton tooltipContent={debuggerRefusal ?? 'Debugger'}>
             <DebuggerButton
               onClick={() => void handleDebuggerClick()}
-              disabled={isDebuggerProcessing || simulatorBusy}
+              disabled={isDebuggerProcessing || simulatorBusy || debuggerRefusal !== null}
               isActive={isDebuggerVisible}
-              className={cn((isDebuggerProcessing || simulatorBusy) && disabledButtonClass)}
+              className={cn((isDebuggerProcessing || simulatorBusy || debuggerRefusal !== null) && disabledButtonClass)}
             />
           </TooltipSidebarWrapperButton>
         </>
