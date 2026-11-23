@@ -63,6 +63,9 @@ export interface LadderCellVisualProps {
   onClick?: (event: MouseEvent<HTMLDivElement>) => void
 }
 
+/** Symbol colour on the brand-blue selection highlight, for contrast in both themes. */
+const SELECTED_SYMBOL_COLOUR = '#ffffff'
+
 /** Space between a selected contact or coil's highlight and its symbol, in px. */
 const HIGHLIGHT_PAD = 3
 
@@ -95,7 +98,7 @@ export function LadderCellVisual({
         aria-hidden
         data-selected={selected}
         className={cn('pointer-events-none absolute rounded-[3px]', {
-          'bg-brand-light dark:bg-brand-medium-dark': selected,
+          'bg-brand': selected,
           'peer-hover:bg-neutral-100 dark:peer-hover:bg-neutral-850': interactive && !selected,
         })}
         style={{
@@ -106,7 +109,11 @@ export function LadderCellVisual({
         }}
       />
       <div className='relative'>
-        <LadderSymbolGlyph kind={kind} stroke={symbolColour} energized={energized} />
+        <LadderSymbolGlyph
+          kind={kind}
+          stroke={selected ? SELECTED_SYMBOL_COLOUR : symbolColour}
+          energized={energized}
+        />
       </div>
       {nameSlot ? (
         nameSlot(nameLabel)
