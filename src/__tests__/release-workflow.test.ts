@@ -12,11 +12,24 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 
 import { afterEach, describe, expect, it } from '@jest/globals'
-import { parse } from 'yaml'
+
+import {
+  isUploadArtifact,
+  type Job,
+  list,
+  record,
+  type Step,
+  str,
+  strings,
+  text,
+  workflowReader,
+} from './release/helpers/workflow-yaml'
 
 const repo = join(__dirname, '..', '..')
 const WORKFLOW = join(repo, '.github', 'workflows', 'release.yml')
 const CLAUDE_MD = join(repo, 'CLAUDE.md')
+const workflow = workflowReader(WORKFLOW)
+const { jobs, job, needsOf, uses, environmentOf, upstream } = workflow
 
 const BUILD_JOBS = ['build-macos', 'build-windows-x64', 'build-windows-arm64', 'build-linux-x64', 'build-linux-arm64']
 const RELEASE_FLAG = 'OPENPLC_RELEASE_BUILD'
@@ -34,11 +47,6 @@ const UPDATE_FILES = [
   'OpenPLC.Editor_4.4.0.exe.blockmap',
   'OpenPLC.Editor_4.4.0-ARM64.exe.blockmap',
 ]
-
-type Step = Record<string, unknown>
-
-/** One job of the workflow, with its id and its steps in order. */
-type Job = { id: string; body: Record<string, unknown>; steps: Step[] }
 
 /** A value of a GitHub Actions expression. */
 type Value = string | number | boolean | null | Value[] | { [key: string]: Value }
@@ -76,81 +84,6 @@ function dispatch(name: string, inputs: Record<string, string>): Run {
 const BRANCH_DISPATCH = dispatch('a dispatch on a branch', {})
 const BRANCH_DISPATCHES = [BRANCH_DISPATCH, dispatch('a dispatch on a branch with a version', { version: '4.4.0' })]
 
-let loaded: { raw: string; doc: Record<string, unknown> } | undefined
-
-function record(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : {}
-}
-
-function list(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
-}
-
-function str(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function text(value: unknown): string {
-  return JSON.stringify(value) ?? ''
-}
-
-/** Every string value of a parsed YAML node, keys excluded, so YAML comments are never read. */
-function strings(value: unknown): string[] {
-  if (typeof value === 'string') return [value]
-  if (Array.isArray(value)) return value.flatMap(strings)
-  return Object.values(record(value)).flatMap(strings)
-}
-
-function workflow(): { raw: string; doc: Record<string, unknown> } {
-  if (loaded === undefined) {
-    const raw = readFileSync(WORKFLOW, 'utf8')
-    loaded = { raw, doc: record(parse(raw)) }
-  }
-  return loaded
-}
-
-function jobs(): Job[] {
-  return Object.entries(record(workflow().doc.jobs)).map(([id, body]) => ({
-    id,
-    body: record(body),
-    steps: list(record(body).steps).map(record),
-  }))
-}
-
-function job(id: string): Job {
-  const found = jobs().find((entry) => entry.id === id)
-  if (found === undefined) throw new Error(`release.yml has no job "${id}"`)
-  return found
-}
-
-function needsOf(entry: Job): string[] {
-  const needs = entry.body.needs
-  return typeof needs === 'string' ? [needs] : list(needs).map(String)
-}
-
-/** Every job the given job waits for, directly or through another job. */
-function upstream(entry: Job): Set<string> {
-  const seen = new Set<string>()
-  const pending = [...needsOf(entry)]
-  while (pending.length > 0) {
-    const id = pending.pop() ?? ''
-    if (seen.has(id)) continue
-    seen.add(id)
-    pending.push(...needsOf(job(id)))
-  }
-  return seen
-}
-
-function uses(step: Step): string {
-  return str(step.uses)
-}
-
-function isUploadArtifact(step: Step): boolean {
-  return uses(step).startsWith('actions/upload-artifact')
-}
-
 function isDownloadArtifact(step: Step): boolean {
   return uses(step).startsWith('actions/download-artifact')
 }
@@ -165,12 +98,6 @@ function isTrustDownload(step: Step): boolean {
 
 function runs(fragment: string): (step: Step) => boolean {
   return (step) => str(step.run).includes(fragment)
-}
-
-function environmentOf(entry: Job): string | undefined {
-  const environment = entry.body.environment
-  if (environment === undefined) return undefined
-  return typeof environment === 'string' ? environment : str(record(environment).name)
 }
 
 function normalizedPath(value: unknown): string {
@@ -442,7 +369,7 @@ function simulate(run: Run): Plan {
     if (!runs(id)) return []
     const entry = job(id)
     const jobFrame: Frame = { contexts: { ...base, needs: needsContext(entry) }, success: true }
-    const env = { ...envOf(workflow().doc.env, jobFrame), ...envOf(entry.body.env, jobFrame) }
+    const env = { ...envOf(workflow.doc.env, jobFrame), ...envOf(entry.body.env, jobFrame) }
     const stepFrame: Frame = { contexts: { ...jobFrame.contexts, env }, success: true }
     return entry.steps
       .map((step, index) => ({ step, index }))
@@ -516,7 +443,7 @@ function position(entry: Job, fragment: string): number {
 
 describe('release.yml: trigger and inputs', () => {
   it('still starts on v* tag pushes and by hand with the version and platforms inputs', () => {
-    const on = record(workflow().doc.on)
+    const on = record(workflow.doc.on)
     const inputs = record(record(on.workflow_dispatch).inputs)
 
     expect(list(record(on.push).tags)).toEqual(['v*'])
@@ -568,7 +495,7 @@ describe('release.yml: trust-module', () => {
 
   it('names the seed secret in exactly one step, a step of trust-module', () => {
     const named = (value: unknown): boolean => text(value).includes('TRUST_SEED_SECRET')
-    const { jobs: _jobs, ...top } = workflow().doc
+    const { jobs: _jobs, ...top } = workflow.doc
     const locations = named(top) ? ['workflow'] : []
     for (const entry of jobs()) {
       const { steps: _steps, ...rest } = entry.body
@@ -590,7 +517,7 @@ describe('release.yml: trust-module', () => {
   })
 
   it('never hands every secret to a step or a called workflow', () => {
-    expect(['toJSON(secrets)', 'secrets: inherit'].filter((token) => workflow().raw.includes(token))).toEqual([])
+    expect(['toJSON(secrets)', 'secrets: inherit'].filter((token) => workflow.raw.includes(token))).toEqual([])
   })
 
   it('installs its dependencies with npm ci --ignore-scripts only', () => {
@@ -776,7 +703,7 @@ describe('release.yml: packaged-checks', () => {
   })
 
   it('runs no negative control anywhere in the workflow', () => {
-    expect(strings(workflow().doc).filter((value) => value.includes('--negative-control'))).toEqual([])
+    expect(strings(workflow.doc).filter((value) => value.includes('--negative-control'))).toEqual([])
   })
 
   it("checks the run's installers, downloaded as artifacts, never a published release", () => {
@@ -940,7 +867,7 @@ describe('release.yml: cross-seed', () => {
     const setup = crossSeed().steps.find((step) => uses(step).startsWith('actions/setup-node'))
     const version = str(record(setup?.with)['node-version'])
     const resolved = /^\$\{\{\s*env\.NODE_VERSION\s*\}\}$/.test(version)
-      ? str(record(workflow().doc.env).NODE_VERSION)
+      ? str(record(workflow.doc.env).NODE_VERSION)
       : version
 
     expect(resolved).toMatch(/^22(\.|$)/)

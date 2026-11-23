@@ -21,15 +21,23 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 
 import { afterEach, describe, expect, it } from '@jest/globals'
-import { parse } from 'yaml'
+
+import {
+  isUploadArtifact,
+  type Job,
+  list,
+  record,
+  type Step,
+  str,
+  strings,
+  text,
+  workflowReader,
+} from './helpers/workflow-yaml'
 
 const repo = join(__dirname, '..', '..', '..')
 const WORKFLOW = join(repo, '.github', 'workflows', 'rebuild-release.yml')
-
-type Step = Record<string, unknown>
-
-/** One job of the workflow, with its id and its steps in order. */
-type Job = { id: string; body: Record<string, unknown>; steps: Step[] }
+const workflow = workflowReader(WORKFLOW)
+const { jobs, job, needsOf, uses, environmentOf, upstream } = workflow
 
 /** Steps that change a release: an asset upload or delete, a body edit, or an action that can do either. */
 const MUTATION =
@@ -38,67 +46,9 @@ const MUTATION =
 /** A reference to the seed secret, in dot or bracket form. */
 const SECRET_REFERENCE = /secrets\s*(\.\s*TRUST_SEED_SECRET|\[\s*['"]TRUST_SEED_SECRET['"]\s*\])/
 
-let loaded: { raw: string; doc: Record<string, unknown> } | undefined
-
-function record(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : {}
-}
-
-function list(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
-}
-
-function str(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function text(value: unknown): string {
-  return JSON.stringify(value) ?? ''
-}
-
-/** Every string value of a parsed YAML node, keys excluded, so YAML comments are never read. */
-function strings(value: unknown): string[] {
-  if (typeof value === 'string') return [value]
-  if (Array.isArray(value)) return value.flatMap(strings)
-  return Object.values(record(value)).flatMap(strings)
-}
-
-function workflow(): { raw: string; doc: Record<string, unknown> } {
-  if (loaded === undefined) {
-    const raw = readFileSync(WORKFLOW, 'utf8')
-    loaded = { raw, doc: record(parse(raw)) }
-  }
-  return loaded
-}
-
-function jobs(): Job[] {
-  return Object.entries(record(workflow().doc.jobs)).map(([id, body]) => ({
-    id,
-    body: record(body),
-    steps: list(record(body).steps).map(record),
-  }))
-}
-
-function job(id: string): Job {
-  const found = jobs().find((entry) => entry.id === id)
-  if (found === undefined) throw new Error(`rebuild-release.yml has no job "${id}"`)
-  return found
-}
-
-function needsOf(entry: Job): string[] {
-  const needs = entry.body.needs
-  return typeof needs === 'string' ? [needs] : list(needs).map(String)
-}
-
 /** The five build jobs: the ones that wait for the trust module they package. */
 function buildJobs(): Job[] {
   return jobs().filter((entry) => needsOf(entry).includes('trust-module'))
-}
-
-function uses(step: Step): string {
-  return str(step.uses)
 }
 
 function stepIndex(entry: Job, predicate: (step: Step) => boolean): number {
@@ -117,40 +67,17 @@ function isMutation(step: Step): boolean {
   return MUTATION.test(text(step))
 }
 
-function isUploadArtifact(step: Step): boolean {
-  return uses(step).startsWith('actions/upload-artifact')
-}
-
 function isCheckout(step: Step, path: string): boolean {
   const checkoutPath = str(record(step.with).path).replace(/^\.\//, '').replace(/\/$/, '')
   return uses(step).startsWith('actions/checkout') && checkoutPath === path
-}
-
-function environmentOf(entry: Job): string | undefined {
-  const environment = entry.body.environment
-  if (environment === undefined) return undefined
-  return typeof environment === 'string' ? environment : str(record(environment).name)
 }
 
 function contentsPermission(entry: Job): unknown {
   return record(entry.body.permissions).contents
 }
 
-/** Every job the given job waits for, directly or through another job. */
-function upstream(entry: Job): Set<string> {
-  const seen = new Set<string>()
-  const pending = [...needsOf(entry)]
-  while (pending.length > 0) {
-    const id = pending.pop() ?? ''
-    if (seen.has(id)) continue
-    seen.add(id)
-    pending.push(...needsOf(job(id)))
-  }
-  return seen
-}
-
 function inputs(): Record<string, Record<string, unknown>> {
-  const dispatch = record(record(workflow().doc.on).workflow_dispatch)
+  const dispatch = record(record(workflow.doc.on).workflow_dispatch)
   return Object.fromEntries(Object.entries(record(dispatch.inputs)).map(([name, value]) => [name, record(value)]))
 }
 
@@ -458,7 +385,7 @@ function runStep(entry: Job, step: Step, box: Sandbox): StepResult {
       if (replacement === undefined) throw new Error(`no test value for the expression ${expression}`)
       return replacement
     })
-  const declared = { ...record(workflow().doc.env), ...record(entry.body.env), ...record(step.env) }
+  const declared = { ...record(workflow.doc.env), ...record(entry.body.env), ...record(step.env) }
   const script = join(box.dir, 'step.sh')
   write(script, evaluate(str(step.run)))
   const ran = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], {
@@ -484,7 +411,7 @@ function runStep(entry: Job, step: Step, box: Sandbox): StepResult {
 
 describe('rebuild-release.yml: trigger and inputs', () => {
   it('is started only by hand', () => {
-    expect(Object.keys(record(workflow().doc.on))).toEqual(['workflow_dispatch'])
+    expect(Object.keys(record(workflow.doc.on))).toEqual(['workflow_dispatch'])
   })
 
   it('takes exactly mode, ref, release, negative_controls and run_id, and no version input', () => {
@@ -508,17 +435,17 @@ describe('rebuild-release.yml: trigger and inputs', () => {
   })
 
   it('never reads a version from the inputs', () => {
-    expect(workflow().raw).not.toMatch(/inputs\.version\b/)
+    expect(workflow.raw).not.toMatch(/inputs\.version\b/)
   })
 })
 
 describe('rebuild-release.yml: permissions and concurrency', () => {
   it('grants only contents: read at the top level', () => {
-    expect(workflow().doc.permissions).toStrictEqual({ contents: 'read' })
+    expect(workflow.doc.permissions).toStrictEqual({ contents: 'read' })
   })
 
   it('runs one rebuild per release at a time, never cancelling a running one', () => {
-    expect(workflow().doc.concurrency).toStrictEqual({
+    expect(workflow.doc.concurrency).toStrictEqual({
       group: 'rebuild-${{ inputs.release }}',
       'cancel-in-progress': false,
     })
@@ -557,7 +484,7 @@ describe('rebuild-release.yml: permissions and concurrency', () => {
 describe('rebuild-release.yml: the seed secret', () => {
   function secretLocations(): string[] {
     const named = (value: unknown): boolean => SECRET_REFERENCE.test(text(value))
-    const { jobs: _jobs, ...top } = workflow().doc
+    const { jobs: _jobs, ...top } = workflow.doc
     const locations = named(top) ? ['workflow'] : []
     for (const entry of jobs()) {
       const { steps: _steps, ...rest } = entry.body
@@ -613,7 +540,7 @@ describe('rebuild-release.yml: checkouts', () => {
   })
 
   it('runs every release script from tooling/, never from the built tree', () => {
-    const values = strings(workflow().doc)
+    const values = strings(workflow.doc)
     const offenders = values.filter((value) =>
       [...value.matchAll(/scripts\/release\//g)].some((match) => !value.slice(0, match.index).endsWith('tooling/')),
     )
@@ -702,7 +629,7 @@ describe('rebuild-release.yml: build jobs', () => {
   })
 
   it('runs every build and package step with OPENPLC_RELEASE_BUILD=1', () => {
-    const topEnv = record(workflow().doc.env)
+    const topEnv = record(workflow.doc.env)
     const building = (step: Step): boolean => /npm run (build|package)\b|electron-builder/.test(str(step.run))
     const flagged = (entry: Job, step: Step): boolean =>
       String({ ...topEnv, ...record(entry.body.env), ...record(step.env) }.OPENPLC_RELEASE_BUILD) === '1' ||
@@ -840,11 +767,11 @@ describe('rebuild-release.yml: what it never does', () => {
     'toJSON(secrets)',
     'secrets: inherit',
   ])('never uses %s', (token) => {
-    expect(workflow().raw).not.toContain(token)
+    expect(workflow.raw).not.toContain(token)
   })
 
   it('finds and replaces assets by release id, never through the tag endpoint or gh release upload', () => {
-    const raw = workflow().raw
+    const raw = workflow.raw
 
     expect(
       ['releases/tags/', 'gh release upload', 'gh release delete-asset'].filter((token) => raw.includes(token)),
@@ -933,7 +860,7 @@ describe('rebuild-release.yml: packaged-checks', () => {
   it('runs with contents: read only, by its own permissions or the top-level ones', () => {
     const own = checks().body.permissions
 
-    expect(own === undefined ? workflow().doc.permissions : own).toStrictEqual({ contents: 'read' })
+    expect(own === undefined ? workflow.doc.permissions : own).toStrictEqual({ contents: 'read' })
   })
 
   it('names no secret and no token', () => {
@@ -1034,7 +961,7 @@ describe('rebuild-release.yml: the branch to build', () => {
   }
 
   it('names the ref, the release and the mode in the run name', () => {
-    const name = str(workflow().doc['run-name'])
+    const name = str(workflow.doc['run-name'])
     const named = (input: string): boolean => new RegExp(`\\$\\{\\{\\s*inputs\\.${input}\\s*\\}\\}`).test(name)
 
     expect(['ref', 'release', 'mode'].filter((input) => !named(input))).toEqual([])
@@ -1369,7 +1296,7 @@ describe('rebuild-release.yml: cross-seed', () => {
     const setup = crossSeed().steps.find((step) => uses(step).startsWith('actions/setup-node'))
     const version = str(record(setup?.with)['node-version'])
     const resolved = /^\$\{\{\s*env\.NODE_VERSION\s*\}\}$/.test(version)
-      ? str(record(workflow().doc.env).NODE_VERSION)
+      ? str(record(workflow.doc.env).NODE_VERSION)
       : version
 
     expect(resolved).toMatch(/^22(\.|$)/)
