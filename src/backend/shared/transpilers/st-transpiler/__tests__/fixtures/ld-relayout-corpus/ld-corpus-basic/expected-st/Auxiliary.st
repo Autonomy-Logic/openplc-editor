@@ -1,4 +1,4 @@
-PROGRAM Aux
+PROGRAM Auxiliary
   VAR
     aux_a : BOOL;
     TON0 : TON;
