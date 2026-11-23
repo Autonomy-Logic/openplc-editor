@@ -51,7 +51,7 @@ type RungProps = {
   nodeDivergences?: string[]
   isDebuggerActive?: boolean
   selected?: boolean
-  onSelect?: (rungId: string, toggle?: boolean) => void
+  onSelect?: (rungId: string, options?: { extend?: boolean; toggle?: boolean }) => void
   editingComment?: boolean
   onEditingCommentChange?: (rungId: string, editing: boolean) => void
 }
@@ -111,7 +111,7 @@ const Rung = ({
     event.preventDefault()
     // The canvas opens the radial menu on a right click; the rung menu replaces it here.
     event.stopPropagation()
-    onSelect?.(rung.id, false)
+    onSelect?.(rung.id, { toggle: false })
     setMenuAt({ x: event.clientX, y: event.clientY })
   }
 
@@ -162,7 +162,7 @@ const Rung = ({
         selected={selected}
         wireTop={wireTop}
         dragListeners={isDebuggerActive || isEditingLocked ? undefined : listeners}
-        onSelect={() => onSelect?.(rung.id)}
+        onSelect={(event) => onSelect?.(rung.id, { extend: event.shiftKey })}
         onContextMenu={handleContextMenu}
       />
       {menuAt && <RungMenu at={menuAt} items={menuItems} onClose={closeMenu} />}

@@ -20,4 +20,14 @@ describe('a coil ends its rung', () => {
     expect(markers).not.toContain(`${coilId}:right`)
     expect(markers.some((marker) => marker.startsWith(`${railId}:`))).toBe(false)
   })
+
+  it('offers one serial marker per insertion point: the start, between the contacts and before the coil', () => {
+    const rung = seriesRung('rung_three', [
+      { kind: 'contact', id: 'a', name: 'A' },
+      { kind: 'contact', id: 'b', name: 'B' },
+      { kind: 'coil', id: 'q', name: 'Q' },
+    ])
+    const serial = renderPlaceholderElements(rung).filter((node) => node.type === 'placeholder')
+    expect(serial).toHaveLength(3)
+  })
 })

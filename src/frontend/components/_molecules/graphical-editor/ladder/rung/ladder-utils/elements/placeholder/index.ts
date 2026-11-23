@@ -417,7 +417,37 @@ export const renderPlaceholderElements = (rung: RungLadderState) => {
     }
   })
 
-  return placeholderNodes
+  return withoutDuplicateMarkers(rung, placeholderNodes)
+}
+
+/** The serial marker of `position` related to node `nodeId`, if any. */
+const serialMarker = (nodes: readonly Node[], nodeId: string, position: 'left' | 'right'): Node | undefined =>
+  nodes.find((node) => {
+    if (node.type !== 'placeholder' || node.id.startsWith('placeholder_handle_')) return false
+    const data = node.data as { position?: string; relatedNode?: { id: string } }
+    return data.position === position && data.relatedNode?.id === nodeId
+  })
+
+/**
+ * The markers with one diamond per insertion point: when a node's only wire in comes from a node that offers a right
+ * marker, the same point in the series, one of the two is dropped: the node's left marker, after the left rail, else the
+ * source's right marker.
+ */
+const withoutDuplicateMarkers = (rung: RungLadderState, nodes: Node[]): Node[] => {
+  const dropped = new Set<string>()
+  for (const node of rung.nodes) {
+    const left = serialMarker(nodes, node.id, 'left')
+    if (left === undefined) continue
+    const input = (node.data as BasicNodeData).inputConnector?.id
+    const incoming = rung.edges.filter(
+      (edge) => edge.target === node.id && (input === undefined || edge.targetHandle === input),
+    )
+    if (incoming.length !== 1) continue
+    const right = serialMarker(nodes, incoming[0].source, 'right')
+    if (right === undefined) continue
+    dropped.add(incoming[0].source.startsWith('left-rail') ? left.id : right.id)
+  }
+  return dropped.size === 0 ? nodes : nodes.filter((node) => !dropped.has(node.id))
 }
 
 /**

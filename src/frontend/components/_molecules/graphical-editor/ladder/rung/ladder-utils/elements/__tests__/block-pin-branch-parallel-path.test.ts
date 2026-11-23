@@ -64,12 +64,22 @@ const nodeNamed = (name: string): Node => {
   return found
 }
 
+/** The marker at `position` of the node named `name`; right of it is also the left marker of the node it feeds. */
 const related =
   (name: string, position: 'left' | 'right' | 'bottom'): Marker =>
-  (placeholder) =>
-    placeholder.data.position === position &&
-    placeholder.data.relatedNode !== undefined &&
-    variableName(placeholder.data.relatedNode.data) === name
+  (placeholder) => {
+    const relatedNode = placeholder.data.relatedNode
+    if (relatedNode === undefined) return false
+    if (placeholder.data.position === position && variableName(relatedNode.data) === name) return true
+    if (
+      position !== 'right' ||
+      placeholder.data.position !== 'left' ||
+      placeholder.id.startsWith('placeholder_handle_')
+    )
+      return false
+    const source = nodeNamed(name).id
+    return rung().edges.some((edge) => edge.source === source && edge.target === relatedNode.id)
+  }
 
 const leftRail: Marker = (placeholder) => placeholder.data.relatedNode?.id.startsWith('left-rail') ?? false
 

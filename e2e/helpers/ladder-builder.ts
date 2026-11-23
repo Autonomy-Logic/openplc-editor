@@ -410,6 +410,16 @@ export class LadderBuilder {
         const isRight = centre(box).x > centre(element).x
         if (isRight === 'right' in marker) return candidate
       }
+      // One diamond stands for a shared insertion point, so the nearest one on that side of the wire is the same point.
+      let nearest: { marker: Locator; distance: number } | undefined
+      for (const candidate of await rung.locator('.react-flow__node-placeholder').all()) {
+        const box = await candidate.boundingBox()
+        if (box === null || Math.abs(centre(box).y - centre(element).y) > element.height) continue
+        const distance = ('right' in marker ? 1 : -1) * (centre(box).x - centre(element).x)
+        if (distance > 0 && (nearest === undefined || distance < nearest.distance))
+          nearest = { marker: candidate, distance }
+      }
+      if (nearest !== undefined) return nearest.marker
       throw new Error(
         `${context}: no drop marker ${describeMarker(marker)}; markers shown: ${await this.markerIds(rung)}`,
       )

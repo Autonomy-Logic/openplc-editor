@@ -10,6 +10,7 @@ import LadderBlockIcon from '../../../../../../assets/icons/project/ladder/Block
 import CoilIcon from '../../../../../../assets/icons/project/ladder/Coil'
 import ContactIcon from '../../../../../../assets/icons/project/ladder/Contact'
 import type { PlacementElementId, PlacementLanguage } from '../../../../../../utils/graphical/placement-elements'
+import { LadderSymbolPreview } from '../../../../../_atoms/graphical-editor/ladder/ladder-symbol'
 
 /** Toolbox icon of a placeable element. */
 export function renderPlacementIcon(language: PlacementLanguage, id: PlacementElementId): ReactNode {
@@ -21,6 +22,12 @@ export function renderPlacementIcon(language: PlacementLanguage, id: PlacementEl
         return <CoilIcon size='md' />
       case 'block':
         return <LadderBlockIcon size='md' />
+      case 'contact-negated':
+      case 'contact-rising':
+      case 'contact-falling':
+      case 'coil-set':
+      case 'coil-reset':
+        return <LadderSymbolPreview kind={id} stroke='#ffffff' scale={1.3} />
       default:
         return null
     }

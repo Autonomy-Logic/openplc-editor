@@ -54,6 +54,7 @@ import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
 import { useGraphicalPlacement } from '../placement/placement-context'
+import { moveRungs, nextRungSelection, type RungSelectOptions } from './rung-selection'
 
 const EMPTY_DIVERGENCES: string[] = []
 
@@ -133,7 +134,18 @@ export default function LadderEditor() {
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
-  const [selectedRungId, setSelectedRungId] = useState<string | null>(null)
+  const [selectedRungIds, setSelectedRungIds] = useState<string[]>([])
+  // The rung whose elements are selected, if any: selecting an element selects its rung alone.
+  const elementRungId = useOpenPLCStore(
+    (state) =>
+      state.ladderFlows
+        .find((candidate) => candidate.name === pouName)
+        ?.rungs.find((rung) => (rung.selectedNodes?.length ?? 0) > 0)?.id ?? null,
+  )
+  useEffect(() => {
+    if (elementRungId === null) return
+    setSelectedRungIds((current) => (current.length === 1 && current[0] === elementRungId ? current : [elementRungId]))
+  }, [elementRungId])
   const [editingCommentRungId, setEditingCommentRungId] = useState<string | null>(null)
   const isEditingLocked = useIsEditingLocked()
   const palette = useLadderThemePalette()
@@ -246,8 +258,6 @@ export default function LadderEditor() {
     scheduleFlowWriteBack(store.getState, pouName, 'ld')
   }, [store, flowUpdated])
 
-  const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
-
   const handleDragStart = (event: DragStartEvent) => {
     if (isDebuggerVisible) return
 
@@ -298,27 +308,12 @@ export default function LadderEditor() {
 
     if (active.id === over.id) return
 
-    const sourceIndex = getRungPos(active.id)
-    const destinationIndex = getRungPos(over.id)
-
-    if (
-      sourceIndex < 0 ||
-      destinationIndex < 0 ||
-      sourceIndex >= flow.rungs.length ||
-      destinationIndex >= flow.rungs.length
-    ) {
-      console.error('Invalid source or destination index')
-      return
-    }
-
-    const auxRungs = [...(flow?.rungs || [])]
-    const originalRungs = [...auxRungs]
-    const [removed] = auxRungs.splice(sourceIndex, 1)
-    auxRungs.splice(destinationIndex, 0, removed)
-
+    const moved = moveRungs(flow.rungs, new Set(selectedRungIds), String(active.id), String(over.id))
+    if (moved.every((rung, index) => rung === flow.rungs[index])) return
+    const originalRungs = [...flow.rungs]
     try {
       captureAndPush(pouName)
-      ladderFlowActions.setRungs({ editorName: pouName, rungs: auxRungs })
+      ladderFlowActions.setRungs({ editorName: pouName, rungs: moved })
     } catch (error) {
       console.error('Failed to update rungs:', error)
       ladderFlowActions.setRungs({ editorName: pouName, rungs: originalRungs })
@@ -330,11 +325,21 @@ export default function LadderEditor() {
     closeModal()
   }
 
-  /** Selects `rungId`; a click on the selected rung's number clears the selection, a right click never does. */
-  const selectRung = useCallback((rungId: string, toggle = true) => {
-    setSelectedRungId((current) => (toggle && current === rungId ? null : rungId))
-    scrollableRef.current?.focus({ preventScroll: true })
-  }, [])
+  /**
+   * Selects rung `rungId` (Shift adds or removes it) and clears the element selection of every rung left unselected; a
+   * click on the only selected rung's number clears the selection, a right click never does.
+   */
+  const selectRung = useCallback(
+    (rungId: string, options?: RungSelectOptions) => {
+      const next = nextRungSelection(selectedRungIds, rungId, options)
+      setSelectedRungIds(next)
+      if (elementRungId !== null && !next.includes(elementRungId)) {
+        ladderFlowActions.setSelectedNodes({ editorName: pouName, rungId: elementRungId, nodes: [] })
+      }
+      scrollableRef.current?.focus({ preventScroll: true })
+    },
+    [selectedRungIds, elementRungId, ladderFlowActions, pouName],
+  )
 
   const setEditingComment = useCallback((rungId: string, editing: boolean) => {
     setEditingCommentRungId(editing ? rungId : null)
@@ -342,17 +347,21 @@ export default function LadderEditor() {
 
   /** The rung shortcuts: they act on the selected rung while the canvas itself has the focus. */
   const handleRungShortcut = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget || selectedRungId === null) return
-    const rung = rungs.find((candidate) => candidate.id === selectedRungId)
-    if (!rung) return
+    if (event.target !== event.currentTarget || selectedRungIds.length === 0) return
+    const selected = rungs.filter((candidate) => selectedRungIds.includes(candidate.id))
+    const rung = selected.length === 1 ? selected[0] : undefined
     const mod = event.metaKey || event.ctrlKey
     const key = event.key.toLowerCase()
-    if (event.key === 'Escape') setSelectedRungId(null)
+    if (event.key === 'Escape') setSelectedRungIds([])
     else if (mod && key === '.')
-      updateModelLadder({ openRung: { rungId: rung.id, open: !getIsRungOpen({ rungId: rung.id }) } })
+      selected.forEach((each) =>
+        updateModelLadder({ openRung: { rungId: each.id, open: !getIsRungOpen({ rungId: each.id }) } }),
+      )
     else if (isEditingLocked) return
+    else if (mod && key === 'd')
+      selected.forEach((each) => ladderFlowActions.duplicateRung({ editorName: pouName, rungId: each.id }))
+    else if (rung === undefined) return
     else if ((event.key === 'Delete' || event.key === 'Backspace') && !mod) openModal('confirm-delete-element', rung)
-    else if (mod && key === 'd') ladderFlowActions.duplicateRung({ editorName: pouName, rungId: rung.id })
     else if (mod && key === '/') setEditingCommentRungId(rung.id)
     else return
     event.preventDefault()
@@ -401,11 +410,15 @@ export default function LadderEditor() {
                     index={index}
                     rung={rung}
                     className={cn({
-                      'opacity-35': activeId === rung.id,
+                      'opacity-35':
+                        activeId === rung.id ||
+                        (activeId !== null &&
+                          selectedRungIds.includes(String(activeId)) &&
+                          selectedRungIds.includes(rung.id)),
                     })}
                     nodeDivergences={nodeDivergences}
                     isDebuggerActive={isDebuggerVisible}
-                    selected={selectedRungId === rung.id}
+                    selected={selectedRungIds.includes(rung.id)}
                     onSelect={selectRung}
                     editingComment={editingCommentRungId === rung.id}
                     onEditingCommentChange={setEditingComment}
@@ -416,7 +429,17 @@ export default function LadderEditor() {
               {createPortal(
                 <DragOverlay dropAnimation={defaultDropAnimation} modifiers={[restrictToParentElement]}>
                   {activeId && activeItem ? (
-                    <Rung key={activeItem.id} id={activeItem.id} rung={activeItem} index={-1} />
+                    <div className='relative'>
+                      <Rung key={activeItem.id} id={activeItem.id} rung={activeItem} index={-1} />
+                      {selectedRungIds.length > 1 && selectedRungIds.includes(String(activeId)) && (
+                        <span
+                          aria-label='Dragged rungs'
+                          className='absolute left-12 top-1 rounded bg-brand px-1.5 py-0.5 text-xs font-medium text-white'
+                        >
+                          {selectedRungIds.length} rungs
+                        </span>
+                      )}
+                    </div>
                   ) : null}
                 </DragOverlay>,
                 document.body,
