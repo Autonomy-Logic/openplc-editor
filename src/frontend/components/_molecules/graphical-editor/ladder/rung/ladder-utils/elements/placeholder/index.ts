@@ -1,4 +1,5 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
+import { EMPTY_LABEL_SOURCE, layoutRungOrStored } from '@root/middleware/shared/utils/ladder-layout'
 import { displayShift, hasBranchOnHandle, type PouPresentation } from '@root/middleware/shared/utils/ladder-layout'
 import type { Node, ReactFlowInstance } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
@@ -431,11 +432,14 @@ const serialMarker = (nodes: readonly Node[], nodeId: string, position: 'left' |
 /**
  * The markers with one diamond per insertion point: when a node's only wire in comes from a node that offers a right
  * marker, the same point in the series, one of the two is dropped: the node's left marker, after the left rail, else the
- * source's right marker.
+ * source's right marker. Both stay before the right rail and the outputs drawn against it, which sit far from the
+ * element before them.
  */
 const withoutDuplicateMarkers = (rung: RungLadderState, nodes: Node[]): Node[] => {
   const dropped = new Set<string>()
+  const atRail = new Set(layoutRungOrStored(rung, EMPTY_LABEL_SOURCE).trailingOutputIds)
   for (const node of rung.nodes) {
+    if (atRail.has(node.id) || node.id.startsWith('right-rail')) continue
     const left = serialMarker(nodes, node.id, 'left')
     if (left === undefined) continue
     const input = (node.data as BasicNodeData).inputConnector?.id

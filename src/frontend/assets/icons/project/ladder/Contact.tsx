@@ -3,6 +3,8 @@ import { ComponentPropsWithoutRef } from 'react'
 import { cn } from '../../../../utils/cn'
 type IContactIconProps = ComponentPropsWithoutRef<'svg'> & {
   size?: 'sm' | 'md' | 'lg'
+  /** Draws the contact's modifier: a diagonal when negated, P or N for a rising or falling edge. */
+  modifier?: 'negated' | 'rising' | 'falling'
 }
 const sizeClasses = {
   sm: 'w-5 h-5',
@@ -11,7 +13,7 @@ const sizeClasses = {
 }
 
 export default function ContactIcon(props: IContactIconProps) {
-  const { className, size = 'sm', ...res } = props
+  const { className, size = 'sm', modifier, ...res } = props
 
   return (
     <svg
@@ -30,6 +32,12 @@ export default function ContactIcon(props: IContactIconProps) {
       <path d='M3.69922 12H8.69922' stroke='#B4D0FE' strokeWidth='1.5' />
       <line x1='9.44922' y1='7' x2='9.44922' y2='17' stroke='#B4D0FE' strokeWidth='1.5' />
       <line x1='15.4492' y1='7' x2='15.4492' y2='17' stroke='#B4D0FE' strokeWidth='1.5' />
+      {modifier === 'negated' && <line x1='10.7' y1='15.6' x2='14.2' y2='8.4' stroke='#B4D0FE' strokeWidth='1.5' />}
+      {(modifier === 'rising' || modifier === 'falling') && (
+        <text x='12.45' y='14.4' textAnchor='middle' fontSize='6.5' fontWeight='700' fill='#B4D0FE'>
+          {modifier === 'rising' ? 'P' : 'N'}
+        </text>
+      )}
     </svg>
   )
 }

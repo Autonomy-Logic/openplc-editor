@@ -3,6 +3,8 @@ import { ComponentPropsWithoutRef } from 'react'
 import { cn } from '../../../../utils/cn'
 type ICoilIconProps = ComponentPropsWithoutRef<'svg'> & {
   size?: 'sm' | 'md' | 'lg'
+  /** Draws the coil's modifier letter: S for set, R for reset. */
+  modifier?: 'set' | 'reset'
 }
 const sizeClasses = {
   sm: 'w-5 h-5',
@@ -11,7 +13,7 @@ const sizeClasses = {
 }
 
 export default function CoilIcon(props: ICoilIconProps) {
-  const { className, size = 'sm', ...res } = props
+  const { className, size = 'sm', modifier, ...res } = props
 
   return (
     <svg
@@ -36,6 +38,11 @@ export default function CoilIcon(props: ICoilIconProps) {
       />
       <path d='M16.6371 11.3629H21.0003' stroke='#B4D0FE' strokeWidth='1.35' />
       <path d='M3 11.3629H7.36364' stroke='#B4D0FE' strokeWidth='1.35' />
+      {modifier !== undefined && (
+        <text x='12' y='13.6' textAnchor='middle' fontSize='6.5' fontWeight='700' fill='#B4D0FE'>
+          {modifier === 'set' ? 'S' : 'R'}
+        </text>
+      )}
     </svg>
   )
 }

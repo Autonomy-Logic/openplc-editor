@@ -21,13 +21,22 @@ describe('a coil ends its rung', () => {
     expect(markers.some((marker) => marker.startsWith(`${railId}:`))).toBe(false)
   })
 
-  it('offers one serial marker per insertion point: the start, between the contacts and before the coil', () => {
+  it('offers one marker between adjacent contacts, and both sides of the gap before the coil at the rail', () => {
     const rung = seriesRung('rung_three', [
       { kind: 'contact', id: 'a', name: 'A' },
       { kind: 'contact', id: 'b', name: 'B' },
       { kind: 'coil', id: 'q', name: 'Q' },
     ])
-    const serial = renderPlaceholderElements(rung).filter((node) => node.type === 'placeholder')
-    expect(serial).toHaveLength(3)
+    const sides = renderPlaceholderElements(rung)
+      .filter((node) => node.type === 'placeholder')
+      .map((node) => {
+        const data = node.data as { relatedNode?: { id: string }; position?: string }
+        const related = rung.nodes.find((candidate) => candidate.id === data.relatedNode?.id)
+        const variable = related?.data.variable
+        const name =
+          typeof variable === 'object' && variable !== null && 'name' in variable ? String(variable.name) : ''
+        return `${related?.type === 'powerRail' ? 'rail' : name}:${data.position ?? ''}`
+      })
+    expect(sides.sort()).toEqual(['B:left', 'B:right', 'Q:left', 'rail:right'])
   })
 })
