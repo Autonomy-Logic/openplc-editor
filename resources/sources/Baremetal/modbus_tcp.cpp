@@ -172,32 +172,24 @@ static uint32_t g_wifi_quiet_since_ms = 0;
 /** Whether mbconfig_wifi_supervise() has run before. */
 static bool g_wifi_supervising = false;
 
-/** The later of two millis() stamps, judged by their age at `now`, so a stamp older than 24.8 days compares right. */
-static uint32_t wifi_later_stamp(uint32_t now, uint32_t a, uint32_t b)
-{
-    return (uint32_t)(now - a) <= (uint32_t)(now - b) ? a : b;
-}
-
 void mbconfig_wifi_supervise(void)
 {
-    const uint32_t now = (uint32_t)millis();
     if (!g_wifi_supervising)
     {
-        g_wifi_quiet_since_ms = now;
+        g_wifi_quiet_since_ms = (uint32_t)millis();
         g_wifi_supervising = true;
     }
-    g_wifi_quiet_since_ms = wifi_later_stamp(now, g_wifi_last_event_ms, g_wifi_quiet_since_ms);
-    const bool has_address = WiFi.status() == WL_CONNECTED;
+    const wl_status_t status = WiFi.status();
+    const bool has_address = status == WL_CONNECTED;
 #ifdef BOARD_ESP32
-    const bool joining = WiFi.STA.connected();
+    const bool joining = WiFi.STA.connected() || status == WL_IDLE_STATUS;
 #else
     const bool joining = wifi_station_get_connect_status() == STATION_CONNECTING;
 #endif
-    if (wifi_reconnect_due(has_address, joining, now, g_wifi_quiet_since_ms))
-    {
+    const uint32_t now = (uint32_t)millis();
+    const uint32_t last_event = g_wifi_last_event_ms;
+    if (wifi_supervise_step(has_address, joining, now, last_event, &g_wifi_quiet_since_ms))
         WiFi.reconnect();
-        g_wifi_quiet_since_ms = now;
-    }
 }
 #endif
 
