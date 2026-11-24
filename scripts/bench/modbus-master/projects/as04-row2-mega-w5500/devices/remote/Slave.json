@@ -22,70 +22,70 @@
             "id": "g1_0",
             "name": "g1_0",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW100",
+            "iecLocation": "%IW0",
             "alias": "MB_G1_0"
           },
           {
             "id": "g1_1",
             "name": "g1_1",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW101",
+            "iecLocation": "%IW1",
             "alias": "MB_G1_1"
           },
           {
             "id": "g1_2",
             "name": "g1_2",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW102",
+            "iecLocation": "%IW2",
             "alias": "MB_G1_2"
           },
           {
             "id": "g1_3",
             "name": "g1_3",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW103",
+            "iecLocation": "%IW3",
             "alias": "MB_G1_3"
           },
           {
             "id": "g1_4",
             "name": "g1_4",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW104",
+            "iecLocation": "%IW4",
             "alias": "MB_G1_4"
           },
           {
             "id": "g1_5",
             "name": "g1_5",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW105",
+            "iecLocation": "%IW5",
             "alias": "MB_G1_5"
           },
           {
             "id": "g1_6",
             "name": "g1_6",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW106",
+            "iecLocation": "%IW6",
             "alias": "MB_G1_6"
           },
           {
             "id": "g1_7",
             "name": "g1_7",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW107",
+            "iecLocation": "%IW7",
             "alias": "MB_G1_7"
           },
           {
             "id": "g1_8",
             "name": "g1_8",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW108",
+            "iecLocation": "%IW8",
             "alias": "MB_G1_8"
           },
           {
             "id": "g1_9",
             "name": "g1_9",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW109",
+            "iecLocation": "%IW9",
             "alias": "MB_G1_9"
           }
         ]

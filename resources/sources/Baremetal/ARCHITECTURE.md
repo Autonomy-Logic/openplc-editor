@@ -49,7 +49,7 @@ calls `mbtask()` once per scan cycle.
 | **`modbus_debug.*`** | The always-on **debugger** FCs (`0x41`–`0x48`): info / set / get / md5 / status / version / device-id. Growth home for future custom FCs (e.g. the `0x49+` licensing set). | — | `frame`, `arduino_runtime_glue`, `license_gate` |
 | **`modbus_pdu.*`** | The **protocol** layer: `process_mbpacket()` dispatches each FC to its handler, and it owns the **per-FC frame shape** — `mb_pdu_request_len()` (RTU length by FC) and `mb_pdu_skips_crc()` (which FCs bypass CRC). Single source of truth for "the set of function codes". | — | `registers`, `debug` |
 | **`modbus_serial.*`** | The **RTU** transport (single- and dual-serial). Declared-length framing (robust over USB-CDC), one-byte resync, RS485 tx-enable timing (the T3.5 waits around the blocking send; the switching itself goes through `modbus_rs485`), per-port RX assembly buffers. | `MB_SERIAL_ACTIVE` | `pdu`, `crc`, `rs485`, `frame` |
-| **`modbus_tcp.*`** | The **TCP** transport (Ethernet / WiFi / ESP ETH). Brings the network stack up, accepts up to `MAX_SRV_CLIENTS`, services MBAP-framed requests. | `MBTCP` | `pdu`, `frame` |
+| **`modbus_tcp.*`** | The **TCP** transport (Ethernet / WiFi / ESP ETH). Brings the network stack up, accepts up to `MAX_SRV_CLIENTS`, services MBAP-framed requests. On ESP32 Wi-Fi it turns modem sleep off (`WiFi.setSleep(false)` right after `WiFi.begin()`): the radio stays in receive between beacons, so frames to the board are not lost while it sleeps, at the cost of the active-receive current all the time instead of the modem-sleep average (not measured), for every ESP32 Wi-Fi project. On ESP32 and ESP8266 Wi-Fi (`MBTCP_WIFI_SUPERVISED`), `loop()` first calls `mbconfig_wifi_supervise()`: one `WiFi.status()` query, and a `WiFi.reconnect()` once the station has not been connected for 10 s; it never waits, never calls `WiFi.begin()` again and logs nothing. | `MBTCP` (link bring-up and supervision: `OPLC_NET_ENABLED`) | `pdu`, `frame` |
 | **`ModbusSlave.*`** | **Umbrella** header (re-includes every `modbus_*.h`, so `Baremetal.ino` is untouched) + the `mbtask()` facade that fans out to `handle_tcp()` / `handle_serial()`. | — | all |
 
 ## Build gates
@@ -207,7 +207,7 @@ transports, the transports call the core, and the core calls neither.
 | **`modbus_master_rtu.*`** | Modbus RTU transport: one state machine per bus (devices on one UART share it): idle, pending (waits for an idle line), send, await. Slave id and CRC around the core's PDU, the bus timeout (the smallest of its devices) counted from the end of the request, at most one receive buffer per bus per pass. See "RTU buses" below. | `MB_MASTER_RTU_ENABLED` | `modbus_master`, `modbus_master_util`, `modbus_crc`, `modbus_rs485` |
 | **`modbus_rs485.*`** | The RS-485 helper of the slave's base layer, shared with the RTU server. | — | `modbus_config` |
 | **`modbus_crc.*`** | `mb_crc16(data, len)`: CRC-16 over the master's own buffers, never `mb_frame`. | — | `frame` |
-| **`modbus_master_util.h`** | Internal helpers of the three master units, `static inline`: `reached(now, when)` (wrap-safe deadline test), `put16` and `get16` (big-endian 16-bit values). | — | `<stdint.h>` only |
+| **`modbus_master_util.h`** | Internal helpers of the three master units (and `reached()` for the Wi-Fi supervision of `modbus_tcp.cpp`), `static inline`: `reached(now, when)` (wrap-safe deadline test), `put16` and `get16` (big-endian 16-bit values). | — | `<stdint.h>` only |
 | **`baremetal_net.*`** | Network seam, extended with the outbound `Connection` (see below) and the `BOARD_WIFININA` branch with its own `NinaClient` and `NinaServer` over the WiFiNINA module driver. | `BM_NET_ENABLED` = `OPCUA_ENABLED \|\| S7COMM_ENABLED \|\| MB_MASTER_TCP_ENABLED` | `modbus_config` (board defines) |
 | **`modbus_pdu.*`** | `mb_pdu_response_len(fc, quantity)`: the length of the normal response, the inverse of `mb_pdu_request_len()`. | — | `registers`, `debug` |
 
@@ -244,8 +244,14 @@ MB_MASTER_ENABLED`, so a point with no program variable still has storage.
    next poll waits one cycle. Only a connection the stack reports lost (connect,
    send or receive error, peer close) follows Reconnect: off, the endpoint gives up
    until the next RUN edge or a reset; on, it retries after 2 s, then 1.5 times
-   longer each attempt, at most 30 s. While an endpoint is not connected its read
-   groups follow their error handling and its write groups send nothing.
+   longer each attempt, at most 30 s. Connects wait for the network link: a pass
+   that has a connect to follow or one due asks `bm_net::link_up()` at most once,
+   and while it answers down no connect starts and the due endpoint keeps its
+   Reconnect timing. A connect that fails while the link is down is not counted as
+   an attempt: its connection is closed and the endpoint connects in the first pass
+   that finds the link up, whatever its Reconnect. A lost established connection
+   follows Reconnect whatever the link answer. While an endpoint is not connected
+   its read groups follow their error handling and its write groups send nothing.
 4. **Constant tables, IPv4 only.** Every endpoint, device, group and point comes
    from the generated tables; there is no name resolution anywhere.
 5. **The slave's state is not the master's.** The RTU master never names
@@ -266,6 +272,18 @@ timeout_ms)`, `poll()` (`BM_CONN_PENDING`, `BM_CONN_CONNECTED`, `BM_CONN_FAILED`
 | `BM_NET_CONNECT_LWIP` | ESP32 core (`BOARD_ESP32`, and `BOARD_PORTENTA` Wi-Fi on the esp32 core) | raw lwIP socket with `O_NONBLOCK`; `poll()` follows it, room from `select()` |
 | `BM_NET_CONNECT_MBED` | mbed core (`MBETH_MBED_LWIP`, `BOARD_PORTENTA` Wi-Fi) | `TCPSocket` with `set_blocking(false)` |
 | `BM_NET_CONNECT_CLIENT` | every other target | the library client, with its connect timeout set to the endpoint timeout (a three-argument `connect`, `setConnectionTimeout` or `setTimeout`, whichever the library has); room from `availableForWrite()`, except on `BOARD_WIFININA`, where `NinaClient::write()` is one `ServerDrv::sendData()` exchange and the module's count is the answer (all of it: sent; none: `BM_SEND_NO_ROOM`; part: lost) |
+
+`bm_net::link_up()` tells the master whether the board's network interface is
+up and addressed. It never waits: it reads the driver's state or makes at most one
+status query of the module, and resolves no name. The master names no network
+class or link state itself.
+
+| Adapter branch | `link_up()` is true when |
+|---|---|
+| `BOARD_ESP32` with `MBTCP_WIFI`, `BOARD_ESP8266`, `BOARD_WIFININA` with `MBTCP_WIFI`, `BOARD_PICOW` and `BOARD_PORTENTA` with `MBTCP_WIFI`, the generic `MBTCP_WIFI` branch | `WiFi.status() == WL_CONNECTED` (on the ESP32 and ESP8266 cores this status means joined and addressed; on NINA it is one module status exchange, no send) |
+| `BOARD_ESP32` with `MBTCP_ETHERNET` | `ETH.linkUp()` and a non-zero `ETH.localIP()` (`<ETH.h>` is included in `baremetal_net.cpp` for this build only) |
+| `MBETH_SPI` with the WIZnet `Ethernet.h` (W5100, W5200, W5500) | `Ethernet.linkStatus() != LinkOFF` (a W5100 answers `Unknown`, which counts as up) |
+| `MBETH_SPI` with `MBTCP_ETH_ENC28J60`, `MBETH_MBED_LWIP`, `BOARD_LOGO8` | always (no link query is relied on there) |
 
 The master has `BM_NET_MASTER_SLOTS` = `MB_MASTER_ENDPOINT_COUNT` slots of its
 own, outside the listeners' pool (`BM_NET_MAX_CLIENTS`), so neither the master

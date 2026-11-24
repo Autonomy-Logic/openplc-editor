@@ -22,7 +22,9 @@ void mb_master_tcp_stop(void);
 /** One non-blocking pass over every endpoint: advance its connect or Reconnect
  *  wait, take what arrived (at most one buffer), time out the request in flight
  *  and send the next one. Connection failures follow the endpoint's Reconnect.
- *  At most one connect starts per pass, and none in a pass that closed a connection. */
+ *  At most one connect starts per pass, and none in a pass that closed a connection.
+ *  Connects wait for the network link (bm_net::link_up(), asked at most once per
+ *  pass); a connect that fails while the link is down is not counted as an attempt. */
 void mb_master_tcp_service(void);
 
 #endif

@@ -22,14 +22,14 @@
             "id": "zero_0",
             "name": "zero_0",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW100",
+            "iecLocation": "%IW0",
             "alias": "MB_ZERO_0"
           },
           {
             "id": "zero_1",
             "name": "zero_1",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW101",
+            "iecLocation": "%IW1",
             "alias": "MB_ZERO_1"
           }
         ]
@@ -47,14 +47,14 @@
             "id": "keep_0",
             "name": "keep_0",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW102",
+            "iecLocation": "%IW2",
             "alias": "MB_KEEP_0"
           },
           {
             "id": "keep_1",
             "name": "keep_1",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW103",
+            "iecLocation": "%IW3",
             "alias": "MB_KEEP_1"
           }
         ]

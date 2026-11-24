@@ -24,21 +24,21 @@
             "id": "coils_0",
             "name": "coils_0",
             "type": "Digital Input (Coil Status)",
-            "iecLocation": "%IX100.0",
+            "iecLocation": "%IX0.0",
             "alias": "MB_FC1_0"
           },
           {
             "id": "coils_1",
             "name": "coils_1",
             "type": "Digital Input (Coil Status)",
-            "iecLocation": "%IX100.1",
+            "iecLocation": "%IX0.1",
             "alias": "MB_FC1_1"
           },
           {
             "id": "coils_2",
             "name": "coils_2",
             "type": "Digital Input (Coil Status)",
-            "iecLocation": "%IX100.2",
+            "iecLocation": "%IX0.2",
             "alias": "MB_FC1_2"
           }
         ]
@@ -56,14 +56,14 @@
             "id": "discretes_0",
             "name": "discretes_0",
             "type": "Digital Input (Discrete Input)",
-            "iecLocation": "%IX101.0",
+            "iecLocation": "%IX0.3",
             "alias": "MB_FC2_0"
           },
           {
             "id": "discretes_1",
             "name": "discretes_1",
             "type": "Digital Input (Discrete Input)",
-            "iecLocation": "%IX101.1",
+            "iecLocation": "%IX0.4",
             "alias": "MB_FC2_1"
           }
         ]
@@ -81,28 +81,28 @@
             "id": "holding_0",
             "name": "holding_0",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW100",
+            "iecLocation": "%IW0",
             "alias": "MB_FC3_0"
           },
           {
             "id": "holding_1",
             "name": "holding_1",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW101",
+            "iecLocation": "%IW1",
             "alias": "MB_FC3_1"
           },
           {
             "id": "holding_2",
             "name": "holding_2",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW102",
+            "iecLocation": "%IW2",
             "alias": "MB_FC3_2"
           },
           {
             "id": "holding_3",
             "name": "holding_3",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW103",
+            "iecLocation": "%IW3",
             "alias": "MB_FC3_3"
           }
         ]
@@ -120,14 +120,14 @@
             "id": "inputs_0",
             "name": "inputs_0",
             "type": "Analog Input (Input Register)",
-            "iecLocation": "%IW104",
+            "iecLocation": "%IW4",
             "alias": "MB_FC4_0"
           },
           {
             "id": "inputs_1",
             "name": "inputs_1",
             "type": "Analog Input (Input Register)",
-            "iecLocation": "%IW105",
+            "iecLocation": "%IW5",
             "alias": "MB_FC4_1"
           }
         ]
@@ -145,7 +145,7 @@
             "id": "coil_out_0",
             "name": "coil_out_0",
             "type": "Digital Output (Single Coil)",
-            "iecLocation": "%QX100.0",
+            "iecLocation": "%QX0.1",
             "alias": "MB_FC5_0"
           }
         ]
@@ -163,7 +163,7 @@
             "id": "reg_out_0",
             "name": "reg_out_0",
             "type": "Analog Output (Single Register)",
-            "iecLocation": "%QW100",
+            "iecLocation": "%QW0",
             "alias": "MB_FC6_0"
           }
         ]
@@ -181,21 +181,21 @@
             "id": "coils_out_0",
             "name": "coils_out_0",
             "type": "Digital Output (Multiple Coils)",
-            "iecLocation": "%QX101.0",
+            "iecLocation": "%QX0.2",
             "alias": "MB_FC15_0"
           },
           {
             "id": "coils_out_1",
             "name": "coils_out_1",
             "type": "Digital Output (Multiple Coils)",
-            "iecLocation": "%QX101.1",
+            "iecLocation": "%QX0.3",
             "alias": "MB_FC15_1"
           },
           {
             "id": "coils_out_2",
             "name": "coils_out_2",
             "type": "Digital Output (Multiple Coils)",
-            "iecLocation": "%QX101.2",
+            "iecLocation": "%QX0.4",
             "alias": "MB_FC15_2"
           }
         ]
@@ -213,14 +213,14 @@
             "id": "regs_out_0",
             "name": "regs_out_0",
             "type": "Analog Output (Multiple Registers)",
-            "iecLocation": "%QW101",
+            "iecLocation": "%QW1",
             "alias": "MB_FC16_0"
           },
           {
             "id": "regs_out_1",
             "name": "regs_out_1",
             "type": "Analog Output (Multiple Registers)",
-            "iecLocation": "%QW102",
+            "iecLocation": "%QW2",
             "alias": "MB_FC16_1"
           }
         ]
@@ -238,7 +238,7 @@
             "id": "coil_back_0",
             "name": "coil_back_0",
             "type": "Digital Input (Coil Status)",
-            "iecLocation": "%IX102.0",
+            "iecLocation": "%IX0.5",
             "alias": "MB_BACK5_0"
           }
         ]
@@ -256,7 +256,7 @@
             "id": "reg_back_0",
             "name": "reg_back_0",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW106",
+            "iecLocation": "%IW6",
             "alias": "MB_BACK6_0"
           }
         ]
@@ -274,21 +274,21 @@
             "id": "coils_back_0",
             "name": "coils_back_0",
             "type": "Digital Input (Coil Status)",
-            "iecLocation": "%IX103.0",
+            "iecLocation": "%IX0.6",
             "alias": "MB_BACK15_0"
           },
           {
             "id": "coils_back_1",
             "name": "coils_back_1",
             "type": "Digital Input (Coil Status)",
-            "iecLocation": "%IX103.1",
+            "iecLocation": "%IX0.7",
             "alias": "MB_BACK15_1"
           },
           {
             "id": "coils_back_2",
             "name": "coils_back_2",
             "type": "Digital Input (Coil Status)",
-            "iecLocation": "%IX103.2",
+            "iecLocation": "%IX1.0",
             "alias": "MB_BACK15_2"
           }
         ]
@@ -306,14 +306,14 @@
             "id": "regs_back_0",
             "name": "regs_back_0",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW107",
+            "iecLocation": "%IW7",
             "alias": "MB_BACK16_0"
           },
           {
             "id": "regs_back_1",
             "name": "regs_back_1",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW108",
+            "iecLocation": "%IW8",
             "alias": "MB_BACK16_1"
           }
         ]

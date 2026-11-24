@@ -56,6 +56,25 @@ uint8_t g_tx[MB_MASTER_ADU_MAX];
 /** A connection was closed in the current master pass, so no connect starts before the next one. */
 bool g_closed_this_pass = false;
 
+/** The network link as the current master pass sees it: not asked yet, down or up. */
+enum NetAnswer : uint8_t
+{
+    NET_UNASKED,
+    NET_DOWN,
+    NET_UP
+};
+
+/** The answer of bm_net::link_up() for the current master pass, asked at most once per pass. */
+uint8_t g_net_this_pass = NET_UNASKED;
+
+/** Whether the board's network link is up, asked of the seam on the first call of the pass and kept for the rest. */
+bool network_up()
+{
+    if (g_net_this_pass == NET_UNASKED)
+        g_net_this_pass = bm_net::link_up() ? NET_UP : NET_DOWN;
+    return g_net_this_pass == NET_UP;
+}
+
 /** Whether an endpoint in `state` still holds an open connection. */
 bool link_open(uint8_t state)
 {
@@ -69,8 +88,8 @@ void link_close(uint16_t e)
     g_closed_this_pass = true;
 }
 
-/** The connection of endpoint `e` failed or was lost: close it, apply error handling, then retry or give up. */
-void link_lost(uint16_t e)
+/** Close the connection of endpoint `e`, drop its request and received bytes, and apply error handling. */
+void link_drop(uint16_t e)
 {
     Endpoint &ep = g_endpoints[e];
     link_close(e);
@@ -78,6 +97,13 @@ void link_lost(uint16_t e)
     ep.quiet = false;
     ep.rx_len = 0;
     mb_master_link_down(MB_MASTER_TCP, e);
+}
+
+/** The connection of endpoint `e` failed or was lost: close it, apply error handling, then retry or give up. */
+void link_lost(uint16_t e)
+{
+    Endpoint &ep = g_endpoints[e];
+    link_drop(e);
     if (MB_MASTER_ENDPOINTS[e].reconnect != 0)
     {
         ep.state = LINK_WAIT;
@@ -89,6 +115,21 @@ void link_lost(uint16_t e)
     {
         ep.state = LINK_GIVEN_UP;
     }
+}
+
+/** A connect of endpoint `e` failed: an attempt as link_lost() counts it while the network link is up; while it is
+ *  down the connection is closed and the endpoint waits for the link, its Reconnect timing unchanged. */
+void connect_failed(uint16_t e)
+{
+    if (network_up())
+    {
+        link_lost(e);
+        return;
+    }
+    Endpoint &ep = g_endpoints[e];
+    link_drop(e);
+    ep.state = LINK_WAIT;
+    ep.retry_at = (uint32_t)millis();
 }
 
 /** Follow a connect in progress to its end. */
@@ -106,7 +147,7 @@ void link_poll_connect(uint16_t e)
     }
     else if (status != bm_net::BM_CONN_PENDING)
     {
-        link_lost(e);
+        connect_failed(e);
     }
 }
 
@@ -118,7 +159,7 @@ void link_connect(uint16_t e)
     ep.state = LINK_CONNECTING;
     if (!ep.conn.start(endpoint.ip, endpoint.port, endpoint.timeout_ms))
     {
-        link_lost(e);
+        connect_failed(e);
         return;
     }
     link_poll_connect(e);
@@ -286,6 +327,7 @@ void mb_master_tcp_stop(void)
 void mb_master_tcp_service(void)
 {
     g_closed_this_pass = false;
+    g_net_this_pass = NET_UNASKED;
     for (uint16_t e = 0; e < MB_MASTER_ENDPOINT_COUNT; e++)
     {
         Endpoint &ep = g_endpoints[e];
@@ -315,7 +357,8 @@ void mb_master_tcp_service(void)
     {
         if (g_endpoints[e].state == LINK_WAIT && reached(now, g_endpoints[e].retry_at))
         {
-            link_connect(e);
+            if (network_up())
+                link_connect(e);
             return;
         }
     }

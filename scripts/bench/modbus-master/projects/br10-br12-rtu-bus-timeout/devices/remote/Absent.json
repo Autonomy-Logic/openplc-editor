@@ -24,7 +24,7 @@
             "id": "absent_0",
             "name": "absent_0",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW102",
+            "iecLocation": "%IW0",
             "alias": "MB_ABSENT_0"
           }
         ]

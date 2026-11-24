@@ -355,6 +355,10 @@ void scheduler()
 
 void loop()
 {
+#ifdef MBTCP_WIFI_SUPERVISED
+    mbconfig_wifi_supervise();
+#endif
+
 #if defined(SUPPORTS_UDP_SCAN)
     udp_scan_poll();
 #endif

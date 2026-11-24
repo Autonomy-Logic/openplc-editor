@@ -132,7 +132,7 @@
             "id": "coil_out_0",
             "name": "coil_out_0",
             "type": "Digital Output (Single Coil)",
-            "iecLocation": "%QX0.1"
+            "iecLocation": "%QX0.0"
           }
         ]
       },
@@ -166,19 +166,19 @@
             "id": "coils_out_0",
             "name": "coils_out_0",
             "type": "Digital Output (Multiple Coils)",
-            "iecLocation": "%QX0.2"
+            "iecLocation": "%QX0.1"
           },
           {
             "id": "coils_out_1",
             "name": "coils_out_1",
             "type": "Digital Output (Multiple Coils)",
-            "iecLocation": "%QX0.3"
+            "iecLocation": "%QX0.2"
           },
           {
             "id": "coils_out_2",
             "name": "coils_out_2",
             "type": "Digital Output (Multiple Coils)",
-            "iecLocation": "%QX0.4"
+            "iecLocation": "%QX0.3"
           }
         ]
       },

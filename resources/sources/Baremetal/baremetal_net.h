@@ -260,6 +260,9 @@ void close_all();
 
 #if BM_NET_MASTER_SLOTS > 0
 
+/** Whether the board's network interface is up and addressed, as the stack reports it now. */
+bool link_up();
+
 /** State of an outbound Connection. */
 enum ConnStatus : uint8_t
 {

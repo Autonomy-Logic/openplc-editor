@@ -22,14 +22,14 @@
             "id": "b_0",
             "name": "b_0",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW102",
+            "iecLocation": "%IW2",
             "alias": "MB_B_0"
           },
           {
             "id": "b_1",
             "name": "b_1",
             "type": "Analog Input (Holding Register)",
-            "iecLocation": "%IW103",
+            "iecLocation": "%IW3",
             "alias": "MB_B_1"
           }
         ]

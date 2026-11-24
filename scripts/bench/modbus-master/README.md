@@ -16,6 +16,7 @@ control is the TCP master's firmware, which compiles the RTU buses out.
 | --- | --- |
 | `projects/compile-*` | Compile fixtures, literal low addresses so a 2 KB AVR has room for the image |
 | `projects/tc*`, `projects/as*` | Bench projects, one per check or per shared configuration (table below) |
+| `projects/tc28-shared-timeout` | TC28 (a): two devices on one endpoint, timeouts 1000 and 300 ms |
 | `maps/*.json` | Register maps for the hostile slave's `normal` scenario (`--map`) |
 | `compare-images.ts` | Compares two builds of one project, target by target |
 
@@ -25,9 +26,10 @@ and Mkr WiFi `7`, Mega `23`, Nano RP2040 Connect `8`, ESP8266 `D1`); the logic a
 LOGO!, Opta and P1AM-200 have no default pins: map `%QX0.0` to an output on the board's own screen before
 measuring.
 
-Program variables are bound to the points by alias (`MB_G1_0`, ...), so they follow the points if the editor
-reallocates their addresses; read them by name in the debugger. In the scenarios, `%IW100` to `%IW109` is
-`g1_0` to `g1_9`, `%IW110` to `%IW119` is `g2_0` to `g2_9`, and so on.
+The editor allocates the points' addresses compactly, right after the board's own pins, and the fixtures store
+that allocation (checked by `__tests__/projects.test.ts`, run by `npm run test:bench`), so a project builds as
+opened, with no recalculation. Program variables are bound to the points by alias (`MB_G1_0`, ...), and the
+scenarios name variables, never addresses: read them by name in the debugger.
 
 ## Open prerequisites
 
@@ -166,6 +168,7 @@ compile exits 0.
 | TC06 scan bound | `tc05-tc06-reconnect-on` | ESP32 Wi-Fi | logic analyzer |
 | TC06 other paths | `tc06-logo`, `tc06-opta-wifi`, `tc06-opta-ethernet`, `tc06-p1am-200-ethernet`, `tc06-esp8266`, `tc06-nano-33-iot`, `tc06-nano-rp2040-connect` | as named | hardware |
 | TC10, AS-02 | `as02-sentinel` | ESP32 Wi-Fi | now |
+| TC28 (a) smallest timeout on a shared endpoint | `tc28-shared-timeout` | ESP32 Wi-Fi | now |
 | AS-01 | `as01-uno-w5x00` | Uno + W5x00 | hardware |
 | TC11 | `tc11-uno-125-registers` | Uno + W5x00 | hardware |
 | AS-03 | `as03-late-response` | ESP32 Wi-Fi | now |
@@ -208,7 +211,9 @@ log one `accepted` event; `a_0`, `a_1` and `b_0`, `b_1` = 1234, 5678.
 Groups: `zero` (offset 0, set-to-zero) and `keep` (offset 10, keep-last-value). Slave map `maps/reconnect.json`.
 
 - TC03: slave stopped (host up, port 502 closed). Power the board. Expect one SYN to `192.168.1.50:502`
-  within 500 ms of the network coming up, then none for 5 minutes; `zero_*` and `keep_*` read 0.
+  within 500 ms of the network coming up, then none for 5 minutes; `zero_*` and `keep_*` read 0. The master
+  waits for the board's network link before its first attempt, and a connect that fails while the link is down
+  is not counted, so the one SYN comes after the board joined the network, however long that takes.
 - TC07: then Stop and Start the PLC from the editor, with the slave running. Expect one new connect, and
   `zero_*` = 1111, 2222, `keep_*` = 3333, 4444.
 - TC04: then stop the slave (it closes the connection). Expect no SYN for 5 minutes, `zero_*` = 0,
@@ -217,19 +222,54 @@ Groups: `zero` (offset 0, set-to-zero) and `keep` (offset 10, keep-last-value). 
 
 ### TC05 and TC06: Reconnect on
 
-Same groups and map. TC05: with the PLC running and polling, stop the slave, wait 60 s, start it again.
-Expect SYNs at about 2, 3, 4.5, 6.75 s and so on after the loss, the interval capped at 30 s, and polling
-back with `zero_*` = 1111, 2222 within one interval of the slave's return. TC06: with the slave stopped,
+Same groups. TC05: with the PLC running and polling (slave `--map maps/reconnect.json`: `zero_*` = 1111,
+2222), stop the slave, wait 60 s, and start it again with `--map maps/tc05-return.json`. Expect SYNs at about
+2, 3, 4.5, 6.75 s and so on after the loss, the interval capped at 30 s, and polling back with `zero_*` = 4321,
+8765 (TC05's values) and `keep_*` = 3333, 4444 within one interval of the slave's return. TC06: with the slave stopped,
 the worst scan stays within 20 + 500 ms over 10 minutes (analyzer). The `tc06-*` projects repeat TC06 on the
 other seven paths.
 
 ### TC10 and AS-02: rejected TCP responses
 
-`as02-sentinel`: G1 offset 0, 10 registers, 100 ms; sentinel G2 offset 10, 1 register, 60 s. For each row
-1 to 9: slave `--scenario AS-02 --row <n>`. After the baseline (G1 = 101..110, G2 = 23130), expect `g1_*` = 0
-(never the 201.. values a malformed frame carries), `g2_0` still 23130 (read before G2's next poll), the next
-request on the same client port, and then `g1_*` = 501..510. TC10 rows: excess bytes (1, 2), wrong
-transaction id (6), wrong FC (9); bad CRC has no TCP row.
+`as02-sentinel`: Reconnect unchecked (TC10); G1 offset 0, 10 registers, 100 ms; sentinel G2 offset 10, 1
+register, 60 s. For each row 1 to 9: slave `--scenario AS-02 --row <n>`. After the baseline (G1 = 101..110,
+G2 = 23130), expect `g1_*` = 0 (never the 201.. values a malformed frame carries), `g2_0` still 23130 (read
+before G2's next poll), the next request on the same client port with the device not given up, and then
+`g1_*` = 501..510. TC10 cases and their AS-02 rows:
+
+| TC10 case | AS-02 row |
+| --- | --- |
+| excess data (byte count 40 for 10 registers) | 1, 2 |
+| no answer within the timeout (a truncated frame, then silence) | 4 |
+| exception response `0x83 0x02` | 5 |
+| transaction id one above the request's | 6 |
+| slave id 2 | 8 |
+| FC `0x04` | 9 |
+| bad CRC | no TCP row (RTU only) |
+
+### TC28 (a): the smallest timeout on a shared endpoint
+
+`tc28-shared-timeout`: `SlaveA` (slave id 1, timeout 1000 ms, group `a`) and `SlaveB` (slave id 2, timeout
+300 ms, group `b`) on `192.168.1.50:502`, both FC 3, offset 0, 2 registers, `set-to-zero`, every 100 ms, Reconnect
+checked. For each row 1 and 2:
+
+```sh
+npm run bench:hostile-slave -- --scenario TC28 --row <1|2> --map scripts/bench/modbus-master/maps/g1-1234-5678.json \
+  --tcp-listen 192.168.1.50:502 --log tc28-row<n>.jsonl
+```
+
+The slave answers the first 20 slave 1 polls at once, then every slave 1 poll after 200 ms (row 1) or 500 ms
+(row 2) with 4321, 8765; slave 2 polls are always answered at once. Expect the baseline `a_*` and `b_*` = 1234,
+5678 on one connection, then:
+
+- row 1: `a_*` = 4321, 8765 (the 200 ms answer is inside the endpoint's 300 ms timeout);
+- row 2: `a_*` = 0, because 300 ms, the smaller of 1000 and 300, is the endpoint's timeout: the late answers are
+  dropped and the connection stays (same client port, no FIN, RST or SYN);
+- in both rows `b_*` keeps updating.
+
+Row 1 needs the board to see the answer within 300 ms, so the bench's Wi-Fi delay counts: record the capture's
+request-to-answer delay with the result. TC28 (b) on Runtime v4 and (c) on RTU are not rows of this README (RTU:
+`br10-br12-rtu-bus-timeout`).
 
 ### AS-01 (Uno with W5x00, 128-byte frame) and TC11
 

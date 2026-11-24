@@ -14,6 +14,10 @@ unrecognised target is a hard #error rather than a fallback.
 
 #include "opcua_log.h"
 
+#if BM_NET_MASTER_SLOTS > 0 && defined(BOARD_ESP32) && defined(MBTCP_ETHERNET)
+    #include <ETH.h>
+#endif
+
 namespace bm_net {
 
 #if defined(BM_NET_NINA)
@@ -369,6 +373,24 @@ void close_all()
 #endif
 
 #if BM_NET_MASTER_SLOTS > 0
+bool link_up()
+{
+#if defined(BOARD_LOGO8)
+    return true;
+#elif defined(BOARD_ESP32) && defined(MBTCP_ETHERNET)
+    return ETH.linkUp() && ETH.localIP() != IPAddress((uint32_t)0);
+#elif defined(BOARD_ESP32) || defined(BOARD_ESP8266) || defined(BM_NET_NINA) || \
+      ((defined(BOARD_PICOW) || defined(BOARD_PORTENTA)) && defined(MBTCP_WIFI))
+    return WiFi.status() == WL_CONNECTED;
+#elif defined(MBETH_MBED_LWIP) || (defined(MBETH_SPI) && defined(MBTCP_ETH_ENC28J60))
+    return true;
+#elif defined(MBETH_SPI)
+    return Ethernet.linkStatus() != LinkOFF;
+#else
+    return WiFi.status() == WL_CONNECTED;
+#endif
+}
+
 void Connection::fail()
 {
     close();

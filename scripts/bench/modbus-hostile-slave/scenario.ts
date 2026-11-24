@@ -61,6 +61,7 @@ export const SCENARIOS: Readonly<Record<string, ScenarioSpec>> = {
   'AS-12': { transports: ['rtu'], rows: [], needsClient: false },
   'AS-13': { transports: BOTH, rows: [], needsClient: false },
   TC10: { transports: ['rtu'], rows: range(1, 3), needsClient: false },
+  TC28: { transports: ['tcp'], rows: [1, 2], needsClient: false },
 }
 
 /** Throws an error naming the scenario when it is unknown or does not accept this row or transport. */
@@ -95,6 +96,10 @@ export const DELAYED_ANSWER_MS = 200
 export const CLIENT_READS = 50
 /** Bytes written per flood tick when the caller does not size the flood. */
 export const DEFAULT_FLOOD_BLOCK = 512
+/** Number of unit-1 FC 3 requests TC28 answers at once before it delays them. */
+export const TC28_PROMPT_ANSWERS = 20
+/** Answer delay of TC28's late answers, in ms, by row; not scaled. */
+export const TC28_DELAYS_MS: Readonly<Record<number, number>> = { 1: 200, 2: 500 }
 
 const BASELINE_G1 = range(101, 110)
 const BASELINE_G2 = [23130]
@@ -621,6 +626,36 @@ function rtuHostile(ctx: Context, malformed: Buffer): Handler {
   }
 }
 
+/** TC28: unit-1 FC 3 requests answered at once from the map 20 times, then after the row's delay with 4321, 8765
+ *  and 0 for any further register; every other request answered at once from the map. */
+function sharedTimeout(ctx: Context): Handler {
+  const delayMs = TC28_DELAYS_MS[ctx.row ?? 0]
+  let unitOnePolls = 0
+  return {
+    handle: (request, link) => {
+      if (request.unit !== SLAVE_UNIT || request.fc !== FC.readHoldingRegisters) {
+        answerNormally(ctx, link, request)
+        return
+      }
+      unitOnePolls += 1
+      if (unitOnePolls <= TC28_PROMPT_ANSWERS) {
+        answerNormally(ctx, link, request)
+        return
+      }
+      if (unitOnePolls === TC28_PROMPT_ANSWERS + 1) {
+        ctx.phase('late-answers', { delay_ms: delayMs })
+      }
+      const values = Array.from({ length: request.quantity ?? RESUME_VALUES.length }, (_, index) =>
+        index < RESUME_VALUES.length ? RESUME_VALUES[index] : 0,
+      )
+      link.later(delayMs, () => {
+        ctx.log({ event: 'late-answer', tid: request.tid, delay_ms: delayMs })
+        answerValues(link, request, values)
+      })
+    },
+  }
+}
+
 function buildHandler(scenario: string, ctx: Context, nowUs: () => number): Handler {
   const row = ctx.row ?? 0
   switch (scenario) {
@@ -643,6 +678,8 @@ function buildHandler(scenario: string, ctx: Context, nowUs: () => number): Hand
       return rtuHostile(ctx, as11Hostile(row))
     case 'TC10':
       return rtuHostile(ctx, tc10Hostile(row))
+    case 'TC28':
+      return sharedTimeout(ctx)
     default:
       return normalScenario(ctx)
   }

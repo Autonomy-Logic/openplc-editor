@@ -1,7 +1,7 @@
 # Scripted hostile Modbus slave (bench tool)
 
 A command-line tool that plays a well-behaved Modbus slave and the scripted hostile slave, client and attacker
-roles of the Modbus master bench scenarios (AS-01 to AS-04, AS-06 to AS-13), over Modbus TCP and Modbus RTU
+roles of the Modbus master bench scenarios (AS-01 to AS-04, AS-06 to AS-13, TC10 and TC28), over Modbus TCP and Modbus RTU
 (USB-TTL), and writes a timestamped script log.
 
 It is bench tooling only: it lives outside `src/`, so it is not on the shared surface with openplc-web, is not
@@ -29,20 +29,20 @@ npm run bench:hostile-slave -- --scenario <name> [--row <n>] \
   [--board <ip[:port]>] [--log <file.jsonl>]
 ```
 
-| Option                                     | Meaning                                                                                                                                                                                                             |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--scenario <name>`                        | `normal`, `AS-01`, `AS-02`, `AS-03`, `AS-04`, `AS-06`, `AS-07`, `AS-08`, `AS-09`, `AS-10`, `AS-11`, `AS-12`, `AS-13` or `TC10`. An unknown name stops the tool with exit code 2 before it listens.                  |
-| `--row <n>`                                | Row of the scenario: AS-02 1-9, AS-04 1-3, AS-09 1-2, AS-11 1-2, TC10 1-3. Required by those scenarios, refused by the others.                                                                                      |
-| `--tcp-listen <ip:port>`                   | Slave role over Modbus TCP, listening only on that address. Port `0` takes a free port, reported in the `listening` event. The wildcard addresses `0.0.0.0` and `::` are refused.                                   |
-| `--serial <path> --baud <n>`               | Slave role over Modbus RTU on that serial port, 8 data bits. `--parity` defaults to `N`, `--stop` to `1`.                                                                                                           |
-| `--board <ip[:port]>`                      | The board, for the `client` role of AS-04 row 1 (default port 502) and the `attacker` role of AS-08 (default port 102) and AS-13 (default port 502). The tool never sends to any other address.                     |
-| `--log <file.jsonl>`                       | Script log file, truncated at start. Without it the log goes to stdout.                                                                                                                                             |
-| `--map <file.json>`                        | Register map of the slave: `{ "coils": { "0": 1 }, "discreteInputs": {}, "holdingRegisters": { "0": 1234 }, "inputRegisters": {} }`. An address absent from the map reads 0.                                        |
-| `--groups g1=<addr>,g2=<addr>,g3=<addr>`   | Starting holding-register address of the poll groups, read with FC 3 on unit 1. Defaults: G1 at 0 (10 registers), G2 at 10 (1 register, 2 in AS-03 and AS-12), G3 at 20 (1 register). Any group can be given alone. |
-| `--duration-scale <factor>`                | Multiplies the long durations: the 5 minutes of AS-06, the 60 s of AS-07, the 15 minutes of AS-10 and the 60 s of AS-13. The 400 ms byte interval of AS-06 and the 200 ms delay of AS-04 are not scaled.            |
-| `--client-serial <path> --client-baud <n>` | Second serial line of the `client` role, AS-04 rows 2 and 3. `--client-parity` and `--client-stop` as above.                                                                                                        |
-| `--client-unit <id>`                       | Unit id of the board's Modbus RTU server for AS-04 row 3. Default 1.                                                                                                                                                |
-| `--debug-index <arr:elem>[,...]`           | Debug addresses (`arr:elem`) of the variables at `%QW0`..`%QW9`, taken from the project's STruC++ debug map, for AS-04 row 2.                                                                                       |
+| Option                                     | Meaning                                                                                                                                                                                                                                   |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--scenario <name>`                        | `normal`, `AS-01`, `AS-02`, `AS-03`, `AS-04`, `AS-06`, `AS-07`, `AS-08`, `AS-09`, `AS-10`, `AS-11`, `AS-12`, `AS-13`, `TC10` or `TC28`. An unknown name stops the tool with exit code 2 before it listens.                                |
+| `--row <n>`                                | Row of the scenario: AS-02 1-9, AS-04 1-3, AS-09 1-2, AS-11 1-2, TC10 1-3, TC28 1-2. Required by those scenarios, refused by the others.                                                                                                  |
+| `--tcp-listen <ip:port>`                   | Slave role over Modbus TCP, listening only on that address. Port `0` takes a free port, reported in the `listening` event. The wildcard addresses `0.0.0.0` and `::` are refused.                                                         |
+| `--serial <path> --baud <n>`               | Slave role over Modbus RTU on that serial port, 8 data bits. `--parity` defaults to `N`, `--stop` to `1`.                                                                                                                                 |
+| `--board <ip[:port]>`                      | The board, for the `client` role of AS-04 row 1 (default port 502) and the `attacker` role of AS-08 (default port 102) and AS-13 (default port 502). The tool never sends to any other address.                                           |
+| `--log <file.jsonl>`                       | Script log file, truncated at start. Without it the log goes to stdout.                                                                                                                                                                   |
+| `--map <file.json>`                        | Register map of the slave: `{ "coils": { "0": 1 }, "discreteInputs": {}, "holdingRegisters": { "0": 1234 }, "inputRegisters": {} }`. An address absent from the map reads 0.                                                              |
+| `--groups g1=<addr>,g2=<addr>,g3=<addr>`   | Starting holding-register address of the poll groups, read with FC 3 on unit 1. Defaults: G1 at 0 (10 registers), G2 at 10 (1 register, 2 in AS-03 and AS-12), G3 at 20 (1 register). Any group can be given alone.                       |
+| `--duration-scale <factor>`                | Multiplies the long durations: the 5 minutes of AS-06, the 60 s of AS-07, the 15 minutes of AS-10 and the 60 s of AS-13. The 400 ms byte interval of AS-06, the 200 ms delay of AS-04 and the 200 or 500 ms delay of TC28 are not scaled. |
+| `--client-serial <path> --client-baud <n>` | Second serial line of the `client` role, AS-04 rows 2 and 3. `--client-parity` and `--client-stop` as above.                                                                                                                              |
+| `--client-unit <id>`                       | Unit id of the board's Modbus RTU server for AS-04 row 3. Default 1.                                                                                                                                                                      |
+| `--debug-index <arr:elem>[,...]`           | Debug addresses (`arr:elem`) of the variables at `%QW0`..`%QW9`, taken from the project's STruC++ debug map, for AS-04 row 2.                                                                                                             |
 
 The slave answers unit id 1 on RTU and ignores the frames of other unit ids; on TCP the `normal` answers echo the
 request's unit id and the scripted answers carry unit id 1. A request that is not a poll group read gets the
@@ -69,6 +69,7 @@ Events of a role carry `role` (`slave`, `client` or `attacker`); events of a TCP
 | `discarded`, `ignored`, `withheld`                 | Bytes that are not a frame, an RTU frame for another unit id, a request the script leaves unanswered |
 | `phase`                                            | `phase` and the phase's fields, at each scenario change                                              |
 | `poll`                                             | AS-04: `poll` number and `counter`                                                                   |
+| `late-answer`                                      | TC28: `tid` and `delay_ms` of each delayed answer, when it is sent                                   |
 | `connected`, `connect-failed`, `response`, `error` | Client and attacker connections and answers                                                          |
 | `stopped`                                          | `code`, last line                                                                                    |
 
@@ -232,6 +233,21 @@ other groups get their `normal` answers. Over TCP the tool stops with exit code 
 
 ```bash
 npm run bench:hostile-slave -- --scenario TC10 --row 1 --serial /dev/ttyUSB0 --baud 19200 --log tc10-row1.jsonl
+```
+
+### TC28 rows 1-2 (TCP)
+
+The smallest timeout on a shared endpoint (TC28 (a)). Every request whose unit id is not 1 gets its `normal` answer
+from `--map` at once. The first 20 FC 3 requests with unit id 1 get their `normal` answer at once too; every later
+one is answered after the row's delay with 4321, 8765 (0 for any further register), on the scenario clock and only
+if the connection is still open. The `phase` event `late-answers` carries `delay_ms` when the delayed answers start,
+and each delayed answer logs a `late-answer` event. Over RTU the tool stops with exit code 2.
+
+- Row 1: the delayed answers come 200 ms after the request.
+- Row 2: the delayed answers come 500 ms after the request.
+
+```bash
+npm run bench:hostile-slave -- --scenario TC28 --row 1 --map scripts/bench/modbus-master/maps/g1-1234-5678.json --tcp-listen 192.168.1.50:502 --log tc28-row1.jsonl
 ```
 
 ### AS-12 (RTU)

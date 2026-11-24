@@ -8,6 +8,7 @@ modbus_tcp.cpp - Modbus TCP transport (Ethernet / WiFi / ESP ETH)
 
 #include "modbus_tcp.h"
 #include "modbus_pdu.h"   // process_mbpacket
+#include "modbus_master_util.h"
 
 // The listen port travels with the project's Modbus server. A firmware built
 // before it did -- or by a toolchain that does not emit it -- keeps the IANA
@@ -111,6 +112,9 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
             }
         #endif
         WiFi.begin(MBTCP_SSID, MBTCP_PWD);
+        #if defined(BOARD_ESP32)
+            WiFi.setSleep(false);
+        #endif
         int num_tries = 0;
         while (WiFi.status() != WL_CONNECTED)
         {
@@ -123,6 +127,33 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
 }
 
 #endif  // OPLC_NET_ENABLED
+
+#ifdef MBTCP_WIFI_SUPERVISED
+/** How long the station may stay disconnected before the supervision asks the driver to reconnect, in ms. */
+static const uint32_t WIFI_RECONNECT_AFTER_MS = 10000;
+
+/** millis() of the later of: the station last seen connected, the first supervision call, the last reconnect request. */
+static uint32_t g_wifi_window_start = 0;
+
+/** Whether mbconfig_wifi_supervise() has run before. */
+static bool g_wifi_supervising = false;
+
+void mbconfig_wifi_supervise(void)
+{
+    const uint32_t now = (uint32_t)millis();
+    if (WiFi.status() == WL_CONNECTED || !g_wifi_supervising)
+    {
+        g_wifi_window_start = now;
+        g_wifi_supervising = true;
+        return;
+    }
+    if (reached(now, g_wifi_window_start + WIFI_RECONNECT_AFTER_MS))
+    {
+        WiFi.reconnect();
+        g_wifi_window_start = now;
+    }
+}
+#endif
 
 #ifdef MB_TCP_ACTIVE
 /** Start listening for Modbus TCP. Separate from the link bring-up above
