@@ -234,6 +234,9 @@
     "socket.io-parser": "^4.2.7",
     "source-map-js": "^1.2.2",
     "svgo": "^3.3.5",
+    "test-exclude": {
+      "glob": "^7.2.3"
+    },
     "tmp": "^0.2.6",
     "webpack-dev-middleware": "^7.4.6",
     "websocket-driver": "^0.7.5",
