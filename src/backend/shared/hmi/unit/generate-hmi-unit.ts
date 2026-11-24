@@ -1372,10 +1372,10 @@ function widgetPreviewSource(info: HmiWidgetInfo): string {
     `FUNCTION_BLOCK ${WIDGET_PREVIEW_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
     '    HMI__Column : HmiHorizontalStack := (Gap := 16, Padding := 16);',
-    "    HMI__Row : HmiVerticalStack := (Parent := 'HMI__Column', GrowAuto := FALSE);",
-    `    Natural : ${info.name} := (Parent := 'HMI__Row', GrowAuto := FALSE);`,
+    "    HMI__Row : HmiVerticalStack := (Parent := 'HMI__Column', AutoSize := FALSE);",
+    `    Natural : ${info.name} := (Parent := 'HMI__Row', AutoSize := FALSE);`,
     "    HMI__Spacer : HmiVerticalStack := (Parent := 'HMI__Row');",
-    `    Stretched : ${info.name} := (Parent := 'HMI__Column', GrowAuto := TRUE);`,
+    `    Stretched : ${info.name} := (Parent := 'HMI__Column', AutoSize := TRUE);`,
     '  END_VAR',
     ...assign,
     'END_FUNCTION_BLOCK',
@@ -1405,8 +1405,8 @@ function galleryWidgets(catalog: HmiWidgetCatalog, projectWidgets: readonly HmiS
 /** The palette gallery's screen: each widget alone in a row, at natural size, with its test value. */
 function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
   const declarations = widgets.flatMap((info) => [
-    `    HMI__R_${info.name} : HmiVerticalStack := (Parent := 'HMI__Column', GrowAuto := FALSE);`,
-    `    ${GALLERY_ELEMENT}${info.name} : ${info.name} := (Parent := 'HMI__R_${info.name}', GrowAuto := FALSE);`,
+    `    HMI__R_${info.name} : HmiVerticalStack := (Parent := 'HMI__Column', AutoSize := FALSE);`,
+    `    ${GALLERY_ELEMENT}${info.name} : ${info.name} := (Parent := 'HMI__R_${info.name}', AutoSize := FALSE);`,
   ])
   const values = widgets.flatMap((info) => {
     const value = previewTestValue(info)
@@ -1415,7 +1415,7 @@ function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
   return [
     `FUNCTION_BLOCK ${HMI_GALLERY_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiHorizontalStack := (Gap := 12, Padding := 8, GrowAuto := FALSE);',
+    '    HMI__Column : HmiHorizontalStack := (Gap := 12, Padding := 8, AutoSize := FALSE);',
     ...declarations,
     '  END_VAR',
     ...values,
@@ -1430,7 +1430,7 @@ export const HMI_THEME_PREVIEW_SCREEN = 'HMI__ThemePreview'
 /** The theme preview's screen: controls and values on surface cards, then the fixed colors, in `theme`. */
 function themePreviewSource(theme: string): string {
   const card = (name: string) =>
-    `    ${name} : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 12, Padding := 12, Fill := COLOR.Surface, GrowAuto := FALSE);`
+    `    ${name} : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 12, Padding := 12, Fill := COLOR.Surface, AutoSize := FALSE);`
   const fixed = ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Gray'].map(
     (c) =>
       `    HMI__${c} : HmiRect := (Parent := 'HMI__Fixed', Fill := COLOR.${c}, PrefWidth := 36, PrefHeight := 20);`,
@@ -1450,7 +1450,7 @@ function themePreviewSource(theme: string): string {
     `    HMI__Level : HmiGauge := (Parent := 'HMI__Values', Caption := 'Level', Value := 62.0);`,
     `    HMI__Tank : HmiTank := (Parent := 'HMI__Values', Caption := 'Tank', Value := 45.0, Unit := '%');`,
     `    HMI__Flow : HmiValue := (Parent := 'HMI__Values', Caption := 'Flow', Value := 42.5, Unit := 'm3/h');`,
-    `    HMI__Fixed : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 8, GrowAuto := FALSE);`,
+    `    HMI__Fixed : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 8, AutoSize := FALSE);`,
     ...fixed,
     '  END_VAR',
     'END_FUNCTION_BLOCK',

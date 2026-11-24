@@ -30,7 +30,6 @@ import {
   insertionParent,
   isContainerType,
   placementRefusal,
-  resizeProperties,
 } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import {
   copyElements,
@@ -62,6 +61,12 @@ import {
   stString,
 } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import { type DesignerModel, parseDesignerBlock } from '@root/middleware/shared/utils/hmi/designer/designer-model'
+import {
+  moveSized,
+  placementProperties,
+  resizeProperties,
+  type StackView,
+} from '@root/middleware/shared/utils/hmi/designer/designer-span'
 import { HMI_DEVICE_PRESETS, hmiDevicePreset } from '@root/middleware/shared/utils/hmi/device-presets'
 import { lastOf } from '@root/middleware/shared/utils/hmi/last-of'
 import { hmiLibraryBlocks, hmiPlcVariables } from '@root/middleware/shared/utils/hmi/plc-variables'
@@ -215,10 +220,16 @@ function thumbnailUrl(thumbnail: HmiThumbnail): string {
   return canvas.toDataURL()
 }
 
-/** The palette's thumbnails as image URLs by upper-case widget name, redrawn a moment after the widget blocks change. */
-function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> {
+/** Palette thumbnails as image URLs, and natural sizes in logical units, by upper-case widget name. */
+interface PaletteThumbnails {
+  urls: ReadonlyMap<string, string>
+  naturals: ReadonlyMap<string, { width: number; height: number }>
+}
+
+/** The palette's thumbnails, redrawn a moment after the widget blocks change. */
+function useThumbnails(request: HmiPreviewRequest): PaletteThumbnails {
   const port = useHmiPreview()
-  const [thumbnails, setThumbnails] = useState<ReadonlyMap<string, string>>(new Map())
+  const [thumbnails, setThumbnails] = useState<PaletteThumbnails>({ urls: new Map(), naturals: new Map() })
   const { widgets, settings, projectNames, libraries } = request
   useEffect(() => {
     if (!port) return
@@ -226,7 +237,10 @@ function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> 
     const timer = setTimeout(() => {
       void port.thumbnails({ widgets, settings, projectNames, libraries }, THUMBNAIL_SCALE).then((result) => {
         if (live && result.thumbnails.length > 0)
-          setThumbnails(new Map(result.thumbnails.map((t) => [t.widget.toUpperCase(), thumbnailUrl(t)])))
+          setThumbnails({
+            urls: new Map(result.thumbnails.map((t) => [t.widget.toUpperCase(), thumbnailUrl(t)])),
+            naturals: new Map(result.thumbnails.map((t) => [t.widget.toUpperCase(), t.natural])),
+          })
       })
     }, THUMBNAIL_DELAY_MS)
     return () => {
@@ -460,6 +474,13 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     },
   }
 
+  const stackView = (shown: DesignerModel): StackView => ({
+    model: shown,
+    catalog,
+    boxes: elements,
+    screen: { width: device.width, height: device.height },
+  })
+
   const setLiveAndCommit = (element: string, entries: Array<[string, string]>, commit: boolean) => {
     if (!model) return
     const live = entries.map(([property, value]) => preview.setLive(name, element, property, value)).every(Boolean)
@@ -475,14 +496,14 @@ export function HmiScreenDesigner({ name }: { name: string }) {
             ['X', String(at.x)],
             ['Y', String(at.y)],
           ]
-        : []
+        : placementProperties(stackView(model), target.parent, type, thumbnails.naturals.get(type.toUpperCase()))
       const result = addElement(source, model, { type, parent: target.parent, before: target.before, props })
       if (apply(result) && result.ok && result.name) select([result.name])
     },
     move: (element, target) => {
       const type = model?.elements.find((e) => same(e.name, element))?.type
       if (!model || type === undefined || refused([type], target.parent)) return
-      apply(moveElement(source, model, element, target.parent, target.before))
+      apply(moveSized(stackView(model), source, element, target.parent, target.before, isWidget))
     },
     bindMain: (element, variable) => {
       const target = model?.elements.find((e) => same(e.name, element))
@@ -533,7 +554,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     },
     resize: (element, size, commit) => {
       if (!model) return
-      setLiveAndCommit(element, resizeProperties(model, catalog, element, size), commit)
+      setLiveAndCommit(element, resizeProperties(stackView(model), element, size), commit)
     },
     place: (element, at, commit) =>
       setLiveAndCommit(
@@ -684,7 +705,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
                 <WidgetPalette
                   catalog={catalog}
                   projectWidgets={new Set(request.widgets.map((w) => w.name.toUpperCase()))}
-                  thumbnails={thumbnails}
+                  thumbnails={thumbnails.urls}
                   filter={filter}
                   capabilities={targetCapabilities}
                   onAdd={addFromPalette}

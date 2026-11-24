@@ -30,7 +30,7 @@ const F = hmiFixture('hmi-button-binding')
 
 const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
-    Row : HmiVerticalStack := (Gap := 24, Padding := 24, GrowAuto := FALSE);
+    Row : HmiVerticalStack := (Gap := 24, Padding := 24, AutoSize := FALSE);
     Jog : HmiButton := (Parent := 'Row', Text := 'Jog', PrefWidth := 160);
     Light : HmiLamp := (Parent := 'Row', Caption := 'Run');
   END_VAR

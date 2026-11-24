@@ -340,6 +340,8 @@ export interface HmiThumbnail {
   width: number
   height: number
   rgba: Uint8ClampedArray
+  /** The widget's natural size in logical units, without the padding around it. */
+  natural: { width: number; height: number }
 }
 
 /** The palette's thumbnails; on errors, the thumbnails of the library widgets only, or none. */

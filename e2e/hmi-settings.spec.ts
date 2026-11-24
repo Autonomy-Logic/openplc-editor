@@ -29,7 +29,7 @@ const F = hmiFixture('hmi-settings')
 
 const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
-    Row : HmiVerticalStack := (Gap := 40, Padding := 40, GrowAuto := FALSE);
+    Row : HmiVerticalStack := (Gap := 40, Padding := 40, AutoSize := FALSE);
     AccentBox : HmiRect := (Parent := 'Row', Fill := COLOR.Accent, PrefWidth := 160, PrefHeight := 100);
     RedBox : HmiRect := (Parent := 'Row', Fill := COLOR.Red, PrefWidth := 160, PrefHeight := 100);
   END_VAR

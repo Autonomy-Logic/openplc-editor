@@ -14,7 +14,6 @@ import {
   placementRefusal,
   propertyEnabled,
   propertyText,
-  resizeProperties,
   widgetIsA,
 } from '../designer-canvas'
 import { parseDesignerBlock } from '../designer-model'
@@ -230,10 +229,10 @@ describe('designer canvas', () => {
   })
 })
 
-describe('growing in the inspector and on resize', () => {
+describe('layout properties in the inspector', () => {
   const grow = (on: boolean): HmiWidgetInfo['properties'] => [
     {
-      name: 'GrowAuto',
+      name: 'AutoSize',
       type: 'BOOL',
       kind: 'bool',
       group: 'layout',
@@ -241,13 +240,13 @@ describe('growing in the inspector and on resize', () => {
       defaultValue: on ? 'TRUE' : 'FALSE',
     },
     {
-      name: 'GrowScale',
+      name: 'Span',
       type: 'DINT',
       kind: 'number',
       group: 'layout',
       declaredBy: 'HmiElement',
-      defaultValue: '1',
-      enabledBy: 'GrowAuto',
+      defaultValue: '100',
+      enabledBy: 'AutoSize',
     },
   ]
   const typed = (name: string, base: string, on: boolean): HmiWidgetInfo => ({
@@ -271,10 +270,10 @@ describe('growing in the inspector and on resize', () => {
   VAR
     Col : HmiHorizontalStack;
     Row : HmiVerticalStack := (Parent := 'Col');
-    A : HmiLamp := (Parent := 'Row', GrowAuto := TRUE);
+    A : HmiLamp := (Parent := 'Row', AutoSize := TRUE);
     B : HmiLamp := (Parent := 'Row');
     Plant : HmiDiagram := (Parent := 'Col');
-    P : HmiLamp := (Parent := 'Plant', GrowAuto := TRUE);
+    P : HmiLamp := (Parent := 'Plant', AutoSize := TRUE);
   END_VAR
 END_FUNCTION_BLOCK
 `,
@@ -290,42 +289,16 @@ END_FUNCTION_BLOCK
   }
 
   it('reads a property as written, else as the type starts it', () => {
-    expect(propertyText(el('Row'), catalog, 'GrowAuto')).toBe('TRUE')
-    expect(propertyText(el('B'), catalog, 'GrowAuto')).toBe('FALSE')
-    expect(propertyText(el('A'), catalog, 'GrowAuto')).toBe('TRUE')
+    expect(propertyText(el('Row'), catalog, 'AutoSize')).toBe('TRUE')
+    expect(propertyText(el('B'), catalog, 'AutoSize')).toBe('FALSE')
+    expect(propertyText(el('A'), catalog, 'AutoSize')).toBe('TRUE')
     expect(propertyText(el('A'), catalog, 'Missing')).toBeUndefined()
   })
 
-  it('takes GrowScale into account only while GrowAuto is on', () => {
-    expect(propertyEnabled(el('A'), catalog, 'GrowScale')).toBe(true)
-    expect(propertyEnabled(el('B'), catalog, 'GrowScale')).toBe(false)
-    expect(propertyEnabled(el('Row'), catalog, 'GrowScale')).toBe(true)
-    expect(propertyEnabled(el('B'), catalog, 'GrowAuto')).toBe(true)
-  })
-
-  it('turns GrowAuto off when a growing element is resized along its stack', () => {
-    expect(resizeProperties(model, catalog, 'A', { width: 80 })).toEqual([
-      ['PrefWidth', '80'],
-      ['GrowAuto', 'FALSE'],
-    ])
-    expect(resizeProperties(model, catalog, 'Row', { height: 60 })).toEqual([
-      ['PrefHeight', '60'],
-      ['GrowAuto', 'FALSE'],
-    ])
-    expect(resizeProperties(model, catalog, 'Col', { width: 200, height: 90 })).toEqual([
-      ['PrefWidth', '200'],
-      ['PrefHeight', '90'],
-      ['GrowAuto', 'FALSE'],
-    ])
-  })
-
-  it('leaves GrowAuto alone across the stack, when it is already off, and inside a diagram', () => {
-    expect(resizeProperties(model, catalog, 'A', { height: 40 })).toEqual([['PrefHeight', '40']])
-    expect(resizeProperties(model, catalog, 'B', { width: 80 })).toEqual([['PrefWidth', '80']])
-    expect(resizeProperties(model, catalog, 'Col', { width: 200 })).toEqual([['PrefWidth', '200']])
-    expect(resizeProperties(model, catalog, 'P', { width: 30, height: 30 })).toEqual([
-      ['PrefWidth', '30'],
-      ['PrefHeight', '30'],
-    ])
+  it('takes Span into account only while AutoSize is on', () => {
+    expect(propertyEnabled(el('A'), catalog, 'Span')).toBe(true)
+    expect(propertyEnabled(el('B'), catalog, 'Span')).toBe(false)
+    expect(propertyEnabled(el('Row'), catalog, 'Span')).toBe(true)
+    expect(propertyEnabled(el('B'), catalog, 'AutoSize')).toBe(true)
   })
 })

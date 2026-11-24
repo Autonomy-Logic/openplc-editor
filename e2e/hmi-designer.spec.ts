@@ -136,32 +136,27 @@ test.describe('HMI designer', () => {
       )
       await expect(page.getByTestId('hmi-main-binding')).toContainText('Alarm', { timeout: 10000 })
 
-      const handle = await page.getByTestId('hmi-grow-right').boundingBox()
-      if (!handle) throw new Error('no grow handle')
-      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
-      await page.mouse.down()
-      await page.mouse.move(handle.x + 60, handle.y + handle.height / 2, { steps: 5 })
-      await page.mouse.up()
-
       await page.getByTestId('hmi-prop-tab-layout').click()
-      const scale = page.getByTestId('hmi-prop-row-GrowScale')
-      await expect(scale).toBeDisabled({ timeout: 5000 })
-      const before = (await page.getByTestId('hmi-selected-Lamp1').boundingBox())?.height ?? 0
-      await page.getByRole('checkbox', { name: 'GrowAuto' }).locator('..').click()
-      await expect(scale).toBeEnabled({ timeout: 10000 })
-      await waitFor(page, 'the lamp grown down the stack', async () => {
-        const box = await page.getByTestId('hmi-selected-Lamp1').boundingBox()
-        return (box?.height ?? 0) > before + 20
-      })
-      await page.screenshot({ path: join(SHOTS, '02b-grow-auto-on.png') })
-      const bottom = await page.getByTestId('hmi-grow-bottom').boundingBox()
-      if (!bottom) throw new Error('no bottom handle')
-      await page.mouse.move(bottom.x + bottom.width / 2, bottom.y + bottom.height / 2)
-      await page.mouse.down()
-      await page.mouse.move(bottom.x + bottom.width / 2, bottom.y - 30, { steps: 5 })
-      await page.mouse.up()
-      await expect(scale).toBeDisabled({ timeout: 10000 })
-      await expect(page.getByRole('checkbox', { name: 'GrowAuto' })).not.toBeChecked()
+      await expect(page.getByRole('checkbox', { name: 'AutoSize' })).toBeChecked({ timeout: 5000 })
+      await expect(page.getByTestId('hmi-prop-row-PrefHeight')).toBeDisabled()
+      const span = await propertyField(page, 'Span')
+      const dropped = Number(await span.inputValue())
+      expect(dropped).toBeGreaterThanOrEqual(5)
+      const drag = async (testId: string, dx: number, dy: number) => {
+        const handle = await page.getByTestId(testId).boundingBox()
+        if (!handle) throw new Error(`no ${testId}`)
+        await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+        await page.mouse.down()
+        await page.mouse.move(handle.x + handle.width / 2 + dx, handle.y + handle.height / 2 + dy, { steps: 5 })
+        await page.mouse.up()
+      }
+      await drag('hmi-grow-bottom', 0, 40)
+      await waitFor(page, 'Span raised by the drag', async () => Number(await span.inputValue()) > dropped)
+      const raised = await span.inputValue()
+      await drag('hmi-grow-right', 60, 0)
+      await page.waitForTimeout(500)
+      expect(await span.inputValue()).toBe(raised)
+      await page.screenshot({ path: join(SHOTS, '02b-span.png') })
 
       await page.getByRole('button', { name: 'Code', exact: true }).click()
       await waitFor(page, 'the code view', async () => (await codeText(page)).includes('FUNCTION_BLOCK Overview'))
@@ -225,11 +220,10 @@ test.describe('HMI designer', () => {
       expect(saved).toContain('MaxValue := 20.0')
       expect(saved).toMatch(/Lamp1 : HmiLamp := \(Parent := 'Col'[^)]*\);/)
       expect(saved).toContain('Lamp1.Value := Alarm;')
-      expect(saved).toMatch(/PrefWidth := \d+/)
       const lampLine = saved.split('\n').find((l) => l.includes('Lamp1 : HmiLamp')) ?? ''
-      expect(lampLine).toMatch(/PrefHeight := \d+/)
-      expect(lampLine).toContain('GrowAuto := FALSE')
-      expect(saved).toContain("Badge1 : Badge := (Parent := 'Col');")
+      expect(lampLine).toMatch(/AutoSize := TRUE, Span := \d+/)
+      expect(lampLine).not.toMatch(/Pref(Width|Height)/)
+      expect(saved).toMatch(/Badge1 : Badge := \(Parent := 'Col', AutoSize := TRUE, Span := \d+\);/)
       expect(saved).not.toContain('Badge1.Value := instance0.Main.Running;')
 
       const renameLeaf = async (from: string, to: string, choice: RegExp) => {

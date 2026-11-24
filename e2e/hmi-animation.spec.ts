@@ -25,7 +25,7 @@ const F = hmiFixture('hmi-animation')
 
 const PLANT = `FUNCTION_BLOCK Plant EXTENDS HmiScreen
   VAR
-    Row : HmiVerticalStack := (Gap := 24, Padding := 24, GrowAuto := FALSE);
+    Row : HmiVerticalStack := (Gap := 24, Padding := 24, AutoSize := FALSE);
     Spinning : HmiFan := (Parent := 'Row', Caption := 'On', Value := TRUE, PrefWidth := 96, PrefHeight := 111);
     Still : HmiFan := (Parent := 'Row', Caption := 'Off', PrefWidth := 96, PrefHeight := 111);
     Star : HmiPolygon := (Parent := 'Row', Sides := 5, InnerPct := 45, Fill := COLOR.Warning);

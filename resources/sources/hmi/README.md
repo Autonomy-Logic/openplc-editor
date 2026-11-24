@@ -155,16 +155,24 @@ Both stacks extend the abstract `HmiStack` (gap, padding and sizing), and every 
 `Parent := '<container name>'`, and the HMI build refuses a screen that declares any other element without one. The
 screen lays its containers out top to bottom. A new screen comes with one `HmiHorizontalStack` that fills it.
 
-Across a stack every child takes the stack's full width or height. Along it, children start from their measured size
-(or `PrefWidth`/`PrefHeight`), and the space left over goes to the children with `GrowAuto := TRUE`, in proportion to
-their `GrowScale` (1 by default), so two growing children side by side get equal shares of it. An element with
-`GrowAuto := FALSE` keeps its size and its `GrowScale` is ignored. Containers, shapes, the gauge and the trend start
-with `GrowAuto` on, every other widget with it off; resizing an element along its stack in the designer turns it off.
+Across a stack every child takes the stack's full width or height. Along it, a child with `AutoSize := TRUE` takes
+its `Span`: a percent (100 by default) of the length the stack's other children leave, after padding and gaps. While
+the spans add up to 100 or less, each child gets exactly its share and the rest stays empty; past 100 every span is
+scaled down so the stack is exactly full. A child with `AutoSize` on ignores `PrefWidth`/`PrefHeight`. A child with
+`AutoSize := FALSE` keeps its measured size (or `PrefWidth`/`PrefHeight`), ignores `Span`, and shrinks in proportion,
+within its minimum, when the stack is too small. Containers, shapes, the gauge and the trend start with `AutoSize` on,
+every other widget with it off.
 
-A widget type sets its own start value for an inherited input with `{attribute 'hmi_default' := 'GrowAuto := TRUE'}`
+The designer writes `AutoSize := TRUE` and a `Span` on every element it places in a stack, the stack a new screen
+comes with included (`Span := 100`): a dropped container takes the span its siblings leave (an equal share when they
+leave none), a dropped widget its natural size's share of the stack. Resizing an element with `AutoSize` on changes
+only its `Span`; moving it to another stack sets the `Span` that keeps its size there. Inside a diagram, `AutoSize`
+and `Span` have no effect.
+
+A widget type sets its own start value for an inherited input with `{attribute 'hmi_default' := 'AutoSize := TRUE'}`
 on the block, since a derived block cannot redeclare an input: the widget catalogue shows it as the type's default,
 and the HMI build sets it in the screen's generated `Build` on every element that leaves it out of its initializer.
-`{attribute 'hmi_enabled_by' := 'GrowAuto'}` on an input greys it out in the inspector while that BOOL is off.
+`{attribute 'hmi_enabled_by' := 'AutoSize'}` on an input greys it out in the inspector while that BOOL is off.
 
 ## Data widgets
 

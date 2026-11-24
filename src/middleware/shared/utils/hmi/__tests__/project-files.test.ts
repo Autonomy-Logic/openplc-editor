@@ -98,7 +98,7 @@ describe('HMI project files', () => {
       [
         'FUNCTION_BLOCK Main EXTENDS HmiScreen',
         '  VAR',
-        `    ${NEW_SCREEN_STACK} : HmiHorizontalStack;`,
+        `    ${NEW_SCREEN_STACK} : HmiHorizontalStack := (AutoSize := TRUE, Span := 100);`,
         '  END_VAR',
         'END_FUNCTION_BLOCK',
         '',

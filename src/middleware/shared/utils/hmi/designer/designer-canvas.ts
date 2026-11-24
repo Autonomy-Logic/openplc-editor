@@ -50,32 +50,6 @@ export function propertyEnabled(element: DesignerElement, catalog: HmiWidgetCata
   return (propertyText(element, catalog, switchName) ?? 'FALSE').trim().toUpperCase() === 'TRUE'
 }
 
-/** Input that makes an element take a share of its stack's leftover space. */
-const GROW_AUTO = 'GrowAuto'
-
-/**
- * What resizing an element writes: the dragged sizes, plus GrowAuto := FALSE when the element grows along the stack
- * it sits in (the screen's own stack runs top to bottom), so it keeps the size it was given.
- */
-export function resizeProperties(
-  model: DesignerModel,
-  catalog: HmiWidgetCatalog,
-  element: string,
-  size: { width?: number; height?: number },
-): Array<[string, string]> {
-  const entries: Array<[string, string]> = []
-  if (size.width !== undefined) entries.push(['PrefWidth', String(size.width)])
-  if (size.height !== undefined) entries.push(['PrefHeight', String(size.height)])
-  const el = model.elements.find((e) => same(e.name, element))
-  if (!el) return entries
-  const parent = el.parent === null ? null : model.elements.find((e) => el.parent !== null && same(e.name, el.parent))
-  if (parent === undefined || (parent !== null && !widgetIsA(catalog, parent.type, 'HmiStack'))) return entries
-  const along = parent !== null && isSideBySide(catalog, parent.type) ? size.width : size.height
-  const grows = (propertyText(el, catalog, GROW_AUTO) ?? 'FALSE').trim().toUpperCase() === 'TRUE'
-  if (along !== undefined && grows) entries.push([GROW_AUTO, 'FALSE'])
-  return entries
-}
-
 /** The notice a placement outside every container gets. */
 export const OUTSIDE_CONTAINER_NOTICE = 'Place widgets inside a stack or a diagram'
 
