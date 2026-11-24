@@ -775,7 +775,7 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
 
 ## Key Technologies
 
-- **Electron 37** (the last line that still runs on macOS 11) / **React 18** / **TypeScript** (target ES2022)
+- **Electron 45** (needs macOS 13 or newer) / **React 18** / **TypeScript** (target ES2022)
 - **Webpack** (not Vite) with separate main/renderer/preload configs
 - **Zustand 5** + **Immer** for state management
 - **Monaco Editor** for code editing (ST, IL, Python, C++)
