@@ -294,7 +294,7 @@ export function VariableList(props: {
             data-testid={`hmi-variable-${v.path}`}
             onDragStart={(e) => {
               e.dataTransfer.setData(VARIABLE_MIME, v.path)
-              e.dataTransfer.effectAllowed = 'link'
+              e.dataTransfer.effectAllowed = 'copy'
             }}
             style={indent}
             className='flex cursor-grab items-center gap-2 rounded-md py-1.5 pr-1.5 font-caption text-xs text-neutral-1000 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900'
@@ -321,7 +321,7 @@ export function VariableList(props: {
             onDragStart={(e) => {
               if (!source) return
               e.dataTransfer.setData(VARIABLE_MIME, source.path)
-              e.dataTransfer.effectAllowed = 'link'
+              e.dataTransfer.effectAllowed = 'copy'
             }}
             style={indent}
             className='flex w-full items-center gap-2 rounded-md py-1 pr-1.5 text-left font-caption text-xs text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900'

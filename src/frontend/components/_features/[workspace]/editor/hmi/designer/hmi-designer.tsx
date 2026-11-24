@@ -11,13 +11,14 @@ import { hmiDesignerEntry } from '@root/frontend/store/slices/hmi-designer'
 import { cn } from '@root/frontend/utils/cn'
 import { hmiPlcDeclarations } from '@root/frontend/utils/PLC/hmi-plc-declarations'
 import { toast } from '@root/frontend/utils/toast'
-import type {
-  HmiCatalogResult,
-  HmiDiagnostic,
-  HmiLibraryArchive,
-  HmiPreviewRequest,
-  HmiThumbnail,
-  HmiWidgetCatalog,
+import {
+  type HmiCatalogResult,
+  type HmiDiagnostic,
+  type HmiLibraryArchive,
+  type HmiPreviewRequest,
+  type HmiThumbnail,
+  type HmiWidgetCatalog,
+  WIDGET_PREVIEW_SCREEN,
 } from '@root/middleware/shared/ports/hmi-preview-types'
 import { useHmiPreview, usePlatform } from '@root/middleware/shared/providers'
 import { hmiTextLiteral } from '@root/middleware/shared/utils/hmi/block-checks'
@@ -815,7 +816,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const preview = usePreviewSession({
     request: ready ? widgetRequest : null,
-    screen: '',
+    screen: WIDGET_PREVIEW_SCREEN,
     device,
     design: false,
     framePeriodMs: request.settings.framePeriodMs,

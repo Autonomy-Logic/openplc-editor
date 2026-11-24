@@ -35,13 +35,14 @@ import {
 import { HMI_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
 import type { CompileOptions, StlibArchive } from 'strucpp'
 
-import type {
-  HmiDiagnostic,
-  HmiPlcVariable,
-  HmiPreviewFactory,
-  HmiPreviewSetter,
-  HmiSourceFile,
-  HmiUnitSources,
+import {
+  type HmiDiagnostic,
+  type HmiPlcVariable,
+  type HmiPreviewFactory,
+  type HmiPreviewSetter,
+  type HmiSourceFile,
+  type HmiUnitSources,
+  WIDGET_PREVIEW_SCREEN,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { loadStrucpp } from '../../library/strucpp-runtime'
 import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
@@ -1338,8 +1339,7 @@ export function buildHmiWidgetCatalog(
   return { ...compiled, errors: [...loaded.errors, ...compiled.errors] }
 }
 
-/** Name of the screen a widget preview adds; the HMI__ prefix is refused for project names. */
-export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
+export { WIDGET_PREVIEW_SCREEN }
 
 const PREVIEW_INTEGER_TYPES = new Set(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT'])
 const PREVIEW_REAL_TYPES = new Set(['REAL', 'LREAL'])

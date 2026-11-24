@@ -238,8 +238,10 @@ describe('HMI designer variables tree', () => {
     const leaf = screen.getByTestId('hmi-variable-instance0.Main.Level')
     expect(leaf.getAttribute('draggable')).toBe('true')
     const data = new Map<string, string>()
-    fireEvent.dragStart(leaf, { dataTransfer: { setData: (k: string, v: string) => data.set(k, v) } })
+    const transfer = { effectAllowed: 'none', setData: (k: string, v: string) => data.set(k, v) }
+    fireEvent.dragStart(leaf, { dataTransfer: transfer })
     expect([...data.entries()]).toEqual([['application/x-openplc-hmi-variable', 'instance0.Main.Level']])
+    expect(transfer.effectAllowed).toBe('copy')
     fireEvent.click(branch)
     expect(branch.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByTestId('hmi-variable-instance0.Main.Level')).toBeNull()

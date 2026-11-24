@@ -66,6 +66,9 @@ export interface HmiUnitSources {
 /** The project's HMI as a device build compiles it; the libraries come from the program build. */
 export type HmiBuildSources = HmiUnitSources
 
+/** Screen a widget preview adds after the project's screens; project names may not use the HMI__ prefix. */
+export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
+
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {
   /** Names of the libraries the project uses (`projectLibraryNames`); a preview compiles against these only. */
