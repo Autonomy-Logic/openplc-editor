@@ -210,16 +210,21 @@ describe('HMI unit generator', () => {
     expect(source).not.toContain('HMI__Column.AutoSize')
   })
 
-  it('previews a widget block on an extra screen, at natural size and stretched, with a test value', () => {
+  it('previews a widget block once, at its preferred size, on an extra screen, with a test value', () => {
     const project = sampleProject()
     const result = generateHmiUnit({ ...project, screens: [], widgetPreview: 'badge', resolve: undefined })
     expect(messages(result)).toEqual([])
     const source =
       result.sources[`${WIDGET_PREVIEW_SCREEN}.st`] ??
       Object.values(result.sources).find((t) => t.includes(WIDGET_PREVIEW_SCREEN))
-    expect(source).toContain("Natural : Badge := (Parent := 'HMI__Row', AutoSize := FALSE);")
-    expect(source).toContain("Stretched : Badge := (Parent := 'HMI__Column', AutoSize := TRUE);")
-    expect(source).toContain('Natural.Value := TRUE;')
+    expect(source).toContain(
+      "HMI__Widget : Badge := (Parent := 'HMI__Row', AutoSize := FALSE, MinWidth := 24, MinHeight := 24);",
+    )
+    expect(source?.match(/: Badge :=/g)).toHaveLength(1)
+    expect(source).toContain('HMI__Widget.Value := TRUE;')
+    expect(result.elementIds).toContainEqual(
+      expect.objectContaining({ screen: WIDGET_PREVIEW_SCREEN, element: 'HMI__Widget' }),
+    )
     expect(result.preview.units.screens[WIDGET_PREVIEW_SCREEN]).toBeDefined()
     expect(generateHmiUnit(project).sources).not.toHaveProperty([`${WIDGET_PREVIEW_SCREEN}.st`])
   })

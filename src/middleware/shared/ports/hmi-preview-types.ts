@@ -68,6 +68,8 @@ export type HmiBuildSources = HmiUnitSources
 
 /** Screen a widget preview adds after the project's screens; project names may not use the HMI__ prefix. */
 export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
+/** Element the widget preview screen shows the widget block as, at its preferred size. */
+export const WIDGET_PREVIEW_ELEMENT = 'HMI__Widget'
 
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {

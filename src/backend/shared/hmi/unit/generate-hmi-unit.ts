@@ -42,6 +42,7 @@ import {
   type HmiPreviewSetter,
   type HmiSourceFile,
   type HmiUnitSources,
+  WIDGET_PREVIEW_ELEMENT,
   WIDGET_PREVIEW_SCREEN,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { loadStrucpp } from '../../library/strucpp-runtime'
@@ -1339,7 +1340,7 @@ export function buildHmiWidgetCatalog(
   return { ...compiled, errors: [...loaded.errors, ...compiled.errors] }
 }
 
-export { WIDGET_PREVIEW_SCREEN }
+export { WIDGET_PREVIEW_ELEMENT, WIDGET_PREVIEW_SCREEN }
 
 const PREVIEW_INTEGER_TYPES = new Set(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT'])
 const PREVIEW_REAL_TYPES = new Set(['REAL', 'LREAL'])
@@ -1361,21 +1362,18 @@ function previewTestValue(info: HmiWidgetInfo): string | undefined {
   return PREVIEW_INTEGER_TYPES.has(type) ? String(Math.round(value)) : undefined
 }
 
-/** The screen a widget preview adds: the block at natural size beside a spacer, then stretched over the rest. */
+/** Smallest box a widget preview gives a block whose natural size is 0, in logical units. */
+const WIDGET_PREVIEW_MIN = 24
+
+/** The screen a widget preview adds: the block once, at its preferred size, in the screen's top-left corner. */
 function widgetPreviewSource(info: HmiWidgetInfo): string {
   const value = previewTestValue(info)
-  const assign =
-    info.main && value !== undefined
-      ? [`  Natural.${info.main.name} := ${value};`, `  Stretched.${info.main.name} := ${value};`]
-      : []
+  const assign = info.main && value !== undefined ? [`  ${WIDGET_PREVIEW_ELEMENT}.${info.main.name} := ${value};`] : []
   return [
     `FUNCTION_BLOCK ${WIDGET_PREVIEW_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiHorizontalStack := (Gap := 16, Padding := 16);',
-    "    HMI__Row : HmiVerticalStack := (Parent := 'HMI__Column', AutoSize := FALSE);",
-    `    Natural : ${info.name} := (Parent := 'HMI__Row', AutoSize := FALSE);`,
-    "    HMI__Spacer : HmiVerticalStack := (Parent := 'HMI__Row');",
-    `    Stretched : ${info.name} := (Parent := 'HMI__Column', AutoSize := TRUE);`,
+    '    HMI__Row : HmiVerticalStack := (AutoSize := FALSE, Gap := 0);',
+    `    ${WIDGET_PREVIEW_ELEMENT} : ${info.name} := (Parent := 'HMI__Row', AutoSize := FALSE, MinWidth := ${WIDGET_PREVIEW_MIN}, MinHeight := ${WIDGET_PREVIEW_MIN});`,
     '  END_VAR',
     ...assign,
     'END_FUNCTION_BLOCK',

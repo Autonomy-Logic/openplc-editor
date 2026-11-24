@@ -18,6 +18,7 @@ import {
   type HmiPreviewRequest,
   type HmiThumbnail,
   type HmiWidgetCatalog,
+  WIDGET_PREVIEW_ELEMENT,
   WIDGET_PREVIEW_SCREEN,
 } from '@root/middleware/shared/ports/hmi-preview-types'
 import { useHmiPreview, usePlatform } from '@root/middleware/shared/providers'
@@ -830,10 +831,40 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   )
 }
 
+/** Room around a widget block's box in its preview: the screen's own padding, where drawing outside the box shows. */
+const WIDGET_MARGIN = 12
+/** Box a widget preview starts from, before the first build gives the block's preferred size. */
+const WIDGET_START = { width: 96, height: 96 }
+/** Room the widget preview has in its panel, in CSS pixels. */
+const WIDGET_PANEL = { width: 332, height: 320 }
+const WIDGET_MAX_ZOOM = 8
+
 export function HmiWidgetEditor({ name }: { name: string }) {
   const { request, ready } = useProjectRequest()
   const widgetRequest = useMemo(() => ({ ...request, widgetPreview: name }), [request, name])
-  const device = useMemo(() => ({ id: 'widget', label: 'Widget', width: 320, height: 240, density: 2 }), [])
+  const [box, setBox] = useState(WIDGET_START)
+  const zoom = Math.max(
+    1,
+    Math.min(
+      WIDGET_MAX_ZOOM,
+      Math.floor(
+        Math.min(
+          WIDGET_PANEL.width / (box.width + 2 * WIDGET_MARGIN),
+          WIDGET_PANEL.height / (box.height + 2 * WIDGET_MARGIN),
+        ),
+      ),
+    ),
+  )
+  const device = useMemo(
+    () => ({
+      id: 'widget',
+      label: 'Widget',
+      width: box.width + 2 * WIDGET_MARGIN,
+      height: box.height + 2 * WIDGET_MARGIN,
+      density: zoom,
+    }),
+    [box.width, box.height, zoom],
+  )
   const canvas = useRef<HTMLCanvasElement>(null)
   const preview = usePreviewSession({
     request: ready ? widgetRequest : null,
@@ -844,6 +875,18 @@ export function HmiWidgetEditor({ name }: { name: string }) {
     canvas,
   })
   const progress = previewProgress(preview)
+  const widgetId = preview.built?.elementIds.find(
+    (e) => same(e.screen, WIDGET_PREVIEW_SCREEN) && same(e.element, WIDGET_PREVIEW_ELEMENT),
+  )?.id
+  const shown = widgetId === undefined ? undefined : preview.bounds.find((b) => b.id === widgetId)
+  useEffect(() => {
+    if (shown && shown.width > 0 && shown.height > 0 && (shown.width !== box.width || shown.height !== box.height))
+      setBox({ width: shown.width, height: shown.height })
+  }, [shown, box.width, box.height])
+  const toPreview = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    return { x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom }
+  }
   return (
     <div className='flex h-full w-full flex-col gap-2 overflow-hidden' data-testid='hmi-widget-editor'>
       <div className='flex h-8 shrink-0 items-center justify-between gap-2'>
@@ -876,21 +919,34 @@ export function HmiWidgetEditor({ name }: { name: string }) {
         >
           <CanvasBackdrop id={`hmi-widget-bg-${name}`} />
           <div className='box shrink-0 rounded-lg'>
-            <div className='relative shrink-0' style={{ width: device.width, height: device.height }}>
+            <div className='relative shrink-0' style={{ width: device.width * zoom, height: device.height * zoom }}>
               <canvas
                 ref={canvas}
                 data-testid='hmi-widget-canvas'
                 className='rounded-lg'
-                style={{ width: device.width, height: device.height }}
+                style={{ width: device.width * zoom, height: device.height * zoom }}
                 onPointerDown={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect()
-                  preview.pointer('down', e.clientX - r.left, e.clientY - r.top)
+                  const p = toPreview(e)
+                  preview.pointer('down', p.x, p.y)
                 }}
                 onPointerUp={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect()
-                  preview.pointer('up', e.clientX - r.left, e.clientY - r.top)
+                  const p = toPreview(e)
+                  preview.pointer('up', p.x, p.y)
                 }}
               />
+              {shown && (
+                <div
+                  className='border-brand/70 pointer-events-none absolute border border-dashed'
+                  data-testid='hmi-widget-box'
+                  title={`${shown.width} × ${shown.height}`}
+                  style={{
+                    left: shown.x * zoom,
+                    top: shown.y * zoom,
+                    width: shown.width * zoom,
+                    height: shown.height * zoom,
+                  }}
+                />
+              )}
               {progress && <PreviewLoading step={progress.step} dimmed={progress.dimmed} />}
             </div>
           </div>
