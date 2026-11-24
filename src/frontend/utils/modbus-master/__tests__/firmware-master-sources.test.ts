@@ -100,6 +100,44 @@ describe('NFR10: only baremetal_net names a network class', () => {
   })
 })
 
+/** Whether `offset` in `code` lies inside the braces of a `namespace bm_net` block opened before it. */
+function insideBmNet(code: string, offset: number): boolean {
+  for (const opening of code.slice(0, offset).matchAll(/\bnamespace\s+bm_net\s*\{/g)) {
+    const inner = code.slice((opening.index ?? 0) + opening[0].length, offset)
+    let depth = 1
+    for (const brace of inner) {
+      if (brace === '{') depth += 1
+      if (brace === '}') depth -= 1
+      if (depth === 0) break
+    }
+    if (depth > 0) return true
+  }
+  return false
+}
+
+/** Names of the network link state the master must leave to the seam. */
+const LINK_STATE_NAMES = ['WL_CONNECTED', 'linkStatus', 'linkUp', 'LinkOFF']
+
+describe('MT-7: the master asks the seam for the link', () => {
+  it('declares bool link_up() in namespace bm_net in baremetal_net.h', () => {
+    const code = codeOf(readBaremetal('baremetal_net.h'))
+    const declaration = /\bbool\s+link_up\s*\(\s*(?:void)?\s*\)\s*;/.exec(code)
+    expect({
+      declared: declaration !== null,
+      inBmNet: declaration !== null && insideBmNet(code, declaration.index),
+    }).toEqual({ declared: true, inBmNet: true })
+  })
+
+  it('calls bm_net::link_up() from modbus_master_tcp.cpp', () => {
+    expect(codeOf(readBaremetal('modbus_master_tcp.cpp'))).toMatch(/\bbm_net::link_up\s*\(\s*\)/)
+  })
+
+  it.each(MASTER_FILES)('%s names no link state of a network library', (name) => {
+    const code = codeOf(readBaremetal(name))
+    expect(LINK_STATE_NAMES.filter((identifier) => new RegExp(`\\b${identifier}\\b`).test(code))).toEqual([])
+  })
+})
+
 describe("M3: the master keeps its own buffers, never the server's frame", () => {
   it.each(MASTER_FILES)('%s does not touch mb_frame or mb_frame_len', (name) => {
     expect(codeOf(readBaremetal(name))).not.toMatch(/\bmb_frame(_len)?\b/)

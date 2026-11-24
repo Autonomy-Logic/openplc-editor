@@ -545,3 +545,169 @@ describeOnHost('NINA OPC-UA debug log build (BOARD_WIFININA, MBTCP_WIFI, OPCUA_D
     expect(ownCode(ninaOpcua('opcua_log.cpp', 0), 'opcua_log.cpp')).not.toMatch(/\bg_log_server\b/)
   })
 })
+
+/** The body of the function `name` defined in `code`, by its plain or `bm_net::` qualified name, or `null`. */
+const definedBody = (code: string, name: string): string | null =>
+  functionsOf(code).find((fn) => fn.name === name || fn.name.endsWith(`::${name}`))?.body ?? null
+
+/** The body of `bm_net::link_up()` in `baremetal_net.cpp` built for `defines` with one TCP device. */
+function linkUpBody(defines: string[]): string {
+  const body = definedBody(netUnit(defines), 'link_up')
+  if (body === null) throw new Error(`bm_net::link_up() is not defined for ${defines.join(', ')}`)
+  return body
+}
+
+const LINK_UP_WIFI: Array<[string, string[]]> = [
+  ['ESP32 Wi-Fi', ['BOARD_ESP32', 'MBTCP_WIFI']],
+  ['ESP8266', ['BOARD_ESP8266', 'MBTCP_WIFI']],
+  ['NINA', ['BOARD_WIFININA', 'MBTCP_WIFI']],
+  ['generic MBTCP_WIFI', ['MBTCP_WIFI']],
+]
+
+const LINK_UP_ALWAYS: Array<[string, string[]]> = [
+  ['ENC28J60', ['MBTCP_ETHERNET', 'MBTCP_ETH_ENC28J60']],
+  ['MBETH_MBED_LWIP', ['MBTCP_ETHERNET', 'MBETH_MBED_LWIP']],
+  ['BOARD_LOGO8', ['BOARD_LOGO8', 'MBTCP_ETHERNET']],
+]
+
+const LINK_UP_EVERY: Array<[string, string[]]> = [
+  ...LINK_UP_WIFI,
+  ['W5x00', W5X00],
+  ['ESP32 MBTCP_ETHERNET', ['BOARD_ESP32', 'MBTCP_ETHERNET']],
+  ...LINK_UP_ALWAYS,
+]
+
+describeOnHost('baremetal_net.cpp answers bm_net::link_up() per adapter branch (MT-7)', () => {
+  it.each(LINK_UP_WIFI)('%s: compares the Wi-Fi status with WL_CONNECTED', (_family, defines) => {
+    expect(linkUpBody(defines)).toMatch(/\bWL_CONNECTED\b/)
+  })
+
+  it('W5x00: reads linkStatus() and counts every answer but LinkOFF as up', () => {
+    const body = linkUpBody(W5X00)
+    expect({ linkStatus: /\blinkStatus\s*\(/.test(body), linkOff: /\bLinkOFF\b/.test(body) }).toEqual({
+      linkStatus: true,
+      linkOff: true,
+    })
+  })
+
+  it('ESP32 MBTCP_ETHERNET: reads linkUp() and the local address', () => {
+    const body = linkUpBody(['BOARD_ESP32', 'MBTCP_ETHERNET'])
+    expect({ linkUp: /\blinkUp\s*\(/.test(body), localIP: /\blocalIP\s*\(/.test(body) }).toEqual({
+      linkUp: true,
+      localIP: true,
+    })
+  })
+
+  it.each(LINK_UP_ALWAYS)('%s: returns true', (_family, defines) => {
+    expect(linkUpBody(defines).trim()).toMatch(/^return\s+true\s*;$/)
+  })
+
+  it.each(LINK_UP_EVERY)('%s: never waits', (_family, defines) => {
+    const body = linkUpBody(defines)
+    expect({ delay: /\bdelay\s*\(/.test(body), loop: /\b(?:while|for)\b/.test(body) }).toEqual({
+      delay: false,
+      loop: false,
+    })
+  })
+})
+
+/** `modbus_tcp.cpp` preprocessed for `defines` with the skeleton stub, its own lines only. */
+const tcpUnit = (defines: string[]): string =>
+  ownCode(
+    preprocess({ file: join(BAREMETAL_DIR, 'modbus_tcp.cpp') }, { defines, masterConfig: STUB_CONFIG() }, false),
+    'modbus_tcp.cpp',
+  )
+
+const ESP32_WIFI_NET = ['BOARD_ESP32', 'MBTCP_WIFI', 'OPLC_NET_ENABLED']
+const ESP8266_WIFI_NET = ['BOARD_ESP8266', 'MBTCP_WIFI', 'OPLC_NET_ENABLED']
+
+describeOnHost('modbus_tcp.cpp turns modem sleep off on ESP32 Wi-Fi only (MT-6)', () => {
+  it('calls setSleep(false) in mbconfig_ethernet_iface() after WiFi.begin() and before the join wait', () => {
+    const body = definedBody(tcpUnit(ESP32_WIFI_NET), 'mbconfig_ethernet_iface')
+    if (body === null) throw new Error('mbconfig_ethernet_iface() is not defined for an ESP32 Wi-Fi build')
+    const begin = body.search(/\bbegin\s*\(/)
+    const sleepOff = body.search(/\bsetSleep\s*\(\s*false\s*\)/)
+    const joinWait = body.search(/\bwhile\b/)
+    expect({ begin: begin >= 0, afterBegin: sleepOff > begin, beforeJoinWait: sleepOff < joinWait }).toEqual({
+      begin: true,
+      afterBegin: true,
+      beforeJoinWait: true,
+    })
+  })
+
+  it.each([
+    ['ESP8266', ESP8266_WIFI_NET],
+    ['NINA', ['BOARD_WIFININA', 'MBTCP_WIFI', 'OPLC_NET_ENABLED']],
+    ['generic MBTCP_WIFI', ['MBTCP_WIFI', 'OPLC_NET_ENABLED']],
+  ])('%s: calls no setSleep()', (_family, defines) => {
+    expect(tcpUnit(defines)).not.toMatch(/\bsetSleep\s*\(/)
+  })
+})
+
+/** The name of the first function `body` calls, keywords skipped. */
+const firstCall = (body: string): string | undefined =>
+  [...body.matchAll(/\b([A-Za-z_]\w*)\s*\(/g)].map((match) => match[1]).find((name) => !C_KEYWORDS.has(name))
+
+/** Baremetal.ino preprocessed for `defines` with the debugger on and the skeleton stub. */
+const sketchFor = (defines: string[]): string =>
+  preprocess(SKETCH, { defines: ['DEBUGGER_ENABLED', ...defines], masterConfig: STUB_CONFIG() }, false)
+
+const SUPERVISED: Array<[string, string[]]> = [
+  ['ESP32 Wi-Fi', ESP32_WIFI_NET],
+  ['ESP8266 Wi-Fi', ESP8266_WIFI_NET],
+]
+
+const NOT_SUPERVISED: Array<[string, string[]]> = [
+  ['ESP32 MBTCP_ETHERNET', ['BOARD_ESP32', 'MBTCP_ETHERNET', 'OPLC_NET_ENABLED']],
+  ['NINA Wi-Fi', ['BOARD_WIFININA', 'MBTCP_WIFI', 'OPLC_NET_ENABLED']],
+  ['ESP32 Wi-Fi without OPLC_NET_ENABLED', ['BOARD_ESP32', 'MBTCP_WIFI']],
+]
+
+describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 (MT-6)', () => {
+  const supervise = (defines: string[]): string => {
+    const body = definedBody(tcpUnit(defines), 'mbconfig_wifi_supervise')
+    if (body === null) throw new Error(`mbconfig_wifi_supervise() is not defined for ${defines.join(', ')}`)
+    return body
+  }
+
+  it.each(SUPERVISED)('%s: mbconfig_wifi_supervise() asks the status and reconnects', (_family, defines) => {
+    const body = supervise(defines)
+    expect({ status: callsOf(body, 'status').length > 0, reconnect: callsOf(body, 'reconnect').length > 0 }).toEqual({
+      status: true,
+      reconnect: true,
+    })
+  })
+
+  it.each(SUPERVISED)(
+    '%s: mbconfig_wifi_supervise() never waits, never begins again and prints nothing',
+    (_family, defines) => {
+      const body = supervise(defines)
+      expect({
+        delay: callsOf(body, 'delay').length > 0,
+        begin: callsOf(body, 'begin').length > 0,
+        loop: /\b(?:while|for)\b/.test(body),
+        print: /\bprint(?:ln|f)?\s*\(/.test(body),
+      }).toEqual({ delay: false, begin: false, loop: false, print: false })
+    },
+  )
+
+  it.each(SUPERVISED)(
+    '%s: loop() calls mbconfig_wifi_supervise() once, first, and nothing else calls it',
+    (_family, defines) => {
+      const code = sketchFor(defines)
+      const loop = functionBody(code, 'loop') ?? ''
+      expect({
+        inLoop: callsOf(loop, 'mbconfig_wifi_supervise').length,
+        first: firstCall(loop),
+        inSketch: callsOf(ownCode(code, 'Baremetal.ino'), 'mbconfig_wifi_supervise').length,
+      }).toEqual({ inLoop: 1, first: 'mbconfig_wifi_supervise', inSketch: 1 })
+    },
+  )
+
+  it.each(NOT_SUPERVISED)('%s: mbconfig_wifi_supervise() is neither defined nor called', (_family, defines) => {
+    expect({
+      defined: definedBody(tcpUnit(defines), 'mbconfig_wifi_supervise') !== null,
+      called: callsOf(ownCode(sketchFor(defines), 'Baremetal.ino'), 'mbconfig_wifi_supervise').length,
+    }).toEqual({ defined: false, called: 0 })
+  })
+})

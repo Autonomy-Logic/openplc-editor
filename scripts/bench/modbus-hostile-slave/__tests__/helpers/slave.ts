@@ -1,4 +1,4 @@
-import { runSlave } from '../../scenario'
+import { runSlave, ScenarioOptions } from '../../scenario'
 import { FakeClock } from './fake-clock'
 import { MemoryLink } from './memory-link'
 
@@ -10,8 +10,14 @@ export type OpenSlave = {
   stop: () => void
 }
 
-/** Starts `runSlave` for one scenario on an in-memory TCP connection or serial line, with the default groups. */
-export function openSlave(scenario: string, transport: 'tcp' | 'rtu', row?: number): OpenSlave {
+/** Starts `runSlave` for one scenario on an in-memory TCP connection or serial line, with the default groups and,
+ *  when given, a register map and a duration scale. */
+export function openSlave(
+  scenario: string,
+  transport: 'tcp' | 'rtu',
+  row?: number,
+  extra: Pick<ScenarioOptions, 'map' | 'durationScale'> = {},
+): OpenSlave {
   const clock = new FakeClock()
   const link = new MemoryLink(clock)
   const events: Array<Record<string, unknown>> = []
@@ -19,6 +25,7 @@ export function openSlave(scenario: string, transport: 'tcp' | 'rtu', row?: numb
     scenario,
     row,
     transport,
+    ...extra,
     stream: link.stream,
     log: (event: Record<string, unknown>) => {
       events.push(event)

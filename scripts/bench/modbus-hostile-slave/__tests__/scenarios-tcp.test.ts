@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict'
+import path from 'node:path'
 import { afterEach, describe, test } from 'node:test'
 
-import { createScenario, FLOOD_MS, runSlave, RunningSlave, ScenarioEngine } from '../scenario'
+import { loadRegisterMap } from '../registers'
+import { checkScenario, createScenario, FLOOD_MS, runSlave, RunningSlave, ScenarioEngine } from '../scenario'
 import { FakeClock, settle } from './helpers/fake-clock'
 import { MemoryLink } from './helpers/memory-link'
-import { GROUPS, hex, range, tcpFrame, tcpRead, tcpRegistersAnswer } from './helpers/modbus'
+import {
+  GROUPS,
+  hex,
+  range,
+  readPdu,
+  registersAnswerPdu,
+  tcpFrame,
+  tcpRead,
+  tcpRegistersAnswer,
+} from './helpers/modbus'
 import { OpenSlave, openSlave } from './helpers/slave'
 
 let current: OpenSlave | null = null
@@ -336,5 +347,138 @@ describe('AS-07 over TCP with reconnections', () => {
     const answer = await second.link.exchange(tcpRead(3, GROUPS.g1))
 
     assert.equal(hex(answer), hex(tcpRegistersAnswer(3, [4321, 8765])))
+  })
+})
+
+/** The bench map TC28 runs with: holding registers 0 and 1 read 1234 and 5678. */
+const TC28_MAP = path.resolve(__dirname, '../../modbus-master/maps/g1-1234-5678.json')
+
+/** TC28's poll of one device: FC 3, two registers from offset 0, on `unit`. */
+const tc28Read = (tid: number, unit: number, quantity = 2): Buffer => tcpFrame(tid, readPdu(3, 0, quantity), unit)
+
+/** The answer of `unit` to a TC28 poll carrying `values`. */
+const tc28Answer = (tid: number, unit: number, values: readonly number[]): Buffer =>
+  tcpFrame(tid, registersAnswerPdu(values), unit)
+
+/** The number of unit-1 FC 3 requests TC28 answers at once before it starts delaying them. */
+const TC28_PROMPT_POLLS = 20
+
+describe('TC28 over TCP: the slave 1 answers late after 20 prompt ones', () => {
+  function startTc28(row: number, durationScale?: number): OpenSlave {
+    current = openSlave('TC28', 'tcp', row, { map: loadRegisterMap(TC28_MAP), durationScale })
+    return current
+  }
+
+  /** Plays the 20 prompt unit-1 polls, each followed by a unit-2 poll; returns the next free transaction id. */
+  async function playPromptPolls(slave: OpenSlave): Promise<number> {
+    let tid = 1
+    for (let poll = 0; poll < TC28_PROMPT_POLLS; poll += 1) {
+      await slave.link.exchange(tc28Read(tid, 1), 1)
+      tid += 1
+      await slave.link.exchange(tc28Read(tid, 2), 1)
+      tid += 1
+    }
+    return tid
+  }
+
+  test('answers the first 20 unit-1 polls at once with the map, 1234 and 5678', async () => {
+    const slave = startTc28(1)
+    for (let tid = 1; tid <= TC28_PROMPT_POLLS; tid += 1) {
+      assert.equal(hex(await slave.link.exchange(tc28Read(tid, 1), 1)), hex(tc28Answer(tid, 1, [1234, 5678])))
+    }
+  })
+
+  for (const { row, delayMs } of [
+    { row: 1, delayMs: 200 },
+    { row: 2, delayMs: 500 },
+  ]) {
+    test(`row ${row} answers the 21st unit-1 poll ${delayMs} ms later with 4321, 8765, not before`, async () => {
+      const slave = startTc28(row)
+      const tid = await playPromptPolls(slave)
+      const early = await slave.link.exchange(tc28Read(tid, 1), delayMs - 1)
+      await slave.clock.advance(1)
+      assert.deepEqual(
+        { early: hex(early), onTime: hex(slave.link.take()) },
+        { early: '', onTime: hex(tc28Answer(tid, 1, [4321, 8765])) },
+      )
+    })
+
+    test(`row ${row} logs one phase event carrying the ${delayMs} ms delay`, async () => {
+      const slave = startTc28(row)
+      const tid = await playPromptPolls(slave)
+      for (let poll = 0; poll < 3; poll += 1) {
+        await slave.link.exchange(tc28Read(tid + poll, 1), delayMs)
+      }
+      const phases = slave.events.filter((event) => event.event === 'phase')
+      assert.equal(phases.length, 1, JSON.stringify(phases))
+      assert.ok(Object.values(phases[0]).includes(delayMs), `phase event ${JSON.stringify(phases[0])}`)
+    })
+  }
+
+  test('counts only unit-1 polls toward the 20 prompt answers', async () => {
+    const slave = startTc28(1)
+    const late: number[] = []
+    let tid = 1
+    for (let poll = 1; poll <= TC28_PROMPT_POLLS + 1; poll += 1) {
+      await slave.link.exchange(tc28Read(tid, 2), 1)
+      tid += 1
+      if (hex(await slave.link.exchange(tc28Read(tid, 1), 1)) !== hex(tc28Answer(tid, 1, [1234, 5678]))) {
+        late.push(poll)
+      }
+      tid += 1
+    }
+    assert.deepEqual(late, [TC28_PROMPT_POLLS + 1])
+  })
+
+  test('answers unit-2 polls at once throughout, also while a unit-1 answer is held', async () => {
+    const slave = startTc28(2)
+    const tid = await playPromptPolls(slave)
+    await slave.link.exchange(tc28Read(tid, 1), 1)
+    assert.equal(hex(await slave.link.exchange(tc28Read(tid + 1, 2), 1)), hex(tc28Answer(tid + 1, 2, [1234, 5678])))
+  })
+
+  test('answers 0 for any register of a late answer beyond the second', async () => {
+    const slave = startTc28(1)
+    const tid = await playPromptPolls(slave)
+    assert.equal(hex(await slave.link.exchange(tc28Read(tid, 1, 3), 200)), hex(tc28Answer(tid, 1, [4321, 8765, 0])))
+  })
+
+  test('sends no late answer once the connection closed', async () => {
+    const slave = startTc28(1)
+    const tid = await playPromptPolls(slave)
+    await slave.link.exchange(tc28Read(tid, 1), 1)
+    slave.link.stream.destroy()
+    await settle()
+    await slave.clock.advance(1_000)
+    assert.equal(slave.link.take().length, 0)
+  })
+
+  test('keeps the 200 ms delay of row 1 under --duration-scale', async () => {
+    const slave = startTc28(1, 0.01)
+    const tid = await playPromptPolls(slave)
+    const early = await slave.link.exchange(tc28Read(tid, 1), 199)
+    await slave.clock.advance(1)
+    assert.deepEqual(
+      { early: hex(early), onTime: hex(slave.link.take()) },
+      { early: '', onTime: hex(tc28Answer(tid, 1, [4321, 8765])) },
+    )
+  })
+
+  test('refuses row 3, a missing row and RTU', () => {
+    assert.deepEqual(
+      [
+        () => checkScenario('TC28', 3, 'tcp'),
+        () => checkScenario('TC28', undefined, 'tcp'),
+        () => checkScenario('TC28', 1, 'rtu'),
+      ].map((call) => {
+        try {
+          call()
+          return 'accepted'
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error)
+        }
+      }),
+      ['scenario "TC28" needs --row 1..2', 'scenario "TC28" needs --row 1..2', 'scenario "TC28" does not run over RTU'],
+    )
   })
 })
