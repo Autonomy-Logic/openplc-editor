@@ -41,33 +41,6 @@ modbus_tcp.cpp - Modbus TCP transport (Ethernet / WiFi / ESP ETH)
 #endif
 #endif
 
-#ifdef MBTCP_WIFI_SUPERVISED
-#include "wifi_supervision.h"
-
-/** millis() of the last station event the Wi-Fi driver posted. */
-static volatile uint32_t g_wifi_last_event_ms = 0;
-
-#ifdef BOARD_ESP32
-/** Station event callback of the ESP32 core: records the event time. */
-static void wifi_station_event(arduino_event_id_t)
-{
-    g_wifi_last_event_ms = (uint32_t)millis();
-}
-#else
-/** Station event handler of the ESP8266 core: records the event time. */
-template <typename Event>
-static void wifi_station_event(const Event &)
-{
-    g_wifi_last_event_ms = (uint32_t)millis();
-}
-
-/** The ESP8266 station handlers, kept alive for as long as the firmware runs. */
-static WiFiEventHandler g_wifi_on_connected;
-static WiFiEventHandler g_wifi_on_disconnected;
-static WiFiEventHandler g_wifi_on_got_ip;
-#endif
-#endif
-
 // Bringing the link up is the NETWORK's job, not the Modbus server's. It used
 // to live under MBTCP, so a project that enabled the network without serving
 // Modbus TCP compiled a firmware that never configured the interface -- fine on
@@ -137,17 +110,6 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
                     WiFi.config(IPAddress(ip), IPAddress(dns), IPAddress(gateway), IPAddress(subnet));
             }
         #endif
-        #if defined(MBTCP_WIFI_SUPERVISED) && defined(BOARD_ESP32)
-            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_START);
-            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_CONNECTED);
-            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_GOT_IP);
-            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_LOST_IP);
-        #elif defined(MBTCP_WIFI_SUPERVISED)
-            g_wifi_on_connected = WiFi.onStationModeConnected(wifi_station_event<WiFiEventStationModeConnected>);
-            g_wifi_on_disconnected = WiFi.onStationModeDisconnected(wifi_station_event<WiFiEventStationModeDisconnected>);
-            g_wifi_on_got_ip = WiFi.onStationModeGotIP(wifi_station_event<WiFiEventStationModeGotIP>);
-        #endif
         WiFi.begin(MBTCP_SSID, MBTCP_PWD);
         #if defined(BOARD_ESP32)
             WiFi.setSleep(false);
@@ -164,34 +126,6 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
 }
 
 #endif  // OPLC_NET_ENABLED
-
-#ifdef MBTCP_WIFI_SUPERVISED
-/** millis() of the later of the first supervision call, the last station event and the last reconnect request. */
-static uint32_t g_wifi_quiet_since_ms = 0;
-
-/** Whether mbconfig_wifi_supervise() has run before. */
-static bool g_wifi_supervising = false;
-
-void mbconfig_wifi_supervise(void)
-{
-    if (!g_wifi_supervising)
-    {
-        g_wifi_quiet_since_ms = (uint32_t)millis();
-        g_wifi_supervising = true;
-    }
-    const wl_status_t status = WiFi.status();
-    const bool has_address = status == WL_CONNECTED;
-#ifdef BOARD_ESP32
-    const bool joining = WiFi.STA.connected() || status == WL_IDLE_STATUS;
-#else
-    const bool joining = wifi_station_get_connect_status() == STATION_CONNECTING;
-#endif
-    const uint32_t now = (uint32_t)millis();
-    const uint32_t last_event = g_wifi_last_event_ms;
-    if (wifi_supervise_step(has_address, joining, now, last_event, &g_wifi_quiet_since_ms))
-        WiFi.reconnect();
-}
-#endif
 
 #ifdef MB_TCP_ACTIVE
 /** Start listening for Modbus TCP. Separate from the link bring-up above

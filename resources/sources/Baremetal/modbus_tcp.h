@@ -92,14 +92,6 @@ back — no knowledge of the function-code set.
 void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *gateway, uint8_t *subnet);
 #endif
 
-#if defined(OPLC_NET_ENABLED) && defined(MBTCP_WIFI) && (defined(BOARD_ESP32) || defined(BOARD_ESP8266))
-#define MBTCP_WIFI_SUPERVISED 1
-
-/** Keep the Wi-Fi station joined: ask the driver to reconnect only after 60 s with no station event while the
- *  station is neither connected nor associating (wifi_supervision.h). Never waits. */
-void mbconfig_wifi_supervise(void);
-#endif
-
 // The listener and its service loop follow MB_TCP_ACTIVE, so the debugger keeps
 // its transport on a board where the network is the only way in.
 #ifdef MB_TCP_ACTIVE
