@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { _electron as electron, test as base, type ElectronApplication, expect, type Page } from '@playwright/test'
 
@@ -17,6 +17,14 @@ import { shutdown } from './electron-editor'
 
 const RELEASE_APP = join(__dirname, '..', '..', 'release', 'app')
 const MAIN = join(RELEASE_APP, 'dist', 'main', 'main.js')
+
+/**
+ * The executable of a test-only packaged build (`npm run package:test`) named by `E2E_PACKAGED_APP`, resolved from the
+ * repository root, or `''` when unset. Playwright cannot drive a fused `npm run package` build.
+ */
+export const PACKAGED_APP = process.env.E2E_PACKAGED_APP
+  ? resolve(__dirname, '..', '..', process.env.E2E_PACKAGED_APP)
+  : ''
 
 export interface EditorSession {
   app: ElectronApplication
@@ -93,17 +101,23 @@ export async function waitForStartup(app: ElectronApplication, timeout = 120000)
 }
 
 /**
- * Launches the built editor on a new profile and waits until its main window is shown, sized past the mobile
- * breakpoint. Closes the app when startup fails, then rethrows.
+ * Launches the editor on `userData` (a new profile by default) and waits until its main window is shown, sized past
+ * the mobile breakpoint. Runs `PACKAGED_APP` when set, else the built `main.js`. Closes the app when startup fails,
+ * then rethrows.
  */
-export async function launchEditor(label: string): Promise<EditorSession> {
-  copyPreload()
+export async function launchEditor(label: string, userData: string = freshProfile(label)): Promise<EditorSession> {
+  if (PACKAGED_APP === '') copyPreload()
   const app = await electron.launch({
-    args: [MAIN, `--user-data-dir=${freshProfile(label)}`],
+    ...(PACKAGED_APP === ''
+      ? { args: [MAIN, `--user-data-dir=${userData}`] }
+      : { executablePath: PACKAGED_APP, args: [`--user-data-dir=${userData}`] }),
     env: { ...process.env, NODE_ENV: 'production' },
   })
   try {
     const page = await waitForStartup(app)
+    if ((await app.evaluate(({ app: electronApp }) => electronApp.isPackaged)) !== (PACKAGED_APP !== '')) {
+      throw new Error(`The editor launched is not the one E2E_PACKAGED_APP asks for (${PACKAGED_APP || 'main.js'}).`)
+    }
     await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().includes('index.html'))
       win?.setSize(1500, 950)
