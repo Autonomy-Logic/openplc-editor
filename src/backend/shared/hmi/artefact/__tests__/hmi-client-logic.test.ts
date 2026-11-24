@@ -24,13 +24,15 @@ interface ClientLogic {
   keyCode(event: Partial<KeyboardEvent> | null): number
   createSequencer(): Sequencer
   openEvent(n: number): Record<string, unknown>
-  showEvent(page: number, n: number): Record<string, unknown>
-  writeEvent(tag: number, value: Uint8Array, n: number): Record<string, unknown>
+  showEvent(page: number, n: number, build: string): Record<string, unknown>
+  writeEvent(tag: number, value: Uint8Array, n: number, build: string): Record<string, unknown>
+  bitEvent(tag: number, bit: number, value: number, n: number, build: string): Record<string, unknown>
   parseWrites(
     bytes: Uint8Array,
   ): Array<{ page: number; tag: number; kind: number; bit: number; value: Uint8Array }> | null
   toQ4(v: number): number
   roleCode(status: unknown): number
+  buildId(value: unknown): string | null
   bytesOf(data: unknown): Uint8Array
 }
 
@@ -85,6 +87,7 @@ describe('the HMI browser client', () => {
     expect(logic.noticeFor('out_of_date')).toBe('HMI out of date, rebuild the project')
     expect(logic.noticeFor('busy')).toBe('Device busy, try later')
     expect(logic.noticeFor('unavailable')).toBe('No HMI installed')
+    expect(logic.noticeFor('updating')).toBe('HMI updating, please wait')
     expect(logic.noticeFor('fault')).toMatch(/error/)
     expect(logic.noticeFor('toString')).toBeNull()
   })
@@ -115,11 +118,19 @@ describe('the HMI browser client', () => {
     expect(seq.next()).toBe(0)
   })
 
-  it('builds the open, show and write events the runtime accepts', () => {
+  it('builds the open, show and write events the runtime accepts, shows and writes naming the HMI build', () => {
+    const build = 'c'.repeat(64)
     expect(logic.openEvent(0)).toEqual({ t: 'o', n: 0 })
-    expect(logic.showEvent(3, 7)).toEqual({ t: 's', p: 3, n: 7 })
+    expect(logic.showEvent(3, 7, build)).toEqual({ t: 's', p: 3, n: 7, h: build })
     const value = new Uint8Array([1])
-    expect(logic.writeEvent(2, value, 8)).toEqual({ t: 'w', g: 2, v: value, n: 8 })
+    expect(logic.writeEvent(2, value, 8, build)).toEqual({ t: 'w', g: 2, v: value, n: 8, h: build })
+    expect(logic.bitEvent(2, 5, 1, 9, build)).toEqual({ t: 'b', g: 2, b: 5, v: 1, n: 9, h: build })
+  })
+
+  it('takes an HMI build ID only as 64 lower-case hex digits', () => {
+    expect(logic.buildId('0f'.repeat(32))).toBe('0f'.repeat(32))
+    for (const bad of [null, undefined, 7, '', 'A'.repeat(64), 'a'.repeat(63), 'a'.repeat(65), 'g'.repeat(64)])
+      expect(logic.buildId(bad)).toBeNull()
   })
 
   it('splits the writes the module queued into page, tag, kind, bit and value, each value a copy', () => {

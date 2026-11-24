@@ -24,10 +24,13 @@
   /** How long a newly shown screen waits for its first values before it is drawn anyway. */
   var FIRST_VALUES_WAIT_MS = 1000
   var MAX_SEQUENCE = 9007199254740991
+  /** Response header naming the HMI build of the screens module served. */
+  var BUILD_HEADER = 'X-HMI-Build'
 
   var NOTICES = {
     stopped: 'PLC stopped',
     out_of_date: 'HMI out of date, rebuild the project',
+    updating: 'HMI updating, please wait',
     busy: 'Device busy, try later',
     fault: 'The screen stopped on an error; restarting',
     unavailable: 'No HMI installed',
@@ -133,19 +136,19 @@
     return { t: 'o', n: n }
   }
 
-  /** The `in` event that asks for the values of screen `page`. */
-  function showEvent(page, n) {
-    return { t: 's', p: page, n: n }
+  /** The `in` event that asks for the values of screen `page` of HMI build `build`. */
+  function showEvent(page, n, build) {
+    return { t: 's', p: page, n: n, h: build }
   }
 
   /** The `in` event of a screen's write of tag `tag`; `value` is its bytes as the runtime takes them. */
-  function writeEvent(tag, value, n) {
-    return { t: 'w', g: tag, v: value, n: n }
+  function writeEvent(tag, value, n, build) {
+    return { t: 'w', g: tag, v: value, n: n, h: build }
   }
 
   /** The `in` event of a screen's assignment of one bit of tag `tag`: bit index and value 0 or 1. */
-  function bitEvent(tag, bit, value, n) {
-    return { t: 'b', g: tag, b: bit, v: value ? 1 : 0, n: n }
+  function bitEvent(tag, bit, value, n, build) {
+    return { t: 'b', g: tag, b: bit, v: value ? 1 : 0, n: n, h: build }
   }
 
   /**
@@ -184,6 +187,11 @@
     return typeof role === 'number' && role >= 0 && role <= 3 && Math.floor(role) === role ? role : -1
   }
 
+  /** An HMI build ID (sha256 of hmi.wasm, 64 lower-case hex digits), or null when `value` is not one. */
+  function buildId(value) {
+    return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value) ? value : null
+  }
+
   /** The bytes of a binary Socket.IO payload as a Uint8Array view. */
   function bytesOf(data) {
     if (data instanceof ArrayBuffer) return new Uint8Array(data)
@@ -209,6 +217,7 @@
     parseWrites: parseWrites,
     toQ4: toQ4,
     roleCode: roleCode,
+    buildId: buildId,
     bytesOf: bytesOf,
     RENEW_RETRY_MS: RENEW_RETRY_MS,
     REOPEN_DELAY_MS: REOPEN_DELAY_MS,
@@ -267,11 +276,16 @@
     var retryDelay = RECONNECT_DELAY_MS
     var t0 = Date.now()
 
-    /** The compiled module once fetched, the running instance's exports and the role it runs as. */
+    /**
+     * The compiled module once fetched ({ module, build }), the fetch in flight ({ build, promise }), the running
+     * instance's exports, the role and HMI build it runs as, and the count of `live` statuses handled.
+     */
     var compiled = null
     var compiling = null
     var hmi = null
     var role = -1
+    var build = null
+    var liveCount = 0
     var live = false
     var shownPage = -1
     var awaitingPage = -1
@@ -304,6 +318,7 @@
       compiled = null
       compiling = null
       hmi = null
+      build = null
       screen.hidden = true
       showNotice(null)
       message.textContent = text || ''
@@ -500,7 +515,7 @@
         var state = status && status.state
         clearTimeout(reopenTimer)
         if (state === 'live') {
-          becomeLive(roleCode(status))
+          becomeLive(roleCode(status), buildId(status.build))
           return
         }
         pause(state)
@@ -534,53 +549,81 @@
     }
 
     /**
-     * The compiled hmi.wasm, fetched once per session with the token: the device serves the project's screens only
-     * to a signed-in account. Rejects with an error whose `refused` is true when the device refuses the token.
+     * The compiled hmi.wasm and the HMI build the device served it as ({ module, build }), fetched with the token:
+     * the device serves the project's screens only to a signed-in account. Kept for the session while it is the
+     * build wanted; fetched again for another build. Rejects with an error whose `refused` is true when the device
+     * refuses the token.
      */
-    function hmiModule() {
-      if (compiled) return Promise.resolve(compiled)
-      if (!compiling) {
-        var sent = token
-        compiling = fetch('hmi.wasm', { headers: { Authorization: 'Bearer ' + sent }, cache: 'no-store' })
-          .then(function (response) {
-            if (response.status === 401 || response.status === 403) {
-              var refused = new Error('hmi.wasm refused')
-              refused.refused = true
-              throw refused
-            }
-            if (!response.ok) throw new Error('hmi.wasm ' + response.status)
-            return response.arrayBuffer()
-          })
-          .then(function (bytes) {
-            return WebAssembly.compile(bytes)
-          })
-          .then(function (m) {
-            if (token === sent) compiled = m
-            return m
-          })
-        compiling.catch(function () {
-          compiling = null
+    function hmiModule(wanted) {
+      if (compiled && compiled.build === wanted) return Promise.resolve(compiled)
+      if (compiling && compiling.build === wanted) return compiling.promise
+      var sent = token
+      var served = null
+      var promise = fetch('hmi.wasm', { headers: { Authorization: 'Bearer ' + sent }, cache: 'no-store' })
+        .then(function (response) {
+          if (response.status === 401 || response.status === 403) {
+            var refused = new Error('hmi.wasm refused')
+            refused.refused = true
+            throw refused
+          }
+          if (!response.ok) throw new Error('hmi.wasm ' + response.status)
+          served = buildId(response.headers.get(BUILD_HEADER))
+          return response.arrayBuffer()
         })
-      }
-      return compiling
+        .then(function (bytes) {
+          return WebAssembly.compile(bytes)
+        })
+        .then(function (m) {
+          var entry = { module: m, build: served }
+          if (token === sent) compiled = entry
+          return entry
+        })
+      var attempt = { build: wanted, promise: promise }
+      compiling = attempt
+      promise.then(
+        function () {
+          if (compiling === attempt) compiling = null
+        },
+        function () {
+          if (compiling === attempt) compiling = null
+        },
+      )
+      return promise
     }
 
-    /** Starts the screens for a role in a new instance; resolves false when the browser cannot run them. */
-    function startScreens(newRole) {
+    /**
+     * Starts the screens of HMI build `wanted` for a role in a new instance. Resolves false when the browser cannot
+     * run them, when the device serves another build (the screens wait for the next `live`), or when a newer `live`
+     * superseded this one.
+     */
+    function startScreens(newRole, wanted, count) {
       hmi = null
-      return hmiModule()
-        .then(function (m) {
-          return WebAssembly.instantiate(m, { wasi_snapshot_preview1: wasiStubs() })
+      build = null
+      if (!wanted) {
+        pause('updating')
+        return Promise.resolve(false)
+      }
+      return hmiModule(wanted)
+        .then(function (entry) {
+          if (count !== liveCount) return null
+          if (entry.build !== wanted) {
+            pause('updating')
+            return null
+          }
+          return WebAssembly.instantiate(entry.module, { wasi_snapshot_preview1: wasiStubs() })
         })
         .then(function (instance) {
+          if (!instance || count !== liveCount) return false
           var x = instance.exports
           if (typeof x._initialize === 'function') x._initialize()
           if (x.hmi_bh_init(viewWidth(), viewHeight(), newRole) !== 0) throw new Error('hmi.wasm out of memory')
           hmi = x
           role = newRole
+          build = wanted
           return true
         })
         .catch(function (error) {
+          if (count !== liveCount) return false
           if (error && error.refused) {
             if (sessionRefused('Your session ended. Sign in again.')) reopenTimer = setTimeout(sendOpen, 0)
           } else showNotice(NOTICES.unsupported)
@@ -588,12 +631,21 @@
         })
     }
 
-    /** The device opened the viewer: the screens run with its role, and the shown screen asks for its values. */
-    function becomeLive(newRole) {
+    /**
+     * The device opened the viewer: the screens of the build it named run with its role, and the shown screen asks
+     * for its values. Another build stops the running screens first, so none of their writes is sent.
+     */
+    function becomeLive(newRole, newBuild) {
       if (newRole < 0) return
-      var ready = hmi && role === newRole ? Promise.resolve(true) : startScreens(newRole)
+      var count = ++liveCount
+      var current = hmi && role === newRole && build === newBuild
+      if (!current) {
+        live = false
+        stopFrames()
+      }
+      var ready = current ? Promise.resolve(true) : startScreens(newRole, newBuild, count)
       ready.then(function (ok) {
-        if (!ok || !socket || !hmi) return
+        if (!ok || count !== liveCount || !socket || !hmi) return
         hmi.hmi_bh_reset_writes()
         hmi.hmi_bh_out_clear()
         fitCanvas()
@@ -626,7 +678,7 @@
       shownPage = page
       awaitingPage = page
       awaitingSince = now
-      send(showEvent(page, sequencer.next()))
+      send(showEvent(page, sequencer.next(), build))
     }
 
     /**
@@ -643,8 +695,8 @@
       for (var i = 0; i < writes.length; i++) {
         var w = writes[i]
         if (w.page !== 65535 && w.page !== shownPage) show(w.page, now)
-        if (w.kind === 1) send(bitEvent(w.tag, w.bit, w.value[0], sequencer.next()))
-        else send(writeEvent(w.tag, w.value, sequencer.next()))
+        if (w.kind === 1) send(bitEvent(w.tag, w.bit, w.value[0], sequencer.next(), build))
+        else send(writeEvent(w.tag, w.value, sequencer.next(), build))
       }
     }
 
