@@ -14,13 +14,17 @@ control is the TCP master's firmware, which compiles the RTU buses out.
 
 | Path | What it is |
 | --- | --- |
-| `projects/compile-*` | Compile fixtures, literal low addresses so a 2 KB AVR has room for the image |
+| `projects/compile-*` | Compile fixtures, no pins, literal low addresses so a 2 KB AVR has room for the image |
 | `projects/tc*`, `projects/as*` | Bench projects, one per check or per shared configuration (table below) |
 | `projects/tc28-shared-timeout` | TC28 (a): two devices on one endpoint, timeouts 1000 and 300 ms |
 | `maps/*.json` | Register maps for the hostile slave's `normal` scenario (`--map`) |
 | `compare-images.ts` | Compares two builds of one project, target by target |
 
-Every project toggles `scan_toggle` (`%QX0.0`) once per scan, with a 20 ms task. Where the board has default
+Every project toggles `scan_toggle` once per scan, with a 20 ms task. The master compile fixtures
+(`compile-tcp-master`, `compile-tcp-master-wifi`, `compile-rtu-master`, `compile-rtu-master-fx3u` and
+`compile-rtu-master-no-pin`) have no pins and are never measured: they bind literal addresses equal to their
+points' compact allocation and keep `scan_toggle` unlocated, since a located output with no producer is refused
+at build. Every other project toggles `scan_toggle` at `%QX0.0`. Where the board has default
 pins, `%QX0.0` is mapped to a digital output in `devices/pin-mapping.json` (ESP32 `02`, Uno and Nano 33 IoT
 and Mkr WiFi `7`, Mega `23`, Nano RP2040 Connect `8`, ESP8266 `D1`); the logic analyzer watches that pin. The
 LOGO!, Opta and P1AM-200 have no default pins: map `%QX0.0` to an output on the board's own screen before
@@ -28,8 +32,8 @@ measuring.
 
 The editor allocates the points' addresses compactly, right after the board's own pins, and the fixtures store
 that allocation (checked by `__tests__/projects.test.ts`, run by `npm run test:bench`), so a project builds as
-opened, with no recalculation. Program variables are bound to the points by alias (`MB_G1_0`, ...), and the
-scenarios name variables, never addresses: read them by name in the debugger.
+opened, with no recalculation. The bench programs bind variables to the points by alias (`MB_G1_0`, ...), and
+the scenarios name variables, never addresses: read them by name in the debugger.
 
 ## Open prerequisites
 
