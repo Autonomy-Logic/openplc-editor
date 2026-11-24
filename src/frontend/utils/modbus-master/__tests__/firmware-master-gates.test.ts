@@ -663,19 +663,198 @@ const NOT_SUPERVISED: Array<[string, string[]]> = [
   ['ESP32 Wi-Fi without OPLC_NET_ENABLED', ['BOARD_ESP32', 'MBTCP_WIFI']],
 ]
 
-describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 (MT-6)', () => {
+/** The top-level arguments of the first call of `name` in `code`, or `null` when `code` does not call it. */
+function argumentsOf(code: string, name: string): string[] | null {
+  const text = callArguments(code, name)[0]
+  if (text === undefined) return null
+  const parts: string[] = []
+  let depth = 0
+  let start = 0
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === '(' || text[index] === '[') depth += 1
+    if (text[index] === ')' || text[index] === ']') depth -= 1
+    if (text[index] === ',' && depth === 0) {
+      parts.push(text.slice(start, index).trim())
+      start = index + 1
+    }
+  }
+  parts.push(text.slice(start).trim())
+  return parts
+}
+
+/**
+ * `expression` followed by what it reads, transitively: the value of every name `body` assigns and the body of every
+ * function `unit` defines that it names.
+ */
+function readsOf(expression: string, body: string, unit: Array<{ name: string; body: string }>): string {
+  let text = expression
+  const seen = new Set<string>()
+  for (let round = 0; round < 4; round += 1) {
+    const names = [...new Set([...text.matchAll(/\b[A-Za-z_]\w*\b/g)].map((match) => match[0]))].filter(
+      (name) => !seen.has(name) && !C_KEYWORDS.has(name),
+    )
+    for (const name of names) {
+      seen.add(name)
+      const values = [...body.matchAll(new RegExp(`\\b${name}\\s*=(?!=)([^;]*);`, 'g'))].map((match) => match[1])
+      const defined = unit.find((fn) => fn.name === name)?.body
+      for (const value of defined === undefined ? values : [...values, defined]) text += ` (${value})`
+    }
+  }
+  return text
+}
+
+/** Every `if` of `body`: its condition and the offsets of its then-branch, braces or single statement. */
+function ifBranches(body: string): Array<{ condition: string; start: number; end: number }> {
+  const found: Array<{ condition: string; start: number; end: number }> = []
+  for (const match of body.matchAll(/\bif\s*\(/g)) {
+    let depth = 1
+    let index = (match.index ?? 0) + match[0].length
+    const conditionStart = index
+    while (index < body.length && depth > 0) {
+      if (body[index] === '(') depth += 1
+      if (body[index] === ')') depth -= 1
+      index += 1
+    }
+    const condition = body.slice(conditionStart, index - 1)
+    while (index < body.length && /\s/.test(body[index])) index += 1
+    const start = index
+    if (body[index] === '{') {
+      depth = 1
+      index += 1
+      while (index < body.length && depth > 0) {
+        if (body[index] === '{') depth += 1
+        if (body[index] === '}') depth -= 1
+        index += 1
+      }
+    } else {
+      index = body.indexOf(';', index) + 1
+    }
+    found.push({ condition, start, end: index })
+  }
+  return found
+}
+
+const STATION_EVENTS = [
+  'ARDUINO_EVENT_WIFI_STA_START',
+  'ARDUINO_EVENT_WIFI_STA_CONNECTED',
+  'ARDUINO_EVENT_WIFI_STA_DISCONNECTED',
+  'ARDUINO_EVENT_WIFI_STA_GOT_IP',
+  'ARDUINO_EVENT_WIFI_STA_LOST_IP',
+]
+
+const ESP8266_STATION_HANDLERS = ['onStationModeConnected', 'onStationModeDisconnected', 'onStationModeGotIP']
+
+/** What the `joining` argument of the rule reads on each supervised board: the association state of the station. */
+const JOINING_READS: Array<[string, string[], RegExp]> = [
+  ['ESP32 Wi-Fi', ESP32_WIFI_NET, /\bSTA\s*\.\s*connected\s*\(/],
+  ['ESP8266 Wi-Fi', ESP8266_WIFI_NET, /\bSTATION_CONNECTING\b/],
+]
+
+describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 reconnects only through wifi_reconnect_due() (CR12-1)', () => {
   const supervise = (defines: string[]): string => {
     const body = definedBody(tcpUnit(defines), 'mbconfig_wifi_supervise')
     if (body === null) throw new Error(`mbconfig_wifi_supervise() is not defined for ${defines.join(', ')}`)
     return body
   }
 
-  it.each(SUPERVISED)('%s: mbconfig_wifi_supervise() asks the status and reconnects', (_family, defines) => {
+  const ifaceBody = (defines: string[]): string => {
+    const body = definedBody(tcpUnit(defines), 'mbconfig_ethernet_iface')
+    if (body === null) throw new Error(`mbconfig_ethernet_iface() is not defined for ${defines.join(', ')}`)
+    return body
+  }
+
+  /** What each argument of the rule's call in mbconfig_wifi_supervise() reads, in the order of the signature. */
+  const ruleArguments = (defines: string[]): string[] => {
+    const unit = functionsOf(tcpUnit(defines))
     const body = supervise(defines)
-    expect({ status: callsOf(body, 'status').length > 0, reconnect: callsOf(body, 'reconnect').length > 0 }).toEqual({
-      status: true,
-      reconnect: true,
+    const args = argumentsOf(body, 'wifi_reconnect_due')
+    if (args === null) throw new Error(`no wifi_reconnect_due() call in mbconfig_wifi_supervise() for ${defines}`)
+    return args.map((arg) => readsOf(arg, body, unit))
+  }
+
+  it.each(SUPERVISED)('%s: mbconfig_wifi_supervise() makes one WiFi.status() query', (_family, defines) => {
+    expect(callsOf(supervise(defines), 'status').length).toBe(1)
+  })
+
+  it.each(SUPERVISED)(
+    '%s: mbconfig_wifi_supervise() calls wifi_reconnect_due() with has_address read from WL_CONNECTED',
+    (_family, defines) => {
+      expect(ruleArguments(defines)[0] ?? '').toMatch(/\bWL_CONNECTED\b/)
+    },
+  )
+
+  it.each(JOINING_READS)(
+    '%s: mbconfig_wifi_supervise() passes the association state as joining',
+    (_family, defines, joining) => {
+      expect(ruleArguments(defines)[1] ?? '').toMatch(joining)
+    },
+  )
+
+  it.each(SUPERVISED)(
+    '%s: mbconfig_wifi_supervise() calls reconnect() only in the branch wifi_reconnect_due() guards',
+    (_family, defines) => {
+      const body = supervise(defines)
+      const unit = functionsOf(tcpUnit(defines))
+      const guarded = ifBranches(body).filter((branch) => {
+        const reads = readsOf(branch.condition, body, unit)
+        return (
+          /\bwifi_reconnect_due\s*\(/.test(reads) &&
+          !/^\s*!/.test(branch.condition) &&
+          !/!\s*[(\s]*wifi_reconnect_due\b/.test(reads)
+        )
+      })
+      const reconnects = callsOf(body, 'reconnect')
+      expect({
+        reconnects: reconnects.length > 0,
+        unguarded: reconnects.filter((at) => !guarded.some((branch) => at >= branch.start && at < branch.end)),
+      }).toEqual({ reconnects: true, unguarded: [] })
+    },
+  )
+
+  it('removes the 10 s window WIFI_RECONNECT_AFTER_MS from modbus_tcp.cpp and modbus_tcp.h', () => {
+    const naming = ['modbus_tcp.cpp', 'modbus_tcp.h'].filter((name) =>
+      readFileSync(join(BAREMETAL_DIR, name), 'utf-8').includes('WIFI_RECONNECT_AFTER_MS'),
+    )
+    expect(naming).toEqual([])
+  })
+
+  it('ESP32 Wi-Fi: mbconfig_ethernet_iface() registers every WiFi.onEvent() before WiFi.begin()', () => {
+    const body = ifaceBody(ESP32_WIFI_NET)
+    const events = callsOf(body, 'onEvent')
+    const begin = callsOf(body, 'begin')
+    expect({
+      registered: events.length > 0,
+      beforeBegin: events.length > 0 && begin.length > 0 && Math.max(...events) < Math.min(...begin),
+    }).toEqual({ registered: true, beforeBegin: true })
+  })
+
+  it('ESP32 Wi-Fi: modbus_tcp.cpp names every station event the supervision counts', () => {
+    const code = tcpUnit(ESP32_WIFI_NET)
+    expect(STATION_EVENTS.filter((id) => !new RegExp(`\\b${id}\\b`).test(code))).toEqual([])
+  })
+
+  it('ESP8266 Wi-Fi: mbconfig_ethernet_iface() registers every station handler before WiFi.begin()', () => {
+    const body = ifaceBody(ESP8266_WIFI_NET)
+    const begin = callsOf(body, 'begin')
+    const late = ESP8266_STATION_HANDLERS.filter((handler) => {
+      const calls = callsOf(body, handler)
+      return calls.length === 0 || begin.length === 0 || Math.max(...calls) > Math.min(...begin)
     })
+    expect(late).toEqual([])
+  })
+
+  it('ESP8266 Wi-Fi: keeps each station handler in a WiFiEventHandler that outlives mbconfig_ethernet_iface()', () => {
+    const code = tcpUnit(ESP8266_WIFI_NET)
+    const body = ifaceBody(ESP8266_WIFI_NET)
+    const notKept = ESP8266_STATION_HANDLERS.filter((handler) => {
+      const assignment = new RegExp(`\\b([A-Za-z_]\\w*)\\s*=\\s*(?:[A-Za-z_]\\w*\\s*\\.\\s*)?${handler}\\s*\\(`)
+      const holder = assignment.exec(body)?.[1]
+      if (holder === undefined) return true
+      const declaredInFile = new RegExp(`\\bWiFiEventHandler\\s+${holder}\\b`).test(code)
+      const declaredInBody = new RegExp(`\\b(?:WiFiEventHandler|auto)\\s+${holder}\\b`).test(body)
+      return !declaredInFile || declaredInBody
+    })
+    expect(notKept).toEqual([])
   })
 
   it.each(SUPERVISED)(

@@ -23,7 +23,20 @@
   `OPCUA_DEBUG_LOG 1` (an `opcua_config.h` override), `NinaServer` declares `available()` and every member
   `opcua_log.cpp` calls on the log server, and `NinaClient` declares `port()` and every member `opcua_log.cpp`
   and the accept log of `baremetal_net.cpp` call on a client; with `OPCUA_DEBUG_LOG 0` the log unit is empty.
+  On ESP32 and ESP8266 Wi-Fi, `mbconfig_wifi_supervise()` makes one `WiFi.status()` query, passes `wifi_reconnect_due()`
+  `has_address` from `WL_CONNECTED` and `joining` from `STA.connected()` (ESP32) or `STATION_CONNECTING` (ESP8266),
+  calls `reconnect()` only in the branch that rule guards, and never waits, begins again or prints;
+  `mbconfig_ethernet_iface()` registers every `WiFi.onEvent()` (ESP32, the five station events) or the three
+  `onStationMode*` handlers, kept in file-level `WiFiEventHandler`s (ESP8266), before `WiFi.begin()`;
+  `WIFI_RECONNECT_AFTER_MS` is gone; `loop()` calls the supervision once, first, and only on those two boards.
   Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
+- `wifi-supervision-rule.test.ts`: the Wi-Fi supervision rule `wifi_reconnect_due()` of `wifi_supervision.h`. As text,
+  everywhere: the header has the SPDX line, includes only `<stdint.h>` and `"modbus_master_util.h"` and names no
+  `WiFi`, `WL_`, `millis` or `Arduino`. On the host: it copies that header and `modbus_master_util.h` unchanged, builds
+  a driver with `g++ -std=gnu++11 -Wall` and checks the cases (never due with an address or while joining, due at
+  exactly 60 000 ms of quiet, across the `millis()` wrap) and four timelines on a 10 ms step: a 27 s join, a 5 minute
+  DHCP wait and a driver retrying every 5 s never ask; a lost station with a silent driver asks at 60 s, then not again
+  for 60 s. The host part is skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 - `firmware-master-tcp-link.test.ts`: the TCP master's network link gate and Reconnect timing on the host. It copies
   the real master sources unchanged next to stand-ins for the network seam (a scripted `bm_net::Connection` and
   `bm_net::link_up()`), the clock, the PLC state, the image and the PDU lengths, builds a driver with
@@ -47,8 +60,8 @@ Run the host checks locally from the repository root:
 
 ```sh
 # openplc-editor
-MB_MASTER_HOST_COMPILE=1 npx jest --config jest.config.json --no-coverage src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-tcp-link.test.ts
+MB_MASTER_HOST_COMPILE=1 npx jest --config jest.config.json --no-coverage src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-tcp-link.test.ts src/frontend/utils/modbus-master/__tests__/wifi-supervision-rule.test.ts
 
 # openplc-web
-MB_MASTER_HOST_COMPILE=1 npx vitest run --config vitest.config.ts src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-tcp-link.test.ts
+MB_MASTER_HOST_COMPILE=1 npx vitest run --config vitest.config.ts src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-tcp-link.test.ts src/frontend/utils/modbus-master/__tests__/wifi-supervision-rule.test.ts
 ```
