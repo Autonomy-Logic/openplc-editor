@@ -1,0 +1,13 @@
+# osv-scanner suppression baseline for openplc-editor: the VEX "not affected"
+# (and mitigated) decisions from the vulnerability report. Empty until advisories
+# are triaged; nothing is suppressed by default.
+#
+# Each entry needs id, ignoreUntil (at most one quarter out) and a reason with the
+# CISA VEX justification. Suppressions written by the automated monthly triage
+# carry "AI-TRIAGED [unreviewed]" in their reason until a human clears the marker
+# while reviewing the PR diff. See security/README.md.
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = "2027-03-01T00:00:00Z"
+# reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: <why> — see security report"
