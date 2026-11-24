@@ -249,3 +249,86 @@ describe('run sheet: TC05 return map', () => {
     })
   })
 })
+
+/** The bench compile fixtures, which have no pins and bind literal addresses in their programs. */
+const COMPILE_FIXTURES = [
+  'compile-tcp-master',
+  'compile-tcp-master-wifi',
+  'compile-rtu-master',
+  'compile-rtu-master-fx3u',
+  'compile-rtu-master-no-pin',
+]
+
+/** Program variable and the IO point it must be located on, in every compile fixture. */
+const COMPILE_PAIRS: Array<[string, string]> = [
+  ['coil_0', 'coils_0'],
+  ['discrete_0', 'discretes_0'],
+  ['holding_0', 'holding_0'],
+  ['input_0', 'inputs_0'],
+  ['second_0', 'second_0'],
+  ['coil_out', 'coil_out_0'],
+  ['reg_out', 'reg_out_0'],
+  ['coils_out_0', 'coils_out_0'],
+  ['regs_out_0', 'regs_out_0'],
+]
+
+/** The pair the TCP compile fixtures add: their second endpoint's point. */
+const TCP_COMPILE_PAIRS: Array<[string, string]> = [['shared_0', 'shared_0']]
+
+const pairsOf = (name: string): Array<[string, string]> =>
+  name.startsWith('compile-tcp-') ? [...COMPILE_PAIRS, ...TCP_COMPILE_PAIRS] : COMPILE_PAIRS
+
+/** Every variable declared in a program, with its `AT` address or `null` when it is not located. */
+function declarationsOf(program: string): Map<string, string | null> {
+  const declared = new Map<string, string | null>()
+  for (const match of program.matchAll(/^\s*([A-Za-z_]\w*)\s*:\s*[A-Za-z_]\w*(?:\s+AT\s+(\S+?))?\s*;/gm)) {
+    declared.set(match[1], match[2] ?? null)
+  }
+  return declared
+}
+
+const programOf = (project: BenchProject): string =>
+  readFileSync(path.join(project.dir, 'pous', 'programs', 'main.st'), 'utf-8')
+
+describe('B1b: compile fixtures bind their own points', () => {
+  for (const name of COMPILE_FIXTURES) {
+    test(`${name}: every paired variable is located at its point's stored address`, () => {
+      const project = loadProject(name)
+      const declared = declarationsOf(programOf(project))
+      const stored = new Map(pointsOf(project).map(({ point }) => [point.name ?? point.id, point.iecLocation]))
+      const mismatches = pairsOf(name).flatMap(([variable, point]) => {
+        const at = declared.get(variable) ?? '<not located>'
+        const expected = stored.get(point) ?? '<no such point>'
+        return at === expected ? [] : [`${name} / ${variable} AT ${at}, point ${point} stored at ${expected}`]
+      })
+      assert.deepEqual(mismatches, [])
+    })
+
+    test(`${name}: scan_toggle is declared and not located`, () => {
+      const declared = declarationsOf(programOf(loadProject(name)))
+      assert.deepEqual(
+        { declared: declared.has('scan_toggle'), at: declared.get('scan_toggle') ?? null },
+        { declared: true, at: null },
+      )
+    })
+
+    test(`${name}: locates no variable outside the pairing`, () => {
+      const paired = new Set(pairsOf(name).map(([variable]) => variable))
+      const extra = [...declarationsOf(programOf(loadProject(name)))]
+        .filter(([variable, at]) => at !== null && !paired.has(variable))
+        .map(([variable, at]) => `${variable} AT ${at}`)
+      assert.deepEqual(extra, [])
+    })
+
+    test(`${name}: no two located variables share an address`, () => {
+      const byAddress = new Map<string, string[]>()
+      for (const [variable, at] of declarationsOf(programOf(loadProject(name)))) {
+        if (at !== null) byAddress.set(at, [...(byAddress.get(at) ?? []), variable])
+      }
+      const shared = [...byAddress]
+        .filter(([, variables]) => variables.length > 1)
+        .map(([at, v]) => `${at}: ${v.join(', ')}`)
+      assert.deepEqual(shared, [])
+    })
+  }
+})
