@@ -24,6 +24,13 @@
   `opcua_log.cpp` calls on the log server, and `NinaClient` declares `port()` and every member `opcua_log.cpp`
   and the accept log of `baremetal_net.cpp` call on a client; with `OPCUA_DEBUG_LOG 0` the log unit is empty.
   Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
+- `firmware-master-tcp-link.test.ts`: the TCP master's network link gate and Reconnect timing on the host. It copies
+  the real master sources unchanged next to stand-ins for the network seam (a scripted `bm_net::Connection` and
+  `bm_net::link_up()`), the clock, the PLC state, the image and the PDU lengths, builds a driver with
+  `g++ -std=gnu++11 -Wall`, once with Reconnect off and once with it on, and plays scenarios S1 to S8 on a 10 ms fake
+  pass: no connect while the link is down and at most one link query per pass; a connect that fails while the link is
+  down is not counted; the 2 s, x1.5, up to 30 s back-off; a truncated frame or a late answer of an old transaction
+  costs failed polls and keeps the connection. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 - `firmware-master-rtu-sources.test.ts`: the RTU master and the RS-485 helper ship; the RTU master calls no
   `flush()`, `delayMicroseconds()` or `delay()`, never touches `mb_frame`, `mb_rx_*` or the frame-bound
   `calcCrc()`, and includes `modbus_crc.h`; the server and the master both include `modbus_rs485.h`, which
@@ -40,8 +47,8 @@ Run the host checks locally from the repository root:
 
 ```sh
 # openplc-editor
-MB_MASTER_HOST_COMPILE=1 npx jest --config jest.config.json --no-coverage src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts
+MB_MASTER_HOST_COMPILE=1 npx jest --config jest.config.json --no-coverage src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-tcp-link.test.ts
 
 # openplc-web
-MB_MASTER_HOST_COMPILE=1 npx vitest run --config vitest.config.ts src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts
+MB_MASTER_HOST_COMPILE=1 npx vitest run --config vitest.config.ts src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-tcp-link.test.ts
 ```
