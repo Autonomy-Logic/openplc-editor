@@ -239,7 +239,20 @@ other seven paths.
 register, 60 s. For each row 1 to 9: slave `--scenario AS-02 --row <n>`. After the baseline (G1 = 101..110,
 G2 = 23130), expect `g1_*` = 0 (never the 201.. values a malformed frame carries), `g2_0` still 23130 (read
 before G2's next poll), the next request on the same client port with the device not given up, and then
-`g1_*` = 501..510. TC10 cases and their AS-02 rows:
+`g1_*` = 501..510.
+
+With Reconnect unchecked, stopping the slave at the end of a row closes the connection and the board gives the
+device up, so each row runs on one connection of its own:
+
+- Start the slave for the row (`--scenario AS-02 --row <n>`), then do **one** Stop and Start of the PLC from the
+  editor: the RUN edge re-arms the master, the board connects once and the row runs on that connection.
+- First row after a board reset: start the slave before pressing EN, and do the Stop and Start only if the slave's
+  log shows no `accepted` within 10 s of the board answering ping.
+- Never Stop and Start again in a row after the board connected: the baseline and the hostile answer come within a
+  fraction of a second of the connection, and a second Stop and Start closes it, so the "next request on the same
+  client port" check fails.
+
+TC10 cases and their AS-02 rows:
 
 | TC10 case | AS-02 row |
 | --- | --- |

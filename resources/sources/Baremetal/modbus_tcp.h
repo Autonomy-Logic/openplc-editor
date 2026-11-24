@@ -95,7 +95,8 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
 #if defined(OPLC_NET_ENABLED) && defined(MBTCP_WIFI) && (defined(BOARD_ESP32) || defined(BOARD_ESP8266))
 #define MBTCP_WIFI_SUPERVISED 1
 
-/** Keep the Wi-Fi station joined: ask the driver to reconnect once the station has not been connected for 10 s. */
+/** Keep the Wi-Fi station joined: ask the driver to reconnect only after 60 s with no station event while the
+ *  station is neither connected nor associating (wifi_supervision.h). Never waits. */
 void mbconfig_wifi_supervise(void);
 #endif
 

@@ -8,7 +8,6 @@ modbus_tcp.cpp - Modbus TCP transport (Ethernet / WiFi / ESP ETH)
 
 #include "modbus_tcp.h"
 #include "modbus_pdu.h"   // process_mbpacket
-#include "modbus_master_util.h"
 
 // The listen port travels with the project's Modbus server. A firmware built
 // before it did -- or by a toolchain that does not emit it -- keeps the IANA
@@ -39,6 +38,33 @@ modbus_tcp.cpp - Modbus TCP transport (Ethernet / WiFi / ESP ETH)
     uint8_t mb_mbap[MBAP_SIZE];
 #if defined(BOARD_ESP8266) || defined(BOARD_ESP32) || defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
     WiFiClient mb_serverClients[MAX_SRV_CLIENTS];
+#endif
+#endif
+
+#ifdef MBTCP_WIFI_SUPERVISED
+#include "wifi_supervision.h"
+
+/** millis() of the last station event the Wi-Fi driver posted. */
+static volatile uint32_t g_wifi_last_event_ms = 0;
+
+#ifdef BOARD_ESP32
+/** Station event callback of the ESP32 core: records the event time. */
+static void wifi_station_event(arduino_event_id_t)
+{
+    g_wifi_last_event_ms = (uint32_t)millis();
+}
+#else
+/** Station event handler of the ESP8266 core: records the event time. */
+template <typename Event>
+static void wifi_station_event(const Event &)
+{
+    g_wifi_last_event_ms = (uint32_t)millis();
+}
+
+/** The ESP8266 station handlers, kept alive for as long as the firmware runs. */
+static WiFiEventHandler g_wifi_on_connected;
+static WiFiEventHandler g_wifi_on_disconnected;
+static WiFiEventHandler g_wifi_on_got_ip;
 #endif
 #endif
 
@@ -111,6 +137,17 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
                     WiFi.config(IPAddress(ip), IPAddress(dns), IPAddress(gateway), IPAddress(subnet));
             }
         #endif
+        #if defined(MBTCP_WIFI_SUPERVISED) && defined(BOARD_ESP32)
+            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_START);
+            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_CONNECTED);
+            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+            WiFi.onEvent(wifi_station_event, ARDUINO_EVENT_WIFI_STA_LOST_IP);
+        #elif defined(MBTCP_WIFI_SUPERVISED)
+            g_wifi_on_connected = WiFi.onStationModeConnected(wifi_station_event<WiFiEventStationModeConnected>);
+            g_wifi_on_disconnected = WiFi.onStationModeDisconnected(wifi_station_event<WiFiEventStationModeDisconnected>);
+            g_wifi_on_got_ip = WiFi.onStationModeGotIP(wifi_station_event<WiFiEventStationModeGotIP>);
+        #endif
         WiFi.begin(MBTCP_SSID, MBTCP_PWD);
         #if defined(BOARD_ESP32)
             WiFi.setSleep(false);
@@ -129,28 +166,37 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
 #endif  // OPLC_NET_ENABLED
 
 #ifdef MBTCP_WIFI_SUPERVISED
-/** How long the station may stay disconnected before the supervision asks the driver to reconnect, in ms. */
-static const uint32_t WIFI_RECONNECT_AFTER_MS = 10000;
-
-/** millis() of the later of: the station last seen connected, the first supervision call, the last reconnect request. */
-static uint32_t g_wifi_window_start = 0;
+/** millis() of the later of the first supervision call, the last station event and the last reconnect request. */
+static uint32_t g_wifi_quiet_since_ms = 0;
 
 /** Whether mbconfig_wifi_supervise() has run before. */
 static bool g_wifi_supervising = false;
 
+/** The later of two millis() stamps, judged by their age at `now`, so a stamp older than 24.8 days compares right. */
+static uint32_t wifi_later_stamp(uint32_t now, uint32_t a, uint32_t b)
+{
+    return (uint32_t)(now - a) <= (uint32_t)(now - b) ? a : b;
+}
+
 void mbconfig_wifi_supervise(void)
 {
     const uint32_t now = (uint32_t)millis();
-    if (WiFi.status() == WL_CONNECTED || !g_wifi_supervising)
+    if (!g_wifi_supervising)
     {
-        g_wifi_window_start = now;
+        g_wifi_quiet_since_ms = now;
         g_wifi_supervising = true;
-        return;
     }
-    if (reached(now, g_wifi_window_start + WIFI_RECONNECT_AFTER_MS))
+    g_wifi_quiet_since_ms = wifi_later_stamp(now, g_wifi_last_event_ms, g_wifi_quiet_since_ms);
+    const bool has_address = WiFi.status() == WL_CONNECTED;
+#ifdef BOARD_ESP32
+    const bool joining = WiFi.STA.connected();
+#else
+    const bool joining = wifi_station_get_connect_status() == STATION_CONNECTING;
+#endif
+    if (wifi_reconnect_due(has_address, joining, now, g_wifi_quiet_since_ms))
     {
         WiFi.reconnect();
-        g_wifi_window_start = now;
+        g_wifi_quiet_since_ms = now;
     }
 }
 #endif
