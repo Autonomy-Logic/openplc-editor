@@ -23,20 +23,27 @@
   `OPCUA_DEBUG_LOG 1` (an `opcua_config.h` override), `NinaServer` declares `available()` and every member
   `opcua_log.cpp` calls on the log server, and `NinaClient` declares `port()` and every member `opcua_log.cpp`
   and the accept log of `baremetal_net.cpp` call on a client; with `OPCUA_DEBUG_LOG 0` the log unit is empty.
-  On ESP32 and ESP8266 Wi-Fi, `mbconfig_wifi_supervise()` makes one `WiFi.status()` query, passes `wifi_reconnect_due()`
-  `has_address` from `WL_CONNECTED` and `joining` from `STA.connected()` (ESP32) or `STATION_CONNECTING` (ESP8266),
-  calls `reconnect()` only in the branch that rule guards, and never waits, begins again or prints;
+  On ESP32 and ESP8266 Wi-Fi, `mbconfig_wifi_supervise()` makes one `WiFi.status()` query and, after its first-call
+  block, reads the status, the joining state, `millis()` and `g_wifi_last_event_ms` in that order; it passes
+  `wifi_supervise_step()` `has_address` from `WL_CONNECTED`, `joining` from `STA.connected()` and `WL_IDLE_STATUS`
+  (ESP32) or `STATION_CONNECTING` (ESP8266), `now` from `millis()`, the event stamp and `&g_wifi_quiet_since_ms`,
+  touches the window otherwise only in the first-call block, calls `reconnect()` only in the branch that step guards,
+  and never waits, begins again or prints; `modbus_tcp.cpp` no longer names `wifi_later_stamp`;
   `mbconfig_ethernet_iface()` registers every `WiFi.onEvent()` (ESP32, the five station events) or the three
   `onStationMode*` handlers, kept in file-level `WiFiEventHandler`s (ESP8266), before `WiFi.begin()`;
   `WIFI_RECONNECT_AFTER_MS` is gone; `loop()` calls the supervision once, first, and only on those two boards.
   Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
-- `wifi-supervision-rule.test.ts`: the Wi-Fi supervision rule `wifi_reconnect_due()` of `wifi_supervision.h`. As text,
-  everywhere: the header has the SPDX line, includes only `<stdint.h>` and `"modbus_master_util.h"` and names no
-  `WiFi`, `WL_`, `millis` or `Arduino`. On the host: it copies that header and `modbus_master_util.h` unchanged, builds
-  a driver with `g++ -std=gnu++11 -Wall` and checks the cases (never due with an address or while joining, due at
-  exactly 60 000 ms of quiet, across the `millis()` wrap) and four timelines on a 10 ms step: a 27 s join, a 5 minute
-  DHCP wait and a driver retrying every 5 s never ask; a lost station with a silent driver asks at 60 s, then not again
-  for 60 s. The host part is skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
+- `wifi-supervision-rule.test.ts`: the Wi-Fi supervision rules `wifi_reconnect_due()`, `wifi_quiet_start()` and
+  `wifi_supervise_step()` of `wifi_supervision.h`. As text, everywhere: the header has the SPDX line, includes only
+  `<stdint.h>` and `"modbus_master_util.h"` and names no `WiFi`, `WL_`, `millis` or `Arduino`. On the host: it copies
+  that header and `modbus_master_util.h` unchanged, builds a driver with `g++ -std=gnu++11 -Wall` and checks
+  `wifi_reconnect_due()` (never due with an address or while joining, due at exactly 60 000 ms of quiet, across the
+  `millis()` wrap); `wifi_quiet_start()` (the newer stamp by age, across the wrap, a stamp up to
+  `WIFI_STAMP_AHEAD_MAX_MS` ahead of now as the newest, one further ahead or older than 24.8 days as old, the further
+  of two stamps ahead); and `wifi_supervise_step()` on five timelines on a 10 ms step: a 27 s join, a 5 minute DHCP
+  wait and a driver retrying every 5 s never ask; a lost station with a silent driver asks at 60 s, then not again for
+  60 s; a disconnect stamp read one tick ahead of the pass asks nothing for 60 s; and one step with the event stamp at
+  now is not due. The host part is skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 - `firmware-master-tcp-link.test.ts`: the TCP master's network link gate and Reconnect timing on the host. It copies
   the real master sources unchanged next to stand-ins for the network seam (a scripted `bm_net::Connection` and
   `bm_net::link_up()`), the clock, the PLC state, the image and the PDU lengths, builds a driver with

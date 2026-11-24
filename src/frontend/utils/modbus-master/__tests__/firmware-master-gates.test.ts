@@ -746,11 +746,36 @@ const ESP8266_STATION_HANDLERS = ['onStationModeConnected', 'onStationModeDiscon
 
 /** What the `joining` argument of the rule reads on each supervised board: the association state of the station. */
 const JOINING_READS: Array<[string, string[], RegExp]> = [
-  ['ESP32 Wi-Fi', ESP32_WIFI_NET, /\bSTA\s*\.\s*connected\s*\(/],
-  ['ESP8266 Wi-Fi', ESP8266_WIFI_NET, /\bSTATION_CONNECTING\b/],
+  ['ESP32 Wi-Fi, STA.connected()', ESP32_WIFI_NET, /\bSTA\s*\.\s*connected\s*\(/],
+  ['ESP32 Wi-Fi, WL_IDLE_STATUS', ESP32_WIFI_NET, /\bWL_IDLE_STATUS\b/],
+  ['ESP8266 Wi-Fi, STATION_CONNECTING', ESP8266_WIFI_NET, /\bSTATION_CONNECTING\b/],
 ]
 
-describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 reconnects only through wifi_reconnect_due() (CR12-1)', () => {
+/** The reads of one supervision pass on each supervised board, in the order the pass must make them. */
+const PASS_READS: Array<[string, string[], Array<[string, RegExp]>]> = [
+  [
+    'ESP32 Wi-Fi',
+    ESP32_WIFI_NET,
+    [
+      ['status(', /\bstatus\s*\(/],
+      ['connected(', /\bconnected\s*\(/],
+      ['millis(', /\bmillis\s*\(/],
+      ['g_wifi_last_event_ms', /\bg_wifi_last_event_ms\b/],
+    ],
+  ],
+  [
+    'ESP8266 Wi-Fi',
+    ESP8266_WIFI_NET,
+    [
+      ['status(', /\bstatus\s*\(/],
+      ['STATION_CONNECTING', /\bSTATION_CONNECTING\b/],
+      ['millis(', /\bmillis\s*\(/],
+      ['g_wifi_last_event_ms', /\bg_wifi_last_event_ms\b/],
+    ],
+  ],
+]
+
+describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 reconnects only through wifi_supervise_step()', () => {
   const supervise = (defines: string[]): string => {
     const body = definedBody(tcpUnit(defines), 'mbconfig_wifi_supervise')
     if (body === null) throw new Error(`mbconfig_wifi_supervise() is not defined for ${defines.join(', ')}`)
@@ -763,13 +788,27 @@ describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 reconnects only through w
     return body
   }
 
-  /** What each argument of the rule's call in mbconfig_wifi_supervise() reads, in the order of the signature. */
+  /** The arguments of the step's call in mbconfig_wifi_supervise(), as written, in the order of the signature. */
+  const stepArguments = (defines: string[]): string[] => {
+    const args = argumentsOf(supervise(defines), 'wifi_supervise_step')
+    if (args === null) throw new Error(`no wifi_supervise_step() call in mbconfig_wifi_supervise() for ${defines}`)
+    return args
+  }
+
+  /** What each argument of the step's call in mbconfig_wifi_supervise() reads, in the order of the signature. */
   const ruleArguments = (defines: string[]): string[] => {
     const unit = functionsOf(tcpUnit(defines))
     const body = supervise(defines)
-    const args = argumentsOf(body, 'wifi_reconnect_due')
-    if (args === null) throw new Error(`no wifi_reconnect_due() call in mbconfig_wifi_supervise() for ${defines}`)
-    return args.map((arg) => readsOf(arg, body, unit))
+    return stepArguments(defines).map((arg) => readsOf(arg, body, unit))
+  }
+
+  /** The body of mbconfig_wifi_supervise() without its first-call block, the `if` that reads `g_wifi_supervising`. */
+  const passBody = (defines: string[]): string => {
+    const body = supervise(defines)
+    const firstCallBlock = ifBranches(body).find((branch) => /\bg_wifi_supervising\b/.test(branch.condition))
+    if (firstCallBlock === undefined) throw new Error(`no first-call block in the supervision for ${defines}`)
+    const ifStart = body.lastIndexOf('if', body.lastIndexOf(firstCallBlock.condition, firstCallBlock.start))
+    return `${body.slice(0, ifStart)} ${body.slice(firstCallBlock.end)}`
   }
 
   it.each(SUPERVISED)('%s: mbconfig_wifi_supervise() makes one WiFi.status() query', (_family, defines) => {
@@ -777,7 +816,7 @@ describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 reconnects only through w
   })
 
   it.each(SUPERVISED)(
-    '%s: mbconfig_wifi_supervise() calls wifi_reconnect_due() with has_address read from WL_CONNECTED',
+    '%s: mbconfig_wifi_supervise() calls wifi_supervise_step() with has_address read from WL_CONNECTED',
     (_family, defines) => {
       expect(ruleArguments(defines)[0] ?? '').toMatch(/\bWL_CONNECTED\b/)
     },
@@ -791,16 +830,16 @@ describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 reconnects only through w
   )
 
   it.each(SUPERVISED)(
-    '%s: mbconfig_wifi_supervise() calls reconnect() only in the branch wifi_reconnect_due() guards',
+    '%s: mbconfig_wifi_supervise() calls reconnect() only in the branch wifi_supervise_step() guards',
     (_family, defines) => {
       const body = supervise(defines)
       const unit = functionsOf(tcpUnit(defines))
       const guarded = ifBranches(body).filter((branch) => {
         const reads = readsOf(branch.condition, body, unit)
         return (
-          /\bwifi_reconnect_due\s*\(/.test(reads) &&
+          /\bwifi_supervise_step\s*\(/.test(reads) &&
           !/^\s*!/.test(branch.condition) &&
-          !/!\s*[(\s]*wifi_reconnect_due\b/.test(reads)
+          !/!\s*[(\s]*wifi_supervise_step\b/.test(reads)
         )
       })
       const reconnects = callsOf(body, 'reconnect')
@@ -810,6 +849,47 @@ describeOnHost('Wi-Fi supervision on ESP32 and ESP8266 reconnects only through w
       }).toEqual({ reconnects: true, unguarded: [] })
     },
   )
+
+  it.each(PASS_READS)(
+    '%s: mbconfig_wifi_supervise() reads, after its first-call block, the status, the joining state, millis() and the event stamp in that order',
+    (_family, defines, reads) => {
+      const body = passBody(defines)
+      const firsts = reads.map(([name, pattern]) => [name, body.search(pattern)] as const)
+      expect({
+        missing: firsts.filter(([, at]) => at < 0).map(([name]) => name),
+        order: [...firsts].sort((a, b) => a[1] - b[1]).map(([name]) => name),
+      }).toEqual({ missing: [], order: reads.map(([name]) => name) })
+    },
+  )
+
+  it.each(SUPERVISED)(
+    '%s: mbconfig_wifi_supervise() passes wifi_supervise_step() now from millis(), the event stamp and &g_wifi_quiet_since_ms',
+    (_family, defines) => {
+      const args = stepArguments(defines)
+      const reads = ruleArguments(defines)
+      expect({
+        count: args.length,
+        now: /\bmillis\s*\(/.test(reads[2] ?? ''),
+        lastEvent: /\bg_wifi_last_event_ms\b/.test(reads[3] ?? ''),
+        window: (args[4] ?? '').replace(/\s+/g, ''),
+      }).toEqual({ count: 5, now: true, lastEvent: true, window: '&g_wifi_quiet_since_ms' })
+    },
+  )
+
+  it.each(SUPERVISED)(
+    '%s: mbconfig_wifi_supervise() touches the quiet window after its first-call block only through wifi_supervise_step()',
+    (_family, defines) => {
+      const uses = [...passBody(defines).matchAll(/(&\s*)?\bg_wifi_quiet_since_ms\b/g)].map((match) =>
+        match[0].replace(/\s+/g, ''),
+      )
+      expect(uses).toEqual(['&g_wifi_quiet_since_ms'])
+    },
+  )
+
+  it('modbus_tcp.cpp no longer names wifi_later_stamp', () => {
+    const lines = readFileSync(join(BAREMETAL_DIR, 'modbus_tcp.cpp'), 'utf-8').split('\n')
+    expect(lines.filter((line) => /\bwifi_later_stamp\b/.test(line))).toEqual([])
+  })
 
   it('removes the 10 s window WIFI_RECONNECT_AFTER_MS from modbus_tcp.cpp and modbus_tcp.h', () => {
     const naming = ['modbus_tcp.cpp', 'modbus_tcp.h'].filter((name) =>
