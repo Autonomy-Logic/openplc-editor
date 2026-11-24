@@ -240,3 +240,56 @@ describe('P07-4: the master helpers live in one internal header', () => {
     expect(includesOf(readBaremetal(name))).toContain(`"${masterHelperHeader()}"`)
   })
 })
+
+/** Every name of the Wi-Fi supervision, its header, its rules, its constants, its state and its callbacks. */
+const SUPERVISION_NAMES = [
+  'wifi_supervision',
+  'mbconfig_wifi_supervise',
+  'MBTCP_WIFI_SUPERVISED',
+  'wifi_reconnect_due',
+  'wifi_quiet_start',
+  'wifi_supervise_step',
+  'wifi_later_stamp',
+  'WIFI_RECONNECT_QUIET_MS',
+  'WIFI_STAMP_AHEAD_MAX_MS',
+  'WIFI_RECONNECT_AFTER_MS',
+  'g_wifi_last_event_ms',
+  'g_wifi_quiet_since_ms',
+  'g_wifi_supervising',
+  'wifi_station_event',
+]
+
+/** The Wi-Fi reconnect and station event calls the core makes on its own. */
+const SUPERVISION_CALLS: Array<[string, RegExp]> = [
+  ['reconnect()', /\breconnect\s*\(/],
+  ['onEvent()', /\bonEvent\s*\(/],
+  ['onStationMode*()', /\bonStationMode\w*\s*\(/],
+  ['WiFiEventHandler', /\bWiFiEventHandler\b/],
+]
+
+describe('no Wi-Fi supervision in the firmware (CR14-1, CR14-2)', () => {
+  it('ships no wifi_supervision.h', () => {
+    expect(existsSync(join(BAREMETAL_DIR, 'wifi_supervision.h'))).toBe(false)
+  })
+
+  it.each(readdirSync(BAREMETAL_DIR))('Baremetal/%s names nothing of the supervision', (name) => {
+    const text = readBaremetal(name)
+    expect(SUPERVISION_NAMES.filter((identifier) => new RegExp(`\\b${identifier}\\b`).test(text))).toEqual([])
+  })
+
+  it.each(SUPERVISION_CALLS)('modbus_tcp.cpp names no %s', (_name, pattern) => {
+    expect(codeOf(readBaremetal('modbus_tcp.cpp')).match(new RegExp(pattern.source, 'g')) ?? []).toEqual([])
+  })
+
+  it('modbus_tcp.cpp keeps setSleep(false) after WiFi.begin() and before the join wait (MT-6)', () => {
+    const code = codeOf(readBaremetal('modbus_tcp.cpp'))
+    const begin = code.search(/\bWiFi\s*\.\s*begin\s*\(/)
+    const sleepOff = code.search(/\bsetSleep\s*\(\s*false\s*\)/)
+    const joinWait = code.search(/\bwhile\s*\(\s*WiFi\s*\.\s*status\s*\(\s*\)\s*!=\s*WL_CONNECTED\s*\)/)
+    expect({
+      begin: begin >= 0,
+      afterBegin: sleepOff > begin,
+      beforeJoinWait: sleepOff >= 0 && sleepOff < joinWait,
+    }).toEqual({ begin: true, afterBegin: true, beforeJoinWait: true })
+  })
+})
