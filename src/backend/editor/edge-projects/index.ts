@@ -42,10 +42,10 @@ const OverflowSchema = envelopeOf(z.object({ projectIds: z.array(z.unknown()).nu
 /** Fields stay `unknown`: the narrowing below decides whether a row is usable at all. */
 const ApiProjectRowSchema = z
   .object({
-    id: z.unknown(),
-    name: z.unknown(),
-    language: z.unknown(),
-    updatedAt: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown().optional(),
+    language: z.unknown().optional(),
+    updatedAt: z.unknown().optional(),
   })
   // A row that isn't even an object becomes an empty one rather than failing the whole list.
   .catch({ id: undefined, name: undefined, language: undefined, updatedAt: undefined })

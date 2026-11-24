@@ -32,7 +32,7 @@ export interface ApiProjectFiles {
 /** An envelope as it may arrive: the API omits every container the project has no files for. */
 export type IncomingApiProjectFiles = Partial<ApiProjectFiles>
 
-const FileMapSchema = z.record(z.string())
+const FileMapSchema = z.record(z.string(), z.string())
 
 // `devices` mixes flat file strings with nested `remote`/`servers` maps; a plain string record rejects it.
 const DevicesSchema = z
@@ -47,13 +47,13 @@ export const ApiProjectFilesSchema = z.object({
   'library.json': z.string().optional(),
   'plcopen-pending-import.xml': z.string().optional(),
   devices: DevicesSchema.optional(),
-  pous: z.record(FileMapSchema).optional(),
+  pous: z.record(z.string(), FileMapSchema).optional(),
   datatypes: FileMapSchema.optional(),
   hmi: HmiSchema.optional(),
   servers: FileMapSchema.optional(),
   build: FileMapSchema.optional(),
   // A field renamed on the interface without being renamed here fails on this line.
-}) satisfies z.ZodType<IncomingApiProjectFiles, z.ZodTypeDef, unknown>
+}) satisfies z.ZodType<IncomingApiProjectFiles, unknown>
 
 /** `undefined` for both a missing file and an unknown path. */
 export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string): string | undefined {

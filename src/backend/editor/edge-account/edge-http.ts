@@ -253,7 +253,7 @@ export function parseJsonBody(body: string): unknown {
   }
 }
 
-export function parseJsonBodyAs<Output>(body: string, schema: z.ZodType<Output, z.ZodTypeDef, unknown>): Output | null {
+export function parseJsonBodyAs<Output>(body: string, schema: z.ZodType<Output, unknown>): Output | null {
   // Parameterised on the output type, not the schema: `z.ZodTypeAny` makes `safeParse`
   // return `any`.
   const parsed = schema.safeParse(parseJsonBody(body))

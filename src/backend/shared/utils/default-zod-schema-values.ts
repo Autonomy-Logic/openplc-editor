@@ -25,7 +25,7 @@ export const getDefaultSchemaValues = (schema: ZodTypeAny): unknown => {
     if (innerType instanceof ZodObject) {
       return getDefaultSchemaValues(innerType)
     }
-    return schema._def.defaultValue()
+    return schema._def.defaultValue
   }
   if (schema instanceof ZodObject) {
     const shape = schema.shape
@@ -36,12 +36,12 @@ export const getDefaultSchemaValues = (schema: ZodTypeAny): unknown => {
   if (schema instanceof ZodNumber) return 0
   if (schema instanceof ZodBoolean) return false
   if (schema instanceof ZodEnum) return schema.options[0]
-  if (schema instanceof ZodLiteral) return schema._def.value
+  if (schema instanceof ZodLiteral) return schema.value
   if (schema instanceof ZodRecord) return {}
   if (schema instanceof ZodNullable) return null
   if (schema instanceof ZodOptional) return getDefaultSchemaValues(schema._def.innerType as ZodTypeAny)
   if (schema instanceof ZodUnion) return getDefaultSchemaValues(schema._def.options[0] as ZodTypeAny)
   if (schema instanceof ZodDiscriminatedUnion) return getDefaultSchemaValues(schema._def.options[0] as ZodTypeAny)
-  if (schema instanceof ZodTuple) return (schema.items as ZodTypeAny[]).map(getDefaultSchemaValues)
+  if (schema instanceof ZodTuple) return (schema._def.items as ZodTypeAny[]).map(getDefaultSchemaValues)
   return null
 }

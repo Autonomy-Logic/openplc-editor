@@ -52,7 +52,7 @@ const AiEnvelopeSchema = z.object({ ok: z.boolean() })
 // thrown, so one bad frame doesn't cost the whole answer.
 const AiSseEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('content_block_delta'), delta: z.string() }),
-  z.object({ type: z.literal('tool_use'), id: z.string(), name: z.string(), input: z.unknown() }),
+  z.object({ type: z.literal('tool_use'), id: z.string(), name: z.string(), input: z.unknown().optional() }),
   z.object({ type: z.literal('message_stop'), stopReason: z.string().optional() }),
   z.object({ type: z.literal('error'), error: z.string() }),
   z.object({ type: z.literal('conversation_started'), conversationId: z.string(), conversationTitle: z.string() }),
@@ -364,7 +364,7 @@ const StoredConversationSchema = z.object({
         id: z.string(),
         role: z.enum(['user', 'assistant']),
         // Opaque on the way through, as the port declares it.
-        content: z.unknown(),
+        content: z.unknown().optional(),
         createdAt: z.string(),
         rating: z.enum(['up', 'down']).nullish(),
       }),
