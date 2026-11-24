@@ -7,7 +7,7 @@ import {
   OnChangeFn,
   useReactTable,
 } from '@tanstack/react-table'
-import { useEffect, useRef } from 'react'
+import { type MouseEvent, type ReactNode, useEffect, useRef } from 'react'
 
 import type { ProjectResponse } from '../../../store/slices/project'
 import { cn } from '../../../utils/cn'
@@ -24,6 +24,11 @@ type GenericTableProps<T> = {
   filterValue?: string
   columnFilters?: ColumnFiltersState
   setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
+  /** A row drawn before the data rows, given the visible column ids. */
+  leadingRow?: (columnIds: string[]) => ReactNode
+  /** A row drawn after the data rows, given the number of visible columns. */
+  trailingRow?: (columnCount: number) => ReactNode
+  onRowContextMenu?: (rowIndex: number, event: MouseEvent<HTMLTableRowElement>) => void
 }
 
 function GenericTable<T>({
@@ -36,6 +41,9 @@ function GenericTable<T>({
   filterValue,
   columnFilters,
   setColumnFilters,
+  leadingRow,
+  trailingRow,
+  onRowContextMenu,
 }: GenericTableProps<T>) {
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
@@ -141,12 +149,14 @@ function GenericTable<T>({
         ))}
       </TableHeader>
       <TableBody ref={tableBodyRef}>
+        {leadingRow?.(table.getVisibleLeafColumns().map((column) => column.id))}
         {table.getRowModel().rows.map((row) => (
           <TableRow
             id={row.id}
             key={row.id}
             className='h-8 cursor-pointer'
             onClick={(e) => handleRowClick(e.currentTarget)}
+            onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(parseInt(row.id), e) : undefined}
             selected={selectedRow === parseInt(row.id)}
             ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
           >
@@ -169,6 +179,7 @@ function GenericTable<T>({
             ))}
           </TableRow>
         ))}
+        {trailingRow?.(table.getVisibleLeafColumns().length)}
       </TableBody>
     </Table>
   )

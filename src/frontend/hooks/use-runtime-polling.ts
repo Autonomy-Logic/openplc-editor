@@ -151,7 +151,7 @@ export const useRuntimePolling = () => {
         consecutiveFailuresRef.current = 0
         const rawStatus =
           typeof statusResult.status === 'string'
-            ? statusResult.status.replace('STATUS:', '').replace('\n', '').trim()
+            ? statusResult.status.replace('STATUS:', '').replace(/\n/g, '').trim()
             : statusResult.status
         const validStatuses: PlcStatus[] = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'TRANSITIONING', 'UNKNOWN']
         const plcStatus: PlcStatus = validStatuses.includes(rawStatus as PlcStatus)

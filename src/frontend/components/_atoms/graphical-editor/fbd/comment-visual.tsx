@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 
 import { cn } from '../../../../utils/cn'
+import { FBD_MONO_CLASS } from './utils/block-style'
 import { MINIMUM_ELEMENT_HEIGHT, MINIMUM_ELEMENT_WIDTH } from './utils/constants'
 
 export type CommentVisualProps = {
@@ -25,7 +26,7 @@ export const CommentVisual = ({
     <div
       style={{ width, height }}
       className={cn(
-        'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+        'relative flex items-center justify-center rounded-[2px] border border-neutral-500 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
         'hover:border-transparent hover:ring-2 hover:ring-brand',
         {
           'border-transparent ring-2 ring-brand': selected,
@@ -37,7 +38,7 @@ export const CommentVisual = ({
         {contentSlot !== undefined ? (
           contentSlot
         ) : (
-          <span className='whitespace-pre-wrap text-center text-xs leading-3 opacity-60'>
+          <span className={cn('whitespace-pre-wrap text-center text-xs leading-3 opacity-60', FBD_MONO_CLASS)}>
             {content || 'Add some text...'}
           </span>
         )}

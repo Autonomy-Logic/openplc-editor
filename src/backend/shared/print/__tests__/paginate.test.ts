@@ -1,4 +1,5 @@
 import type { RungLadderState } from '@root/middleware/shared/ports/types'
+import { EMPTY_LABEL_SOURCE } from '@root/middleware/shared/utils/ladder-layout/labels'
 import type { Node } from '@xyflow/react'
 
 import { paginate } from '../paginate'
@@ -31,7 +32,7 @@ function makeRung(overrides: Partial<RungLadderState> = {}): RungLadderState {
 }
 
 function ldPou(name: string): PrintPou {
-  return { name, kind: 'ld', rungs: [makeRung()], variables: [] }
+  return { name, kind: 'ld', rungs: [makeRung()], variables: [], labels: EMPTY_LABEL_SOURCE }
 }
 
 function stPou(name: string, lineCount = 3): PrintPou {

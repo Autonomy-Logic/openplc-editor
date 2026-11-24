@@ -178,7 +178,13 @@ describe('collectSelectedPous', () => {
 
     const [result] = await collectSelectedPous(store, ['MyLadder'])
 
-    expect(result).toEqual({ name: 'MyLadder', kind: 'ld', rungs, variables: [] })
+    expect(result).toEqual({
+      name: 'MyLadder',
+      kind: 'ld',
+      rungs,
+      variables: [],
+      labels: { pouVariables: [], globalVariables: [] },
+    })
   })
 
   it('builds a "fbd" PrintPou from an fbd body', async () => {

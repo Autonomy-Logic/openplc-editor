@@ -1,6 +1,8 @@
 import { ReactNode } from 'react'
 
 import { cn } from '../../../../utils/cn'
+import { FbdSlimFrame } from './block-visual'
+import { FBD_MONO_CLASS } from './utils/block-style'
 import {
   DEFAULT_VARIABLE_HEIGHT,
   DEFAULT_VARIABLE_WIDTH,
@@ -43,25 +45,13 @@ export const VariableVisual = ({
   return (
     <div
       title={title}
-      style={{
-        width,
-        height: VARIABLE_ELEMENT_HEIGHT,
-        ...(debuggerColor
-          ? {
-              borderColor: debuggerColor,
-              boxShadow: `0 0 0 2px ${debuggerColor}33 inset`,
-            }
-          : {}),
-      }}
+      style={{ width, height: VARIABLE_ELEMENT_HEIGHT }}
       className={cn(
-        'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
-        'hover:border-transparent hover:ring-2 hover:ring-brand',
-        {
-          'border-transparent ring-2 ring-brand': selected && !debuggerColor,
-        },
+        'group relative flex items-center justify-center p-1 text-neutral-1000 dark:text-neutral-50',
         className,
       )}
     >
+      <FbdSlimFrame selected={selected && !debuggerColor} borderColour={debuggerColor} />
       <div
         className='relative flex items-center'
         style={{ width: width - (VARIABLE_ELEMENT_SIZE - DEFAULT_VARIABLE_WIDTH), height: DEFAULT_VARIABLE_HEIGHT }}
@@ -70,7 +60,7 @@ export const VariableVisual = ({
           nameSlot
         ) : (
           <span
-            className={cn('w-full truncate text-center text-xs leading-3', {
+            className={cn('relative w-full truncate text-center text-xs leading-3', FBD_MONO_CLASS, {
               'text-yellow-500': !isAVariable,
               'text-red-500': inputError,
               'font-bold': isForced,

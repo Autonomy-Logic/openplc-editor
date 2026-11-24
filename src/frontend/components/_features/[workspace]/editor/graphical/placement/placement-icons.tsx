@@ -21,6 +21,16 @@ export function renderPlacementIcon(language: PlacementLanguage, id: PlacementEl
         return <CoilIcon size='md' />
       case 'block':
         return <LadderBlockIcon size='md' />
+      case 'contact-negated':
+        return <ContactIcon size='md' modifier='negated' />
+      case 'contact-rising':
+        return <ContactIcon size='md' modifier='rising' />
+      case 'contact-falling':
+        return <ContactIcon size='md' modifier='falling' />
+      case 'coil-set':
+        return <CoilIcon size='md' modifier='set' />
+      case 'coil-reset':
+        return <CoilIcon size='md' modifier='reset' />
       default:
         return null
     }

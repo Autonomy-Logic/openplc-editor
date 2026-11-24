@@ -9,7 +9,8 @@ const isPlaceholder = (node: Node): boolean => node.type === 'placeholder' || no
 
 /**
  * Nearest ladder placeholder whose centre lies within `radius` of `flowPoint`
- * (flow coordinates), or `undefined` when none is close enough.
+ * (flow coordinates), or `undefined` when none is close enough. `nodes` must be
+ * at the positions they are drawn at, the space `flowPoint` is read in.
  */
 export function findPlaceholderWithinRadius(
   nodes: readonly Node[],

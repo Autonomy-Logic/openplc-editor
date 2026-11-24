@@ -73,7 +73,16 @@ describe('GraphicalPlacementProvider', () => {
     setup()
     openMenuAt()
     expect(screen.getByTestId('radial-menu')).toBeTruthy()
-    expect(menuItemIds()).toEqual(['contact', 'coil', 'block'])
+    expect(menuItemIds()).toEqual([
+      'contact',
+      'contact-negated',
+      'contact-rising',
+      'contact-falling',
+      'coil',
+      'coil-set',
+      'coil-reset',
+      'block',
+    ])
   })
 
   it('lists the FBD elements in the FBD editor', () => {
@@ -112,7 +121,7 @@ describe('GraphicalPlacementProvider', () => {
   it('arms the selected element and shows it next to the cursor', () => {
     setup()
     openMenuAt(400, 300)
-    const anchor = getSliceAnchor(1, 3, 78)
+    const anchor = getSliceAnchor(4, 8, 78)
     fireEvent.click(screen.getByTestId('radial-menu'), { clientX: 400 + anchor.x, clientY: 300 + anchor.y })
     expect(screen.queryByTestId('radial-menu')).toBeNull()
     expect(armed()).toBe('coil')

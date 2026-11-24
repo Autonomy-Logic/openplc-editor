@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
 
+import { pouLabelSource } from '../../../../middleware/shared/utils/ladder-layout'
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { usePouSnapshot } from '../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../store'
@@ -20,11 +21,10 @@ export const LadderToolbox = () => {
     editorActions: { updateModelVariables },
     ladderFlows,
     ladderFlowActions,
-    project: {
-      data: { pous },
-    },
+    project: { data: projectData },
     projectActions: { deleteVariable },
   } = useOpenPLCStore()
+  const { pous } = projectData
 
   const isEditingLocked = useIsEditingLocked()
   const { captureAndPush } = usePouSnapshot()
@@ -81,7 +81,11 @@ export const LadderToolbox = () => {
         return
       }
 
-      const { nodes: newNodes, edges: newEdges } = removeElements({ ...rung }, selectedNodes)
+      const { nodes: newNodes, edges: newEdges } = removeElements(
+        { ...rung },
+        selectedNodes,
+        pouLabelSource(projectData, editor.meta.name),
+      )
       remainingRungs.push({ nodes: newNodes })
       ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rung.id, nodes: newNodes })
       ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rung.id, edges: newEdges })

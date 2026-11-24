@@ -1,8 +1,10 @@
 import type { Node } from '@xyflow/react'
 
 import type { RungLadderState } from '../../../../../../store/slices/ladder'
-import { defaultCustomNodesStyles, nodesBuilder } from '../../../../../_atoms/graphical-editor/ladder/node-builders'
+import { nodesBuilder } from '../../../../../_atoms/graphical-editor/ladder/node-builders'
 import type { BuilderBasicProps } from '../../../../../_atoms/graphical-editor/ladder/utils/types'
+
+export { getDefaultNodeStyle } from '@root/middleware/shared/utils/ladder-layout'
 
 export const findNode = (
   rung: RungLadderState,
@@ -20,10 +22,6 @@ export const removeNode = (rung: RungLadderState, nodeId: string): Node[] => {
 
 export const isNodeOfType = (node: Node, nodeType: string): boolean => {
   return node.type === nodeType
-}
-
-export const getDefaultNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?: string }) => {
-  return defaultCustomNodesStyles[node?.type ?? nodeType ?? 'mockNode']
 }
 
 /** Origin placeholder inherited from the synthetic `-1` node that used to be

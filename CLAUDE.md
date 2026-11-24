@@ -61,6 +61,7 @@ npm run build:renderer   # React renderer only
 npm run build:dll        # Webpack DLL cache for faster dev rebuilds
 npm run build:relay      # Vendor-document relay.js for a VPP package (release/relay/)
 npm run package          # Build + create distributable (electron-builder)
+npm run package:test     # Test-only package with the inspect fuse on, for Playwright (never in a workflow)
 
 npm run lint             # ESLint check
 npm run lint:fix         # Auto-fix lint issues
@@ -159,6 +160,12 @@ loads only when Claude Code runs from this repository, and does not see shell ed
 more: when a change touches such a port, move its logic into the shared surface
 in the same PR pair (editor + web).
 
+**Exception: package trust (DOPE-893).** The trust anchor in `src/backend/editor/package-trust/`
+is desktop-only logic: a module generated per build (`scripts/package-trust/`) that checks every
+package decision of `PackageManagerModule` (`src/backend/editor/package-manager/`). Neither it nor
+the `PackageManagerModule` logic is moved to the shared surface, and openplc-web is not changed.
+This is a recorded exception, not a precedent: see `docs/release-hardening.md`.
+
 ## Electron e2e (Playwright)
 
 `ci-e2e-debug-lock.yml` runs the `debug-*` specs on every pull request; every other
@@ -194,6 +201,19 @@ and closes a debug session with no PLC attached. Any other build drops the branc
 - **An unsigned fixture package is removed when a project opens.** A suite that installs one
   (`e2e/fixtures/vendor-configurator/`) replaces the `packages:verify-signatures` handler with a
   no-op once the bridge has registered it, as `e2e/vendor-configurator.spec.ts` does.
+- **Packaged builds carry Electron fuses** (`electronFuses` in `electron-builder.json`): no
+  `ELECTRON_RUN_AS_NODE`, no `NODE_OPTIONS`, no `--inspect` style arguments, ASAR integrity, and the
+  app loads only from `app.asar`. `_electron.launch` needs the inspect arguments, so Playwright can
+  drive a packaged build (`E2E_PACKAGED_APP`) only when it comes from `npm run package:test`. A
+  release build (`npm run package`) is checked by spawning it (`scripts/release/packaged-checks.mjs`).
+- **`E2E_PACKAGED_APP` switches every spec that launches through `e2e/helpers/editor-session.ts`**
+  (`launchEditor` or its `editor` fixture) to that packaged executable, path resolved from the
+  repository root; unset, they run the built `release/app/dist/main/main.js`.
+- **A modified `app.asar` makes the app terminate at start**, with exit code 1 or a signal such as
+  SIGTRAP: expect either.
+- **A local macOS build with no signing identity starts only because `resetAdHocDarwinSignature`**
+  re-signs it ad hoc after the fuses are written. It has no hardened runtime; only CI's Developer ID
+  builds do. Details: `docs/release-hardening.md`.
 
 **Never wait on a dead app.** Every wait for a build, a Play, a running simulator or a Console line must also
 read what the app shows and fail at once when it reports a failure: use `e2e/helpers/app-console.ts`
@@ -392,6 +412,47 @@ There is **no URL-based router**. Navigation is tab-driven via the Zustand `tabs
 - **SFC:** @xyflow/react graph (sequential function charts)
 
 Flow state is stored per-POU in dedicated slices (`ladder`, `fbd`). Flows must be relinked to current variables after variable table changes.
+
+**LD layout engine** (`src/middleware/shared/utils/ladder-layout/`, byte-identical on openplc-web). Every stored LD
+coordinate is engine output: `layoutRung(rung, labelSource)` computes the geometry (columns sized from names and
+locations, a location line reserved on every contact and coil, block header band and pin rows) and
+`applyRungLayout` stores it, with the natural size as `defaultBounds` and `reactFlowViewport`. Editing paths call
+`relayoutRung(rung, labelSource)`, which also rebuilds the pin variable boxes. Every layout caller passes a
+`LadderLabelSource` (`pouLabelSource(project, pou)`); a caller without one passes `EMPTY_LABEL_SOURCE`. The input pin networks of a main-series
+block start at the left rail, each column sharing one width with the main series before the block. In a parallel
+group every branch spans the longest branch: a shorter branch ends in a straight branch filler to one vertical
+closing junction (before the coils in a trailing coil group). Branch fillers and junction lines are derived from the
+layout (`RungLayout.branchFillers`, `parallelEdgeRoute`) and never stored. Geometry decides the order of the
+compiled statements, so any layout change must keep the ST-order corpus green
+(`st-transpiler/__tests__/ld-relayout-corpus.test.ts`).
+
+**LD screen drawing.** The LD editor lays every rung of the POU out once (`useLadderPouCanvasValue`,
+`_molecules/graphical-editor/ladder/rung/pou-canvas.ts`), and each rung body gives its layout, the label source and
+the theme palette (`LADDER_PALETTE`) to the node atoms through `LadderRungViewProvider`
+(`_atoms/graphical-editor/ladder/rung-view.tsx`). The atoms draw the layout's labels as SVG text in JetBrains Mono,
+never as HTML; a name becomes a one-line `<input>` when clicked or when its element is placed. Every edge
+`parallelEdgeRoute` routes is drawn as the straight polyline of the `ladderRoute` edge type (`route-edge.tsx`); other
+edges stay xyflow `smoothstep`. Rendering itself writes no geometry: the panel size comes from the layout, and xyflow's
+measurements stay local; the LD editor stores the layout on any rung whose stored geometry drifted from it (a
+rename, an instance name, a changed location, a new rung: `withLaidOutGeometry`). The LD diff view lays both sides out the same way with the project's current
+variables, and marks an element whose position or size alone changed only in a rung pair that is a pure re-layout
+(`graphical-diff.ts`).
+
+**LD POU canvas.** A POU is one canvas (`ld-pou-canvas`) that scrolls sideways as one, with a 44 px left gutter.
+`presentPou(layouts, visibleWidth)` (`ladder-layout/presentation.ts`) puts one right rail for every rung 24 px from
+the editor's right edge when every rung fits, else right after the widest rung, and right-justifies each rung's
+trailing outputs against it as display-only x shifts (`dxByNode`). xyflow gets `toDisplayNodes(...)`; every position
+it reports goes through `toCanonicalPosition` before reaching rung state, copycats and placeholders shift with the node
+they stand for (`withTransientShifts`), and hit-tests compare displayed positions with the pointer. The shifts and the
+editor width are never stored.
+
+**LD print.** The PDF draws Ladder from the same engine (`backend/shared/print/ladder-painter.ts`, with the POU's
+`LadderLabelSource` carried in the `ld` `PrintPou`), in `LADDER_PALETTE.paper`: one content block per rung (comment
+lines wrapped, number, rows) so pages break only between rungs, then the End row. `ladder-print-plan.ts` picks the
+scale: 100% when the widest rung fits, else one POU scale down to 80%, then a rung wraps between top-level segments
+onto rows joined by lettered markers (A..Z, AA), its outputs on the last row; a rung with a part too wide for a row,
+or taller than the page, is scaled alone. Gutter, rails, number and comment use the POU scale, so the rails of every
+rung meet. Scale to fit keeps one scale for the widest rung, no floor, no wrap.
 
 ### Compilation Pipeline
 
@@ -767,6 +828,21 @@ repos and merge to `development`; promote `development` to `main` in both repos;
 Release"). openplc-web has no release workflow: `production-cd.yml` deploys on every push to its
 `main`, and `staging-cd.yml` on pushes to `development`.
 
+**Release mode.** A run of `release.yml` on a `v*` tag (a tag push, or a dispatch on the tag) is
+release mode: its `trust-module` job, in the GitHub Environment `release-trust` (secret
+`TRUST_SEED_SECRET`, approved by a required reviewer), generates the build's trust module, and the
+five build jobs download it and build with `OPENPLC_RELEASE_BUILD=1`. A dispatch on a branch builds with the development seed and publishes
+nothing. Every run reads the fuses of each built executable (`scripts/release/read-fuses.mjs`), scans
+the unpacked output for the trusted key (`scan-trust-literals.mjs`) and runs `packaged-checks` on the
+macOS arm64, Windows x64 and Linux x64 installers; `create-release` runs `check-upload-set.mjs` and
+uploads exactly the six installers.
+
+**Installers of a published release are replaced only through `rebuild-release.yml`** (modes
+`rebuild`, `dry-run`, `verify`, `seed-audit`), from the release's backport branch
+`feature/<KEY>-backport-v<version>`, and only after a rehearsal on a draft release
+(`v<version>-rehearsal`) passed. A backport branch never gets a `v*` tag: the tag would start
+`release.yml`. Procedure and checks: `docs/release-hardening.md`.
+
 ### Update notice (never publish `latest*.yml`):
 The editor checks the GitHub releases API once per launch and, when a newer
 version is out, shows a banner at the top of the window ("Update" and an X);
@@ -777,6 +853,8 @@ installer (`assets/installer.nsh`) that asks the user to close a running editor
 and never kills it; keep `oneClick: false`. **Never add `latest-mac.yml` / `latest-linux*.yml` / `latest.yml`
 to a release**: every editor from 4.1.0 to 4.3.2 still embeds electron-updater's
 `app-update.yml` and would install it without asking, unsigned on Windows.
+`rebuild-release.yml` keeps the same rule, and a same-version rebuild gives no update notice; while an
+installer is being replaced its name is absent for a few seconds (`docs/update-notice.md`).
 
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`

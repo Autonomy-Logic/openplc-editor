@@ -10,6 +10,7 @@ import {
   renameBlockHeader,
 } from '../../../../middleware/shared/utils/hmi/references'
 import { describeAliasRename } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
+import { migrateLadderRungs, pouLabelSource } from '../../../../middleware/shared/utils/ladder-layout'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
 import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
@@ -1111,12 +1112,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       }
 
+      const relaidPous: string[] = []
+      const relayoutWarnings: string[] = []
       pous.forEach((pou) => {
         if (pou.body.language === 'ld') {
           const bodyValue = structuredClone(pou.body.value) as LadderFlowType
           restampedCount += restampFlowBlockVariants([bodyValue], systemLibraries, userPous)
           for (const rung of bodyValue.rungs ?? []) scanLegacyInOut(rung.nodes, pou.name)
-          getState().ladderFlowActions.addLadderFlow({ ...bodyValue, name: pou.name })
+          // Every LD POU opens in the current layout and stays in it; issues are only reported.
+          const migration = migrateLadderRungs(
+            pou.name,
+            bodyValue.rungs ?? [],
+            pouLabelSource(data.projectData, pou.name),
+          )
+          relayoutWarnings.push(...migration.warnings)
+          if (migration.changed) relaidPous.push(pou.name)
+          getState().ladderFlowActions.addLadderFlow({ ...bodyValue, rungs: migration.rungs, name: pou.name })
         }
         if (pou.body.language === 'fbd') {
           const bodyValue = structuredClone(pou.body.value) as FBDFlowType
@@ -1356,6 +1367,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
       getState().fileActions.setFiles({ files })
 
+      for (const name of relaidPous) getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+      if (relaidPous.length > 0) {
+        getState().consoleActions.addLog({
+          level: 'info',
+          message: `Converted ${relaidPous.length} Ladder POU(s) to the new layout: ${relaidPous.join(', ')}.`,
+        })
+      }
+      for (const message of relayoutWarnings) getState().consoleActions.addLog({ level: 'warning', message })
+
       if (aliasRepairs.length > 0) {
         getState().fileActions.setAllToUnsaved()
       }
@@ -1435,7 +1455,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
 
       for (const flow of getState().ladderFlows) {
-        getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
+        // A POU converted to the new layout stays updated, so the next save writes it back.
+        getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: relaidPous.includes(flow.name) })
       }
       for (const flow of getState().fbdFlows) {
         getState().fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })

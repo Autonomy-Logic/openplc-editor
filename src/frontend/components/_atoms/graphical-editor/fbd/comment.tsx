@@ -6,6 +6,7 @@ import { cn } from '../../../../utils/cn'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils'
+import { FBD_MONO_CLASS } from './utils/block-style'
 import { MINIMUM_ELEMENT_HEIGHT, MINIMUM_ELEMENT_WIDTH } from './utils/constants'
 import { CommentNode, CommentProps } from './utils/types'
 
@@ -145,7 +146,7 @@ const CommentElement = (block: CommentProps) => {
           height: height ?? MINIMUM_ELEMENT_HEIGHT,
         }}
         className={cn(
-          'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+          'relative flex items-center justify-center rounded-[2px] border border-neutral-500 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
           'hover:border-transparent hover:ring-2 hover:ring-brand',
           {
             'border-transparent ring-2 ring-brand': selected,
@@ -165,9 +166,10 @@ const CommentElement = (block: CommentProps) => {
             ref={inputVariableRef}
             textAreaClassName={cn(
               'text-center placeholder:text-center text-xs leading-3',
+              FBD_MONO_CLASS,
               !commentFocused && 'opacity-60',
             )}
-            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3')}
+            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', FBD_MONO_CLASS)}
             scrollableIndicator={false}
             placeholder={'Add some text...'}
             textAreaValue={commentValue}

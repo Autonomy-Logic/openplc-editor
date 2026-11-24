@@ -34,6 +34,12 @@ hand them to `../core/path-tree.ts` for normalisation and chunk
 serialisation. Contact / coil modifiers (negated, set, reset, edge
 triggers) flow through `../core/modifiers.ts:extractModifier`.
 
+The order in which `ld.ts` emits a body's sinks (which nodes are
+sinks, the execution-order bucket, the cumulative rung Y offsets and
+the position comparator) comes from `ldSinkBuckets` in
+`src/middleware/shared/utils/ladder-layout/sink-order.ts`, which also
+exports it as `ldSinkOrder` for code outside `backend/shared`.
+
 ## Source of truth
 
 `xml2st`'s python `PLCGenerator.py` is the canonical reference for
