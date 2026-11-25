@@ -474,6 +474,29 @@ static void truncated_then_silence(uint32_t request, uint16_t tid)
     }
 }
 
+static void exception_then_truncated_silence(uint32_t request, uint16_t tid)
+{
+    if (request <= 3)
+    {
+        answer_with(tid, 101);
+    }
+    else if (request == 4)
+    {
+        uint8_t frame[9] = {(uint8_t)(tid >> 8), (uint8_t)tid, 0, 0, 0, 3, 1, 0x83, 0x02};
+        queue(10, frame, 9);
+    }
+    else if (request == 5)
+    {
+        uint8_t frame[29];
+        answer(frame, tid, 201);
+        queue(10, frame, 15);
+    }
+    else
+    {
+        answer_with(tid, 501);
+    }
+}
+
 static void late_valid_answer(uint32_t request, uint16_t tid)
 {
     if (request <= 3)
@@ -535,6 +558,7 @@ static const Scenario SCENARIOS[] = {
     {"S5", link_always, accept, truncated_then_silence, 2000},
     {"S6", link_always, accept, late_valid_answer, 2000},
     {"S7", link_always, accept, truncated_then_remainder, 3000},
+    {"S9", link_always, accept, exception_then_truncated_silence, 2000},
 };
 
 int main(int argc, char **argv)
@@ -832,6 +856,31 @@ describeHostCompile('modbus_master_tcp.cpp waits for the network link before a c
 
     it('keeps the connection: no close()', () => {
       expect(trace('off', 'S7').filter((e) => e.ev === 'close')).toEqual([])
+    })
+  })
+
+  describe('S9: a failed poll with Reconnect on keeps the connection (BR30, TC34)', () => {
+    it('an exception answer and a truncated answer then silence each fail one poll, then 501..510 arrives on the same connection: no close(), one connect', () => {
+      const run = trace('on', 'S9')
+      const sends = run.filter((e) => e.ev === 'send').map((e) => e.t)
+      const images = imagesOf(run).filter((image) => image.t > 0)
+      const zero = images.find((image) => image.first === 0)
+      const recovered = images.find((image) => image.first === 501)
+      expect({
+        closes: run.filter((e) => e.ev === 'close'),
+        startCount: startsOf(run).length,
+        values: images.map((image) => image.first),
+        recovered: images[2]?.all,
+        zeroAtException: zero !== undefined && zero.t > sends[3] && zero.t <= sends[3] + 30,
+        recoveredAfterTimeout: recovered !== undefined && recovered.t >= sends[4] + 500,
+      }).toEqual({
+        closes: [],
+        startCount: 1,
+        values: [101, 0, 501],
+        recovered: range(501),
+        zeroAtException: true,
+        recoveredAfterTimeout: true,
+      })
     })
   })
 
