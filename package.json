@@ -203,6 +203,9 @@
   },
   "overrides": {
     "@babel/plugin-transform-modules-systemjs": "^7.29.4",
+    "@electron/asar": {
+      "glob": "^7.2.3"
+    },
     "@isaacs/brace-expansion": "^5.0.1",
     "@xmldom/xmldom@0": "^0.8.15",
     "app-builder-lib": "^26.15.0",
