@@ -1,0 +1,63 @@
+warnings []
+fonts {"variant":"compact","faces":[0,1]}
+units {"library":["lib_standard_widgets.cpp"],"widgets":["lib_project_widgets.cpp"],"screens":{"Overview":["pou_OVERVIEW.cpp","hmi_preview_0.cpp"],"Details":["pou_DETAILS.cpp","hmi_preview_1.cpp"]},"glue":["configuration.cpp","pou_HMIMAIN.cpp","pou_HMI_SHOW.cpp","pou_HMI_CURRENTSCREEN.cpp","pou_HMI__SCREENOPEN.cpp","pou_HMI__SCREENBODY.cpp","hmi_unit_glue.cpp","hmi_preview.cpp"],"factory":[]}
+tags 5 md5=0123456789abcdef0123456789abcdef frame_ms=50 pin='2468' relock=5
+tag 0 CONFIG0.RES0.INSTANCE0.MAIN.LEVEL arr=0 elem=3 type=14 max=0 size=4
+tag 1 CONFIG0.RES0.INSTANCE0.MAIN.RUNNING arr=0 elem=4 type=1 max=0 size=1
+tag 2 CONFIG0.RES0.INSTANCE0.MAIN.SPEED arr=0 elem=5 type=3 max=0 size=2
+tag 3 CONFIG0.RES0.INSTANCE0.MAIN.TAG arr=1 elem=0 type=16 max=12 size=13
+tag 4 CONFIG0.ALARMON arr=2 elem=0 type=1 max=0 size=1
+admin start page=0 dl=d7755e055639de28 status=0
+admin steady! page=0 dl=d7755e055639de28 status=0
+admin run_down page=0 dl=80daa48d684066a2 status=0 write CONFIG0.RES0.INSTANCE0.MAIN.RUNNING=1
+admin run_up page=0 dl=80daa48d684066a2 status=0
+admin slider_down page=0 dl=e87d0528ffdb1747 status=0 write CONFIG0.RES0.INSTANCE0.MAIN.SPEED=55
+admin slider_up page=0 dl=4f113d4d5420add7 status=0
+admin name_down page=0 dl=5f3c5a58200fbb3e status=0
+admin name_up page=0 dl=5f3c5a58200fbb3e status=0
+admin name_typed! page=0 dl=e9e4515246656b3c status=0 write CONFIG0.RES0.INSTANCE0.MAIN.TAG='PUMP STATION'
+admin setpoint_down page=0 dl=84b03f3dbb05661a status=0
+admin setpoint_up page=0 dl=84b03f3dbb05661a status=0
+admin setpoint_typed page=0 dl=e9e4515246656b3c status=0
+admin setpoint_down page=0 dl=84b03f3dbb05661a status=0
+admin setpoint_up page=0 dl=84b03f3dbb05661a status=0
+admin setpoint_typed page=0 dl=e9e4515246656b3c status=0
+admin setpoint_down page=0 dl=84b03f3dbb05661a status=0
+admin setpoint_up page=0 dl=84b03f3dbb05661a status=0
+admin setpoint_typed page=0 dl=e9e4515246656b3c status=0
+admin setpoint_down page=0 dl=84b03f3dbb05661a status=0
+admin setpoint_up page=0 dl=84b03f3dbb05661a status=0
+admin setpoint_typed page=0 dl=c3463672b5028800 status=0 write CONFIG0.RES0.INSTANCE0.MAIN.SPEED=12
+admin next_down page=0 dl=fbea66830fb1a8c0 status=0
+admin next_up page=1 dl=c3463672b5028800 status=0
+admin details! page=1 dl=21e553692bd96c07 status=0
+admin back_down page=1 dl=b1406e8bebfaf5c7 status=0
+admin back_up page=0 dl=21e553692bd96c07 status=0
+admin overview_again page=0 dl=c3463672b5028800 status=0
+operator start! page=0 dl=50bef9fe7ad812c6 status=0
+operator next_down page=0 dl=48c075930991e686 status=0
+operator next_up page=0 dl=50bef9fe7ad812c6 status=0
+operator still_overview page=0 dl=50bef9fe7ad812c6 status=0
+unknown start! page=0 dl=692f958adecd8655 status=0
+admin admin_after page=0 dl=c3463672b5028800 status=0
+admin next_again_down page=0 dl=fbea66830fb1a8c0 status=0
+admin next_again_up page=1 dl=c3463672b5028800 status=0
+operator op_on_overview page=0 dl=50bef9fe7ad812c6 status=0
+admin admin_on_details page=1 dl=21e553692bd96c07 status=0
+operator op_still_overview page=0 dl=50bef9fe7ad812c6 status=0
+hidden screen setter=-1
+admin back_again_down page=1 dl=b1406e8bebfaf5c7 status=0
+admin back_again_up page=0 dl=21e553692bd96c07 status=0
+admin admin_back page=0 dl=c3463672b5028800 status=0
+setters rc=0 refused=-1 -1 -1
+admin live_edit! page=0 dl=013f23217646ec5b status=0
+admin reads page=0 dl=013f23217646ec5b status=0
+frame read the host yes
+read level=7.25 reads=1
+unreadable level=7.25
+readable again level=9.50
+host cut 'ABCDEFGHIJKL'
+half access reads=0
+cut 'ABCDEFGHIJKL'
+short 'AB'
+unit size known

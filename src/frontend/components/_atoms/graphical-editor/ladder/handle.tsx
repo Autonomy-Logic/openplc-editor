@@ -1,4 +1,5 @@
 import { Handle, HandleProps } from '@xyflow/react'
+import type { CSSProperties } from 'react'
 
 import { cn } from '../../../../utils/cn'
 
@@ -37,6 +38,31 @@ export const CustomHandle = ({
       {...props}
     />
   )
+}
+
+/**
+ * Inline style that puts a ladder handle, as a 1 px point, on its stored relative position shifted by `dx`; the
+ * handle's own style when it has no relative position.
+ */
+export function ladderHandleStyle(
+  handle: { relPosition?: unknown; style?: CSSProperties },
+  dx = 0,
+): CSSProperties | undefined {
+  const rel: unknown = handle.relPosition
+  if (typeof rel !== 'object' || rel === null || !('x' in rel) || !('y' in rel)) return handle.style
+  if (typeof rel.x !== 'number' || typeof rel.y !== 'number') return handle.style
+  return {
+    left: rel.x + dx,
+    top: rel.y,
+    right: 'auto',
+    bottom: 'auto',
+    width: 1,
+    height: 1,
+    minWidth: 1,
+    minHeight: 1,
+    borderWidth: 0,
+    transform: 'translate(-50%, -50%)',
+  }
 }
 
 type BuildHandleProps = Omit<CustomHandleProps, 'glbPosition' | 'relPosition'> & {

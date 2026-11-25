@@ -1,3 +1,5 @@
+import type { WasmLibraryObjectKind } from './wasm-toolchain-types'
+
 /** A file tree as clang sees it: directories are nested objects, files are text or bytes. */
 export type WasmToolchainTree = { [name: string]: string | Uint8Array | WasmToolchainTree }
 
@@ -21,7 +23,7 @@ export interface WasmClangJobResult {
 }
 
 export interface WasmClangRunner {
-  /** Jobs run one at a time: always 1. */
+  /** Jobs that may run at once: 1, or more while held and the memory allows (`setHeld`). */
   readonly concurrency: number
   /**
    * Gets the toolchain's files ready through the mechanism; starts no worker. A success is kept; a failure is not, so
@@ -29,15 +31,57 @@ export interface WasmClangRunner {
    */
   prepare(): Promise<void>
   /**
-   * Runs one job on the one worker, starting it when none is alive, after a stopping worker has exited. Rejects only
-   * when the job could not run, never for a compile error.
+   * Runs one job on a worker, starting one when none is idle and the limit allows, after a stopping worker has exited.
+   * Rejects only when the job could not run, never for a compile error.
    */
   run(job: WasmClangJob): Promise<WasmClangJobResult>
   /**
-   * Ends the worker when no job is running or queued; resolves once it has exited, at once when there is none. Ends
-   * nothing while jobs remain.
+   * While held, jobs may run on more than one worker, as many as the platform's free memory allows; otherwise on one.
+   * Releasing the hold ends nothing by itself.
+   */
+  setHeld?(held: boolean): void
+  /**
+   * Forgets a load failure when no job is running or queued, so the next job tries to start a worker again; ends no
+   * worker. A held toolchain calls it where an unheld one would release.
+   */
+  retry?(): void
+  /**
+   * Ends the workers when no job is running or queued; resolves once they have exited, at once when there are none.
+   * Ends nothing while jobs remain.
    */
   release(): Promise<void>
+}
+
+/**
+ * Durable storage of compiled objects across sessions: opaque records by key, stored and returned verbatim. What a
+ * record holds and when it is still valid is decided by the shared toolchain.
+ */
+export interface WasmObjectStore {
+  readAll(): Promise<Array<[key: string, record: Uint8Array]>>
+  write(key: string, record: Uint8Array): Promise<void>
+  remove(key: string): Promise<void>
+}
+
+/**
+ * Compiled objects shipped with the application, read only from the application's own files (the installed resources
+ * on the desktop, the app's own origin on the web), never from a project or a folder users write. Each file is
+ * returned verbatim; what it holds and whether it may be used is decided by the shared toolchain.
+ */
+export interface WasmShippedObjectSource {
+  /** The bytes of one shipped file by its name, or null when there is no such file. */
+  read(name: string): Promise<Uint8Array | null>
+}
+
+/**
+ * The place next to each library archive where its compiled objects are kept, one file per library and kind of build.
+ * Each file is stored and returned verbatim; what it holds and whether it may be used is decided by the shared
+ * toolchain. A platform with no writable place for a library keeps nothing for it.
+ */
+export interface WasmLibraryObjectStore {
+  /** The file of `library` for `kind`, or null when there is none. */
+  read(library: string, kind: WasmLibraryObjectKind): Promise<Uint8Array | null>
+  /** Replaces the file of `library` for `kind`; does nothing for a library the platform keeps no files next to. */
+  write(library: string, kind: WasmLibraryObjectKind, bytes: Uint8Array): Promise<void>
 }
 
 /** A message the pool sends a clang worker: run one job. */
@@ -73,4 +117,8 @@ export interface ClangWorkerMechanism {
   spawn(): ClangWorkerHandle
   /** Deletes the toolchain's stored files, so the next load downloads them again. */
   discard?(): Promise<void>
+  /** Memory the platform can hand out now, in bytes, read from the OS; undefined when it cannot tell. */
+  availableMemoryBytes?(): number | undefined
+  /** Processors of the machine; undefined when unknown. */
+  cores?(): number | undefined
 }

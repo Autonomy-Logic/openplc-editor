@@ -1,4 +1,6 @@
 import type { EmbeddedFontSet } from '../types'
+import { JETBRAINS_MONO_REGULAR_BASE64 } from './jetbrains-mono-regular'
+import { JETBRAINS_MONO_SEMIBOLD_BASE64 } from './jetbrains-mono-semibold'
 import { NOTO_SANS_BOLD_BASE64 } from './noto-sans-bold'
 import { NOTO_SANS_MONO_BOLD_BASE64 } from './noto-sans-mono-bold'
 import { NOTO_SANS_MONO_REGULAR_BASE64 } from './noto-sans-mono-regular'
@@ -20,6 +22,8 @@ export function getEmbeddedFontSet(): EmbeddedFontSet {
     sansBold: base64ToBytes(NOTO_SANS_BOLD_BASE64),
     mono: base64ToBytes(NOTO_SANS_MONO_REGULAR_BASE64),
     monoBold: base64ToBytes(NOTO_SANS_MONO_BOLD_BASE64),
+    ldMono: base64ToBytes(JETBRAINS_MONO_REGULAR_BASE64),
+    ldMonoSemibold: base64ToBytes(JETBRAINS_MONO_SEMIBOLD_BASE64),
   }
   return cached
 }

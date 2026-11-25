@@ -1,7 +1,10 @@
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
+import { symbolKindOf } from '@root/middleware/shared/utils/ladder-layout'
 import { useState } from 'react'
 
 import { ContactNode } from '../../../../../../../_atoms/graphical-editor/ladder/contact'
+import { LadderSymbolPreview } from '../../../../../../../_atoms/graphical-editor/ladder/ladder-symbol'
+import { useLadderThemePalette } from '../../../../../../../_atoms/graphical-editor/ladder/rung-view'
 import { DEFAULT_CONTACT_TYPES } from '../../../../../../../_atoms/graphical-editor/ladder/utils/constants'
 import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
@@ -16,6 +19,7 @@ type ContactElementProps = {
 const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
   const store = useOpenPLCStoreApi()
   const pouName = useBoundPou()
+  const palette = useLadderThemePalette()
   const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
   const onOpenChange = useOpenPLCStore((state) => state.modalActions.onOpenChange)
 
@@ -25,11 +29,6 @@ const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
     value: label,
     contact,
   }))
-
-  const getModifierContact = (value: string) => {
-    const modifier = contactModifiers.find((modifier) => modifier.value === value)
-    return modifier ? modifier.contact.svg(false) : ''
-  }
 
   const handleCloseModal = () => {
     setSelectedModifier(null)
@@ -103,7 +102,12 @@ const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
               Preview
             </label>
             <div className='flex h-full w-full items-center justify-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'>
-              <div className='scale-150'>{selectedModifier && getModifierContact(selectedModifier)}</div>
+              {selectedModifier && (
+                <LadderSymbolPreview
+                  kind={symbolKindOf('contact', selectedModifier) ?? 'contact'}
+                  stroke={palette.text}
+                />
+              )}
             </div>
           </div>
         </div>

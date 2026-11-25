@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
-import { useAppUpdate, useCapabilities, useProject, useSystem, useTheme } from '../../../middleware/shared/providers'
+import { useAppUpdate, useProject, useSystem, useTheme } from '../../../middleware/shared/providers'
 import { useAppUpdateStatus } from '../../hooks/use-app-update-status'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
@@ -12,6 +12,7 @@ import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
 import { DataTypeDeleteImpactModal } from '../_molecules/rename-impact-modal/data-type-delete-impact-modal'
 import { DataTypeRenameImpactModal } from '../_molecules/rename-impact-modal/data-type-rename-impact-modal'
+import { HmiRenameImpactModal } from '../_molecules/rename-impact-modal/hmi-rename-impact-modal'
 import AboutModal from '../_organisms/about-modal'
 import {
   RetrieveProjectModal,
@@ -50,13 +51,11 @@ type AppLayoutProps = ComponentPropsWithoutRef<'main'>
 const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const system = useSystem()
   const projectPort = useProject()
-  const caps = useCapabilities()
   const [showComponent, setShowComponent] = useState(true)
   const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
   const saveChangesData = asSaveChangesModalData(modals?.['save-changes-project']?.data)
   const dataTypes = useOpenPLCStore(useCallback((s) => s.project.data.dataTypes, []))
   const { closeModal, onOpenChange } = useOpenPLCStore(useCallback((s) => s.modalActions, []))
-  const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
   const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
 
   const themePort = useTheme()
@@ -97,8 +96,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const showTitleBar = !caps.isNativeApplication || OS !== 'linux'
-
   const appUpdate = useAppUpdate()
   const update = useAppUpdateStatus()
   const banner = appUpdate && update.state !== 'none' ? update : null
@@ -108,11 +105,11 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
       <div
         className={`h-full bg-neutral-50 text-gray-500 dark:bg-neutral-950 dark:text-gray-400 ${showComponent ? 'block' : 'hidden'}`}
       >
-        {showTitleBar && <TitleBar />}
+        <TitleBar />
         {banner && appUpdate && (
           <UpdateBanner
             update={banner}
-            className={cn('absolute left-0 right-0', showTitleBar ? 'top-[--oplc-title-bar-height]' : 'top-0')}
+            className='absolute left-0 right-0 top-[--oplc-title-bar-height]'
             onUpdate={() => appUpdate.downloadAndOpen()}
             onDismiss={() => appUpdate.dismiss()}
           />
@@ -120,13 +117,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
         <main
           className={cn(
             'absolute bottom-0 left-0 right-0 flex overflow-hidden',
-            showTitleBar
-              ? banner
-                ? 'top-[calc(var(--oplc-title-bar-height)+1.75rem)]'
-                : 'top-[--oplc-title-bar-height]'
-              : banner
-                ? 'top-7'
-                : 'top-0',
+            banner ? 'top-[calc(var(--oplc-title-bar-height)+1.75rem)]' : 'top-[--oplc-title-bar-height]',
           )}
           {...rest}
         >
@@ -157,6 +148,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             <ConfirmDeleteProjectModal isOpen={modals['confirm-delete-project'].open} />
           )}
           <DataTypeRenameImpactModal />
+          <HmiRenameImpactModal />
           <DataTypeDeleteImpactModal />
           {modals?.['confirm-plcopen-import']?.open === true && (
             <ConfirmPlcopenImportModal isOpen={modals['confirm-plcopen-import'].open} />

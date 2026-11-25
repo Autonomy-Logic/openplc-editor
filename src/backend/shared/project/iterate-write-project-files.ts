@@ -36,6 +36,7 @@ export type WriteProjectFileEntry =
   | { category: 'server'; relativePath: string; content: string }
   | { category: 'remote-device'; relativePath: string; content: string }
   | { category: 'data-type'; relativePath: string; content: string }
+  | { category: 'hmi'; relativePath: string; content: string }
 
 /**
  * Yield every file in a WriteProjectFiles as a `WriteProjectFileEntry`.
@@ -70,5 +71,8 @@ export function* iterateWriteProjectFiles(files: WriteProjectFiles): Generator<W
   }
   for (const f of files.dataTypeFiles) {
     yield { category: 'data-type', relativePath: f.relativePath, content: f.content }
+  }
+  for (const f of files.hmiFiles) {
+    yield { category: 'hmi', relativePath: f.relativePath, content: f.content }
   }
 }

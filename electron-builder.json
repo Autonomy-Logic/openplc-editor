@@ -32,6 +32,10 @@
       "to": "./strucpp/libs"
     },
     {
+      "from": "./vendor/hmi-widgets",
+      "to": "./hmi-widgets"
+    },
+    {
       "from": "./release/yowasp-clang",
       "to": "./yowasp-clang",
       "filter": ["package.json", "README.md", "gen/**"]
@@ -39,6 +43,10 @@
     {
       "from": "./third-party-licenses/yowasp-clang",
       "to": "./yowasp-clang/licenses"
+    },
+    {
+      "from": "./release/hmi-objects",
+      "to": "./hmi-objects"
     },
     {
       "from": "./node_modules/@wasmer/sdk",

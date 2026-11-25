@@ -224,3 +224,40 @@ describe('parseClangWorkerInit', () => {
     expect(parseClangWorkerInit(value)).toBeNull()
   })
 })
+
+describe('producedFiles', () => {
+  it('keeps only what a job wrote, folder by folder', () => {
+    const big = new Uint8Array([1, 2, 3])
+    const input: WasmToolchainTree = { 'a.c': 'int a;', 'big.pch': big, dir: { 'b.h': 'x' } }
+    const output: WasmToolchainTree = {
+      'a.c': 'int a;',
+      'big.pch': big,
+      dir: { 'b.h': 'x', 'b.o': new Uint8Array([9]) },
+      out: { 'module.wasm': new Uint8Array([0]) },
+    }
+    expect(host.producedFiles(input, output)).toEqual({
+      dir: { 'b.o': new Uint8Array([9]) },
+      out: { 'module.wasm': new Uint8Array([0]) },
+    })
+  })
+
+  it('keeps an input the job rewrote, and drops a copy with the same bytes', () => {
+    const input: WasmToolchainTree = { 'a.o': new Uint8Array([1]), 'b.o': new Uint8Array([2]), 'c.txt': 'old' }
+    const output: WasmToolchainTree = { 'a.o': new Uint8Array([1]), 'b.o': new Uint8Array([3]), 'c.txt': 'new' }
+    expect(host.producedFiles(input, output)).toEqual({ 'b.o': new Uint8Array([3]), 'c.txt': 'new' })
+  })
+
+  it('replies to a job without the files it was given', async () => {
+    const pch = new Uint8Array(64)
+    const clang = fakeClang(() => ({ 'a.c': 'int a;', 'pch.pch': pch, 'out.o': new Uint8Array([1]) }))
+    const port = memoryPort()
+    await serveClangWorker(() => Promise.resolve(clang), port)
+    port.deliver({ id: 1, argv: ['clang', '-c', 'a.c'], tree: { 'a.c': 'int a;', 'pch.pch': pch } })
+    await settle()
+    expect(port.replies[1]).toEqual({
+      type: 'result',
+      id: 1,
+      result: { exitCode: 0, stderr: '', stdout: '', tree: { 'out.o': new Uint8Array([1]) } },
+    })
+  })
+})

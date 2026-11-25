@@ -128,6 +128,7 @@ const mockRawProjectFiles = {
     ],
     serverFiles: [],
     remoteDeviceFiles: [],
+    hmiFiles: [],
     dataTypeFiles: [],
   },
 }
@@ -420,6 +421,7 @@ describe('createEditorProjectAdapter', () => {
         ...mockRawProjectFiles,
         data: {
           ...mockRawProjectFiles.data,
+          hmiFiles: [],
           dataTypeFiles: [{ relativePath: 'datatypes/Color.dt', content: 'TYPE\n  Color : (Red);\nEND_TYPE\n' }],
         },
       })
@@ -507,6 +509,7 @@ describe('createEditorProjectAdapter', () => {
       pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'PROGRAM main\nEND_PROGRAM' }],
       serverFiles: [],
       remoteDeviceFiles: [],
+      hmiFiles: [],
       dataTypeFiles: [],
       deletions: [],
     }

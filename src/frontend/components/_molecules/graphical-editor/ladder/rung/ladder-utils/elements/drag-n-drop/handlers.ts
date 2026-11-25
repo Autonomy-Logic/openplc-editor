@@ -1,4 +1,5 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
+import { type LadderLabelSource, relayoutRung } from '@root/middleware/shared/utils/ladder-layout'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { BasicNodeData, HandleBranch } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
@@ -7,7 +8,6 @@ import { disconnectNodes } from '../../edges'
 import { removeNode } from '../../nodes'
 import { removeElement } from '..'
 import { spliceNodeIntoEdgeChain } from '../core'
-import { updateDiagramElementsPosition } from '../diagram'
 import {
   getBranch,
   insertIntoBranch,
@@ -41,21 +41,14 @@ export type DropContext = {
   selectedPlaceholderIndex: number
   preparedNodes: Node[]
   preparedEdges: Edge[]
+  labelSource: LadderLabelSource
 }
 
 // ---------------------------------------------------------------------------
 // Shared private helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Insert a node into the nodes array at the correct position for the layout algorithm.
- * `updateDiagramElementsPosition` processes nodes in array order and looks up predecessors
- * from already-processed nodes. Appending at the end would cause successors to be processed
- * before this node, making them "invisible" to the layout and getting skipped.
- *
- * Strategy: insert the node just before its edge-chain successor (the target of its outgoing edge).
- * If no successor is found, append at the end (safe for branch-context nodes which skip layout).
- */
+/** Inserts a node just before its edge-chain successor (the target of its outgoing edge), or appends it when there is none. */
 function insertNodeInOrder(nodes: Node[], newNode: Node, edges: Edge[]): Node[] {
   const outHandle = (newNode.data as BasicNodeData).outputConnector?.id
   const outEdge = edges.find((e) => e.source === newNode.id && e.sourceHandle === outHandle)
@@ -166,18 +159,19 @@ function removeAndBuildRung(
  */
 function layoutAndReturn(
   oldStateRung: RungLadderState,
+  labelSource: LadderLabelSource,
   nodes: Node[],
   edges: Edge[],
   handleBranches?: HandleBranch[],
 ): DropResult {
-  const { nodes: diagramNodes, edges: diagramEdges } = updateDiagramElementsPosition(
+  const { nodes: diagramNodes, edges: diagramEdges } = relayoutRung(
     {
       ...oldStateRung,
       nodes,
       edges,
       ...(handleBranches && { handleBranches }),
     },
-    oldStateRung.defaultBounds as [number, number],
+    labelSource,
     // `nodes` may have had its variable nodes stripped by prepareDropState;
     // the pre-drop rung still holds them, so pass it as the identity source
     // to keep variable-node ids stable across the rebuild.
@@ -213,16 +207,21 @@ export function handleRestore(ctx: DropContext): DropResult {
 
   const cleanedNodes = removePlaceholderElements(resultNodes)
 
-  return layoutAndReturn(ctx.rung, cleanedNodes, resultEdges)
+  return layoutAndReturn(ctx.rung, ctx.labelSource, cleanedNodes, resultEdges)
 }
 
 /**
  * Path 2: any → branch parallel.
  */
-export function handleBranchParallel(oldStateRung: RungLadderState, node: Node, aboveElement: Node): DropResult {
+export function handleBranchParallel(
+  oldStateRung: RungLadderState,
+  node: Node,
+  aboveElement: Node,
+  labelSource: LadderLabelSource,
+): DropResult {
   const { rungAfterRemove } = removeAndBuildRung(oldStateRung, node.id)
   const parallel = startParallelInBranch(rungAfterRemove, aboveElement, node)
-  return layoutAndReturn(oldStateRung, parallel.nodes, parallel.edges, parallel.handleBranches)
+  return layoutAndReturn(oldStateRung, labelSource, parallel.nodes, parallel.edges, parallel.handleBranches)
 }
 
 /**
@@ -240,7 +239,7 @@ export function handleMainParallel(ctx: DropContext, sourceIsBranch: boolean): D
       movedNode,
     )
 
-    return layoutAndReturn(ctx.oldStateRung, parallelNodes, parallelEdges, handleBranches)
+    return layoutAndReturn(ctx.oldStateRung, ctx.labelSource, parallelNodes, parallelEdges, handleBranches)
   }
 
   // Path 4: main → main parallel (copycat-aware)
@@ -263,6 +262,7 @@ export function handleMainParallel(ctx: DropContext, sourceIsBranch: boolean): D
     { ...ctx.rung, nodes: parallelNodes, edges: parallelEdges },
     ctx.copycatNode,
     ctx.oldStateRung.nodes,
+    ctx.labelSource,
   )
 
   return { nodes: cleanedNodes, edges: cleanedEdges }
@@ -275,6 +275,7 @@ export function handleBranchSerial(
   oldStateRung: RungLadderState,
   node: Node,
   target: { blockId: string; handleId: string; direction: 'input' | 'output'; insertIndex: number },
+  labelSource: LadderLabelSource,
 ): DropResult {
   const { rungAfterRemove } = removeAndBuildRung(oldStateRung, node.id)
 
@@ -302,7 +303,7 @@ export function handleBranchSerial(
     node,
   )
 
-  return layoutAndReturn(oldStateRung, inserted.nodes, inserted.edges, inserted.handleBranches)
+  return layoutAndReturn(oldStateRung, labelSource, inserted.nodes, inserted.edges, inserted.handleBranches)
 }
 
 /**
@@ -314,6 +315,7 @@ export function handleBranchParallelPath(
   targetNode: Node,
   branchContext: NonNullable<BasicNodeData['branchContext']>,
   position: 'left' | 'right',
+  labelSource: LadderLabelSource,
 ): DropResult {
   const { rungAfterRemove, handleBranches } = removeAndBuildRung(oldStateRung, node.id)
   const movedNode = { ...node, data: { ...node.data, branchContext } }
@@ -325,7 +327,7 @@ export function handleBranchParallelPath(
   }
 
   const newNodes = insertNodeInOrder(rungAfterRemove.nodes, movedNode, splicedEdges)
-  return layoutAndReturn(oldStateRung, newNodes, splicedEdges, handleBranches)
+  return layoutAndReturn(oldStateRung, labelSource, newNodes, splicedEdges, handleBranches)
 }
 
 /**
@@ -340,10 +342,11 @@ export function handleBranchCreate(
     direction: 'input' | 'output'
     handlePosition: { x: number; y: number }
   },
+  labelSource: LadderLabelSource,
 ): DropResult {
   const { rungAfterRemove } = removeAndBuildRung(oldStateRung, node.id)
   const result = replaceVariableWithBranch(rungAfterRemove, target, node)
-  return layoutAndReturn(oldStateRung, result.nodes, result.edges, result.handleBranches)
+  return layoutAndReturn(oldStateRung, labelSource, result.nodes, result.edges, result.handleBranches)
 }
 
 /**
@@ -371,7 +374,7 @@ export function handleMainSerial(ctx: DropContext, sourceIsBranch: boolean): Dro
     if (!splicedEdges) return { nodes: ctx.oldStateRung.nodes, edges: ctx.oldStateRung.edges }
 
     const newNodes = insertNodeInOrder(rungAfterRemove.nodes, movedNode, splicedEdges)
-    return layoutAndReturn(ctx.oldStateRung, newNodes, splicedEdges, handleBranches)
+    return layoutAndReturn(ctx.oldStateRung, ctx.labelSource, newNodes, splicedEdges, handleBranches)
   }
 
   // Path 9: main → main serial (copycat-aware)
@@ -394,6 +397,7 @@ export function handleMainSerial(ctx: DropContext, sourceIsBranch: boolean): Dro
     { ...ctx.rung, nodes: serialNodes, edges: serialEdges },
     ctx.copycatNode,
     ctx.oldStateRung.nodes,
+    ctx.labelSource,
   )
 
   return { nodes: cleanedNodes, edges: cleanedEdges }

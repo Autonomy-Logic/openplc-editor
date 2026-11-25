@@ -1,14 +1,15 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.3.5",
+  "version": "4.4.0",
   "license": "GPL-3.0-only",
   "author": {
     "name": "Autonomy Logic"
   },
   "main": "./configs/dll/main.js",
   "scripts": {
-    "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
+    "build": "npm run build:hmi-objects && concurrently \"npm run build:main\" \"npm run build:renderer\"",
+    "build:hmi-objects": "ts-node -T -r tsconfig-paths/register scripts/build-hmi-objects.ts",
     "build:dll": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.dev.dll.ts",
     "build:main": "cross-env TS_NODE_TRANSPILE_ONLY=true ts-node scripts/prepare-yowasp-clang.ts && ts-node --transpile-only scripts/package-trust/cli.ts prepare && cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.prod.ts && ts-node --transpile-only scripts/package-trust/cli.ts verify-bundle",
     "build:cli": "npm run build:main",
@@ -24,6 +25,7 @@
     "compile:matrix": "ts-node scripts/compile-matrix.ts",
     "setup:binaries": "ts-node scripts/download-binaries.ts",
     "setup:strucpp": "ts-node scripts/download-binaries.ts --strucpp-only",
+    "setup:hmi-widgets": "ts-node scripts/download-binaries.ts --hmi-widgets-only",
     "setup:python": "ts-node scripts/download-python-runtime.ts",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "package:test": "cross-env OPENPLC_TEST_PACKAGE=1 ts-node scripts/clean.js dist && cross-env OPENPLC_TEST_PACKAGE=1 npm run build && cross-env OPENPLC_TEST_PACKAGE=1 electron-builder build --publish never -c.electronFuses.enableNodeCliInspectArguments=true && cross-env OPENPLC_TEST_PACKAGE=1 npm run build:dll",
@@ -31,11 +33,16 @@
     "prestart": "ts-node scripts/download-binaries.ts && ts-node scripts/prepare-yowasp-clang.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",
     "start:dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
-    "dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer\" \"cross-env PORT=1313 electronmon .\"",
+    "dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer\" \"cross-env PORT=1313 ELECTRON_OZONE_PLATFORM_HINT=auto electronmon .\"",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "test": "jest --collectCoverage --maxWorkers=2",
     "test:watch": "jest --watch --no-coverage",
     "test:e2e": "cross-env OPENPLC_E2E_DEBUG_SEAM=1 npm run build && npx playwright test",
+    "test:hmi-core": "node tests/hmi-core/run.mjs --cc \"gcc clang\" --sanitize",
+    "test:hmi-unit": "node tests/hmi-unit/run.mjs --cc \"gcc clang\" --sanitize",
+    "test:hmi-baremetal": "node tests/hmi-baremetal/run.mjs --cc \"gcc clang\" --sanitize",
+    "test:hmi-preview": "ts-node -T -r tsconfig-paths/register tests/hmi-preview/run.ts",
+    "test:hmi-client": "ts-node -T -r tsconfig-paths/register tests/hmi-client/run.ts",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",
     "prepare": "husky"
   },
@@ -212,5 +219,8 @@
       "cross-env NODE_ENV=development eslint --fix",
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "node-gyp-build": "^4.8.4"
   }
 }

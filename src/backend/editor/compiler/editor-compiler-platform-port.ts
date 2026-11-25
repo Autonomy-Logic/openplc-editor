@@ -24,6 +24,7 @@
  * `middleware/adapters/web/`.
  */
 
+import { readFolderBytes } from '@root/backend/editor/hmi/hmi-preview-files'
 import {
   ARDUINO_EXPORT_DIR,
   planBuildTreeSync,
@@ -136,6 +137,8 @@ export interface EditorCompilerHandlers {
 export interface EditorCompilerPlatformPortContext {
   /** Project path on disk (without the trailing `project.json`). */
   normalizedProjectPath: string
+  /** The bundled HMI sources folder (`resources/sources/hmi`). */
+  hmiSourcesPath: string
   /** `<projectPath>/build/<boardTarget>/`. */
   compilationPath: string
   /** `<compilationPath>/src/`. */
@@ -262,7 +265,7 @@ export function createEditorCompilerPlatformPort(
   return {
     /**
      * Node's `crypto.createHash('md5')` produces the canonical MD5
-     * hex digest that defines.h embeds as `PROGRAM_MD5`.  Web's
+     * hex digest that program_md5.h embeds as `PROGRAM_MD5`.  Web's
      * adapter computes the same hash via `spark-md5`; both outputs
      * are byte-identical.
      */
@@ -297,11 +300,21 @@ export function createEditorCompilerPlatformPort(
         return {
           ok: false,
           error: message,
-          stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
+          stats: { units: 0, cached: 0 },
           diagnostics: [{ message, level: 'error' }],
         }
       }
       return context.wasmCompileService.compile(request, log)
+    },
+
+    /** Compiles a module only; the build folder is left as it is. */
+    compileWasmModule(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult> {
+      return context.wasmCompileService.compile(request, log)
+    },
+
+    /** The HMI sources folder, read verbatim. */
+    readHmiSources(): Promise<Record<string, Uint8Array>> {
+      return readFolderBytes(context.hmiSourcesPath)
     },
 
     /**
@@ -624,12 +637,12 @@ export function createEditorCompilerPlatformPort(
         if (!result.success) return { success: false as const, error: result.error }
         return { success: true as const, body: result.data }
       }
-      const { version, minEditorVersion, supportsProjectSnapshot } = await probeRuntimeVersion({
+      const probe = await probeRuntimeVersion({
         fetchCapabilities: () => getJson('/api/capabilities'),
         fetchVersion: () => getJson('/api/version'),
         log,
       })
-      return { ok: true, version, minEditorVersion, supportsProjectSnapshot }
+      return { ok: true, ...probe }
     },
 
     /**

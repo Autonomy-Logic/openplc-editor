@@ -281,6 +281,11 @@ function getContentFingerprint(node: Node, includePosition = true): string {
   return `${node.type}|${varName}|${variantName}|${variantType}|${varsKey}|${pos}`
 }
 
+/** The saved geometry of a node: its position and its stored size. */
+function getGeometryKey(node: Node): string {
+  return `${node.position?.x ?? 0},${node.position?.y ?? 0},${node.width ?? ''},${node.height ?? ''}`
+}
+
 function getPositionKey(node: Node): string {
   return `${node.type ?? ''}@${node.position?.x ?? 0},${node.position?.y ?? 0}`
 }
@@ -324,20 +329,29 @@ function matchNodePools(
 /**
  * Matching is scoped to paired rungs: a global pass could let an element consume a same-keyed
  * one in another rung, painting untouched rungs as changed. The cross-rung pass is a safety
- * net for failed alignment, not move detection.
+ * net for failed alignment, not move detection. In LD a matched element is modified when its
+ * content changed, or when its saved geometry changed in a rung pair that is a pure re-layout:
+ * no content change and no element added or removed.
  */
-function computeNodeDiffMap(rungPairs: RungPair[]): {
+function computeNodeDiffMap(
+  rungPairs: RungPair[],
+  isLadder: boolean,
+): {
   original: Map<string, DiffStatus>
   current: Map<string, DiffStatus>
 } {
   const original = new Map<string, DiffStatus>()
   const current = new Map<string, DiffStatus>()
 
+  const mark = (currentNode: Node, originalNode: Node, status: DiffStatus) => {
+    current.set(currentNode.id, status)
+    original.set(originalNode.id, status)
+  }
+
   const settle = (currentNode: Node, originalNode: Node, includePosition: boolean) => {
     const changed =
       getContentFingerprint(currentNode, includePosition) !== getContentFingerprint(originalNode, includePosition)
-    current.set(currentNode.id, changed ? 'modified' : 'unchanged')
-    original.set(originalNode.id, changed ? 'modified' : 'unchanged')
+    mark(currentNode, originalNode, changed ? 'modified' : 'unchanged')
   }
 
   const isStructural = (node: Node) => STRUCTURAL_NODE_TYPES.has(node.type ?? '')
@@ -351,13 +365,28 @@ function computeNodeDiffMap(rungPairs: RungPair[]): {
     let pendingOriginal = (pair.original?.nodes ?? []).filter((n) => !isStructural(n))
     let pendingCurrent = (pair.current?.nodes ?? []).filter((n) => !isStructural(n))
 
+    const matched: [Node, Node][] = []
     for (const keyOf of RUNG_NODE_MATCHERS) {
       if (pendingOriginal.length === 0 || pendingCurrent.length === 0) break
       const rest = matchNodePools(pendingOriginal, pendingCurrent, keyOf, (currentNode, originalNode) =>
-        settle(currentNode, originalNode, true),
+        matched.push([currentNode, originalNode]),
       )
       pendingOriginal = rest.original
       pendingCurrent = rest.current
+    }
+
+    if (isLadder) {
+      const contentChanged = matched.map(
+        ([c, o]) => getContentFingerprint(c, false) !== getContentFingerprint(o, false),
+      )
+      const pureRelayout =
+        pendingOriginal.length === 0 && pendingCurrent.length === 0 && !contentChanged.some((changed) => changed)
+      matched.forEach(([currentNode, originalNode], index) => {
+        const relaidOut = pureRelayout && getGeometryKey(currentNode) !== getGeometryKey(originalNode)
+        mark(currentNode, originalNode, contentChanged[index] || relaidOut ? 'modified' : 'unchanged')
+      })
+    } else {
+      for (const [currentNode, originalNode] of matched) settle(currentNode, originalNode, true)
     }
 
     leftoverOriginal.push(...pendingOriginal)
@@ -491,7 +520,7 @@ export function computeGraphicalDiff(
 
   const variableDiff = computeVariableDiff(originalContent, currentContent)
   const rungPairs = alignRungs(originalFlows, currentFlows)
-  const nodeDiffMaps = computeNodeDiffMap(rungPairs)
+  const nodeDiffMaps = computeNodeDiffMap(rungPairs, isLadder)
 
   const flows: GraphicalDiffResult['flows'] = []
   const changedIndexes: number[] = []

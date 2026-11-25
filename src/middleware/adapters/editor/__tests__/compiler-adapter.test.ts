@@ -98,6 +98,7 @@ beforeEach(() => {
       libraryCallback = cb
     }),
     loadAllLibraries: jest.fn().mockResolvedValue([]),
+    loadBuildLibraries: jest.fn().mockResolvedValue({ archives: [], missing: [] }),
   } as unknown as typeof window.bridge
 })
 
@@ -224,11 +225,11 @@ describe('createEditorCompilerAdapter', () => {
         // Args layout (verbatim, in order):
         //   projectPath, boardTarget, boardCore, compileOnly,
         //   projectData, runtimeIpAddress, runtimeJwtToken,
-        //   cleanBuild, communicationPort, vendorScreenData.
+        //   cleanBuild, communicationPort, vendorScreenData, hmi.
         // `vendorScreenData` is the 10th slot — threaded through to
         // the shared compile pipeline for `vpp_config.h` emission on
         // arduino-cli VPP boards (Arduino Opta, P1AM).  `null` when
-        // the caller didn't supply one (non-VPP build).
+        // the caller didn't supply one (non-VPP build). `hmi` is null for a project without screens.
         [
           '/path/to/project',
           'Arduino Mega',
@@ -238,6 +239,7 @@ describe('createEditorCompilerAdapter', () => {
           null,
           null,
           false,
+          null,
           null,
           null,
         ],
@@ -512,6 +514,8 @@ describe('createEditorCompilerAdapter', () => {
       return {
         manifest: {
           name: libraryName,
+          version: '1.0.0',
+          namespace: libraryName,
           functionBlocks: [
             {
               name: blockName,
@@ -553,9 +557,13 @@ describe('createEditorCompilerAdapter', () => {
         ...mockProjectData,
         libraries: [{ name: 'motor_lib', version: '1.0.0' }],
       }
-      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([nativeArchive('motor_lib', 'Driver', 'cpp')])
+      ;(window.bridge.loadBuildLibraries as jest.Mock).mockResolvedValue({
+        archives: [nativeArchive('motor_lib', 'Driver', 'cpp')],
+        missing: [],
+      })
 
       const ipcProjectData = await compileWith(projectWithLib)
+      expect(window.bridge.loadBuildLibraries).toHaveBeenCalledWith(['motor_lib'])
       expect(ipcProjectData.pous.map((p) => p.data.name)).toContain('Driver')
       // `preprocessPous` lowered the grafted body and stamped the sidecar,
       // which is what proves it went through the user-POU path.
@@ -567,7 +575,10 @@ describe('createEditorCompilerAdapter', () => {
         ...mockProjectData,
         libraries: [{ name: 'py_lib', version: '1.0.0' }],
       }
-      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([nativeArchive('py_lib', 'Scale', 'python')])
+      ;(window.bridge.loadBuildLibraries as jest.Mock).mockResolvedValue({
+        archives: [nativeArchive('py_lib', 'Scale', 'python')],
+        missing: [],
+      })
 
       // Runtime v4, not Arduino Mega: a Python block on an arduino-cli target is
       // refused before the graft can be observed — correctly, and that refusal
@@ -581,11 +592,14 @@ describe('createEditorCompilerAdapter', () => {
         ...mockProjectData,
         libraries: [{ name: 'enabled_lib', version: '1.0.0' }],
       }
-      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([
-        nativeArchive('enabled_lib', 'OK', 'cpp'),
-        // Installed but not enabled — must not leak into the build.
-        nativeArchive('other_lib', 'Leak', 'cpp'),
-      ])
+      ;(window.bridge.loadBuildLibraries as jest.Mock).mockResolvedValue({
+        archives: [
+          nativeArchive('enabled_lib', 'OK', 'cpp'),
+          // Installed but not enabled — must not leak into the build.
+          nativeArchive('other_lib', 'Leak', 'cpp'),
+        ],
+        missing: [],
+      })
 
       const ipcProjectData = await compileWith(projectWithLib)
       const pouNames = ipcProjectData.pous.map((p) => p.data.name)
@@ -1054,6 +1068,8 @@ describe('compileForDebug — library function block pins', () => {
   const TON_ARCHIVE = {
     manifest: {
       name: 'iec_standard_fb',
+      version: '1.0.0',
+      namespace: 'iec_standard_fb',
       functionBlocks: [
         {
           name: 'TON',
@@ -1077,7 +1093,7 @@ describe('compileForDebug — library function block pins', () => {
     // and a Python POU declaring `ton0 : TON` compiled for upload and failed the
     // DEBUG compile with "cannot exchange these variables". The archives were
     // already in hand — only the argument was missing.
-    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([TON_ARCHIVE])
+    ;(window.bridge.loadBuildLibraries as jest.Mock).mockResolvedValue({ archives: [TON_ARCHIVE], missing: [] })
     ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
       new Map([['OpenPLC Runtime v4', { name: 'OpenPLC Runtime v4', compiler: 'openplc-compiler' }]]),
     )
@@ -1101,7 +1117,7 @@ describe('compileForDebug — library function block pins', () => {
     // reason — a Python block is no more loadable on an Arduino board when the
     // compile is for debugging — so the message must name the board and the
     // bridge must never be reached.
-    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([])
+    ;(window.bridge.loadBuildLibraries as jest.Mock).mockResolvedValue({ archives: [], missing: [] })
     ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
       new Map([['Arduino Mega', { name: 'Arduino Mega', compiler: 'arduino-cli' }]]),
     )
@@ -1134,7 +1150,7 @@ describe('compileForDebug — library function block pins', () => {
   it('refuses the same POU when no archive declares the block', async () => {
     // The other half of the contract: with no library carrying TON, the refusal
     // is correct and must still name the variable.
-    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([])
+    ;(window.bridge.loadBuildLibraries as jest.Mock).mockResolvedValue({ archives: [], missing: [] })
     ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
       new Map([['OpenPLC Runtime v4', { name: 'OpenPLC Runtime v4', compiler: 'openplc-compiler' }]]),
     )

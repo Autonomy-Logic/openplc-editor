@@ -14,7 +14,8 @@ import { buildCBlocksFromPous, composeFirmwareBundle } from '../steps/compose-fi
 const baseInput = {
   strucppFiles: {},
   cBlocks: { header: '// Empty file\n', code: null as string | null },
-  definesH: '#define PROGRAM_MD5 ""\n',
+  definesH: '#define SIMULATOR_MODE\n',
+  programMd5H: '#pragma once\n#define PROGRAM_MD5 ""\n',
   firmwareSkeleton: {},
 }
 
@@ -46,9 +47,19 @@ describe('composeFirmwareBundle — skeleton passthrough', () => {
     const out = composeFirmwareBundle({
       ...baseInput,
       firmwareSkeleton: skeleton,
-      definesH: '#define PROGRAM_MD5 "abc"\n',
+      definesH: '#define NUM_DISCRETE_INPUT 2\n',
     })
-    expect(out['src/defines.h']).toBe('#define PROGRAM_MD5 "abc"\n')
+    expect(out['src/defines.h']).toBe('#define NUM_DISCRETE_INPUT 2\n')
+  })
+
+  it('writes src/program_md5.h from the programMd5H input, apart from defines.h', () => {
+    const out = composeFirmwareBundle({
+      ...baseInput,
+      firmwareSkeleton: { 'src/program_md5.h': '// stub from skeleton\n' },
+      programMd5H: '#pragma once\n#define PROGRAM_MD5 "abc"\n',
+    })
+    expect(out['src/program_md5.h']).toBe('#pragma once\n#define PROGRAM_MD5 "abc"\n')
+    expect(out['src/defines.h']).not.toContain('PROGRAM_MD5')
   })
 })
 
@@ -140,6 +151,7 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       },
       cBlocks: { header: 'CBLOCKS_HEADER', code: 'CBLOCKS_CODE_WITH_USER' },
       definesH: 'DEFINES_H',
+      programMd5H: 'PROGRAM_MD5_H',
     })
 
     expect(out).toEqual({
@@ -155,6 +167,7 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       'src/generated.cpp': 'GEN_CPP',
       'src/generated.hpp': 'GEN_HPP',
       'src/pou_BLINK_CPP.cpp': 'POU_BLINK_CPP',
+      'src/program_md5.h': 'PROGRAM_MD5_H',
       'src/c_blocks.h': 'CBLOCKS_HEADER',
       'src/defines.h': 'DEFINES_H',
       'src/OpenPLCUserLib.h': expect.stringContaining('#pragma once') as unknown as string,
@@ -174,6 +187,7 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       },
       cBlocks: { header: '// Empty file\n', code: null },
       definesH: 'DEFINES_H',
+      programMd5H: 'PROGRAM_MD5_H',
     })
 
     expect(out).toEqual({
@@ -183,6 +197,7 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       // header was overwritten with the empty-file sentinel
       'src/c_blocks.h': '// Empty file\n',
       'src/generated.cpp': 'GEN_CPP',
+      'src/program_md5.h': 'PROGRAM_MD5_H',
       'src/defines.h': 'DEFINES_H',
       'src/OpenPLCUserLib.h': expect.stringContaining('#pragma once') as unknown as string,
     })
@@ -227,6 +242,7 @@ describe('composeFirmwareBundle — OpenPLCUserLib.h stub', () => {
       strucppFiles: {},
       cBlocks: { header: '', code: null },
       definesH: '',
+      programMd5H: '',
     })
     expect(out['src/OpenPLCUserLib.h']).toContain('#pragma once')
   })

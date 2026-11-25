@@ -143,6 +143,8 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   s7Server: true,
   // RTU over the emulated virtual serial port the in-process simulator
   // exposes — not Modbus TCP.
+  hmi: null,
+  hmiDataWidgets: false,
   debuggerTransports: ['modbus-serial'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: true,
@@ -167,6 +169,8 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
+  hmi: null,
+  hmiDataWidgets: false,
   debuggerTransports: ['modbus-tcp'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -201,6 +205,8 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   opcuaServer: true,
   s7Server: true,
   s7: RUNTIME_V4_S7_PROFILE,
+  hmi: null,
+  hmiDataWidgets: true,
   debuggerTransports: ['websocket'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -236,6 +242,8 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   // Arduino targets speak RTU over USB always; some also speak TCP
   // via an ethernet shield. Both flagged available — the actual
   // user-facing protocol selector picks between them at debug time.
+  hmi: null,
+  hmiDataWidgets: false,
   debuggerTransports: ['modbus-serial', 'modbus-tcp'],
   pythonFunctionBlocks: false,
   arduinoApiCompletions: true,

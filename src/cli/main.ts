@@ -66,6 +66,8 @@ const BOOLEAN_FLAGS = [
   'help',
   'version',
   'clean',
+  // `compile --hmi-test-readout`: board firmware with HMI screens answers the test-only display-list readout.
+  'hmi-test-readout',
   'yes',
   'upload-if-needed',
   'force-new',
@@ -92,6 +94,7 @@ Usage
   openplc-cli packages list                                 (boards --target accepts, and their pins)
   openplc-cli packages install <file.vpp|dir>...            (same checks as the GUI: schema + signature)
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
+                            [--hmi-test-readout]  (tests only: a panel firmware answers the HMI readout codes)
   openplc-cli simulate <project> [--clean]                 (build for the OpenPLC Simulator and run it, Python
                             blocks included; prints its Console until Ctrl+C)
   openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]

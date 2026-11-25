@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../../../frontend/assets/fonts/jetbrains-mono/JetBrainsMono-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url('../../../frontend/assets/fonts/jetbrains-mono/JetBrainsMono-SemiBold.ttf') format('truetype');
+}
+
 ::-webkit-scrollbar {
   display: flex;
   height: 0.25rem;

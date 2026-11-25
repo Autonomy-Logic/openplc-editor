@@ -175,3 +175,23 @@ export const computeRungDebugStates = (
 
   return { edgeStates, nodeInputStates }
 }
+
+/** The blocks that receive power on the rung wire: an energized edge ends on the pin their input connector names. */
+export const poweredBlockIds = (
+  nodes: RungLadderState['nodes'],
+  edges: RungLadderState['edges'],
+  edgeStates: ReadonlyMap<string, boolean>,
+): Set<string> => {
+  const inputPin = new Map<string, string>()
+  for (const node of nodes) {
+    if (node.type !== 'block') continue
+    const connector: unknown = node.data.inputConnector
+    if (typeof connector === 'object' && connector !== null && 'id' in connector && typeof connector.id === 'string')
+      inputPin.set(node.id, connector.id)
+  }
+  const powered = new Set<string>()
+  for (const edge of edges) {
+    if (edgeStates.get(edge.id) === true && inputPin.get(edge.target) === edge.targetHandle) powered.add(edge.target)
+  }
+  return powered
+}

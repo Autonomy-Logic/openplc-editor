@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
+import { defaultHmiSettings } from '../../../middleware/shared/utils/hmi/settings'
 import type { OpenPLCStore } from '../index'
 import { createTestStore } from '../testing'
 import { elementNameCollision, type NamedElementKind, newGlobalNameCollision } from '../slices/shared/name-collision'
@@ -50,6 +51,11 @@ const seed = () => {
         },
       ],
       libraries: [],
+      hmi: {
+        screens: [{ name: 'Overview', source: '' }],
+        widgets: [{ name: 'Badge', source: '' }],
+        settings: defaultHmiSettings(),
+      },
     },
   })
   store.getState().projectActions.setUnparsedDataTypeFiles([])
@@ -66,6 +72,8 @@ const KINDS: NamedElementKind[] = [
   'remote-device',
   'ethercat-slave',
   'resource-global',
+  'hmi-screen',
+  'hmi-widget',
 ]
 const OWNER: Record<NamedElementKind, string> = {
   pou: 'Main',
@@ -75,6 +83,8 @@ const OWNER: Record<NamedElementKind, string> = {
   'remote-device': 'Drive',
   'ethercat-slave': 'Axis1',
   'resource-global': 'Setpoint',
+  'hmi-screen': 'Overview',
+  'hmi-widget': 'Badge',
 }
 const LABEL: Record<NamedElementKind, string> = {
   pou: 'a POU',
@@ -84,6 +94,8 @@ const LABEL: Record<NamedElementKind, string> = {
   'remote-device': 'a remote device',
   'ethercat-slave': 'an EtherCAT slave',
   'resource-global': 'a global variable',
+  'hmi-screen': 'an HMI screen',
+  'hmi-widget': 'an HMI widget block',
 }
 // Compiler namespace: pou, data type, list, global. Workspace registry: pou, data type, list, server, device, slave.
 const DISJOINT = new Set(['server:resource-global', 'remote-device:resource-global', 'ethercat-slave:resource-global'])
@@ -110,6 +122,14 @@ describe('elementNameCollision across kinds', () => {
     expect(gate('modbus', 'server')).toBe('Server already exists')
     expect(gate('drive', 'remote-device')).toBe('Remote device already exists')
     expect(gate('axis1', 'ethercat-slave')).toBe('An EtherCAT slave named "axis1" already exists in this project')
+    expect(gate('overview', 'hmi-screen')).toBe('Screen name already exists')
+    expect(gate('badge', 'hmi-widget')).toBe('Widget block name already exists')
+  })
+
+  it('refuses HMI library and generated names for screens and widget blocks only', () => {
+    expect(gate('HmiLamp', 'hmi-widget')).toBe('"HmiLamp" is taken by the HMI library')
+    expect(gate('hmi_show', 'hmi-screen')).toBe('"hmi_show" is taken by the HMI library')
+    expect(gate('HmiLamp', 'pou')).toBeNull()
   })
 
   it('leaves same-table duplicates of globals to the variables table', () => {

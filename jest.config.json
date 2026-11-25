@@ -42,11 +42,14 @@
     "src/frontend/components/_organisms/modals/__tests__/confirm-plcopen-import-modal.test.tsx",
     "src/backend/shared/library/__tests__/build-pipeline-real-strucpp.test.ts",
     "src/backend/shared/print/__tests__/fixtures/",
+    "src/backend/shared/transpilers/st-transpiler/__tests__/ld-relayout-corpus/",
     "src/backend/shared/ethercat/__tests__/fixtures/",
     "src/backend/shared/runtime-provisioning/__tests__/fixtures/",
     "src/backend/editor/runtime-provisioning/__tests__/fixtures/",
     "src/frontend/services/__tests__/fixtures/",
     "src/backend/shared/wasm-toolchain/__tests__/fixtures/",
+    "src/backend/shared/hmi/unit/__tests__/fixtures/",
+    "src/backend/shared/hmi/preview/__tests__/fixtures/",
     "src/backend/shared/simulator/__tests__/fixtures/",
     "src/backend/editor/wasm-toolchain/__tests__/fixtures/",
     "src/backend/editor/package-trust/__tests__/fixtures/",
@@ -98,6 +101,30 @@
       "functions": 97,
       "lines": 95,
       "statements": 95
+    },
+    "src/backend/shared/hmi/unit/": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
+    },
+    "src/backend/shared/hmi/preview/": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
+    },
+    "src/middleware/shared/utils/hmi/": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
+    },
+    "src/backend/shared/hmi/lib/": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
     },
     "src/backend/shared/": {
       "branches": 0,

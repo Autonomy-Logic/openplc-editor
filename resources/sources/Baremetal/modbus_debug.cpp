@@ -16,23 +16,9 @@ modbus_debug.cpp - OpenPLC always-on debugger function codes (0x41-0x4B)
 // reporting in debugGetStatus() and plcSetState().
 #include "openplc.h"
 #include "openplc_version.h"
+#include "program_md5.h"
 
-// The identity behind DEBUG_GET_DEVICE_ID (0x48) comes from the closed
-// license-core, not from a library compiled into this open firmware.
-//
-// It used to come from ArduinoUniqueID (ricaun), included right here, and that
-// had two problems. The library `#error`s out on any core it does not cover
-// (mbed is one, so every Arduino Opta, Portenta Machine Control and Edge
-// Control build failed, DOPE-587), and it made this file read the raw factory
-// serial in order to publish it on a channel with no authentication.
-//
-// Now the firmware ASKS: `license_gate_device_id()` reads the silicon inside
-// the closed artifact and hands back the derived device_id, so the anchor never
-// leaves it. On a board with no license-core the weak default answers 0, which
-// is the truthful answer for a board no licence can be bound to. Nothing here
-// derives, normalizes or reformats what it gets: the bytes go on the wire as
-// they arrive, because the editor compares them against what it purchased.
-#include "license_gate.h"
+#include "license_platform.h"
 
 /**
  * @brief Sends a Modbus response frame for the DEBUG_INFO function code.
@@ -481,30 +467,41 @@ void debugGetVersion()
 }
 
 // PDU request:  [FC]
-// PDU response: [FC, STATUS, id_len:u8, id_bytes...]
-//
-// Reports this board's device_id: LIC_DEVICE_ID_SIZE bytes on a board that can
-// hold a licence, and id_len = 0 on one that cannot. Both are SUCCESS replies.
-// The empty answer is not an error and must not look like one: `device-probe`
-// reads a successful reply, not the id bytes, as proof that firmware is running
-// (requiring bytes once reported mbed boards as having no firmware at all), and
-// the editor's licensing flow reads a zero-length id as "no licence can be
-// bound to this board" (license-flow.ts, deriveIdentity).
-//
-// The frame is the capacity limit, so it is passed as one: if the id could not
-// fit after [FC][STATUS][id_len], `license_gate_device_id` refuses and reports
-// nothing rather than a truncated identity, which would be a DIFFERENT id and
-// would match no licence ever issued.
+// PDU response: [FC][STATUS][count:u8] then [kind:u8][len:u8][bytes] per ID source; count 0 = no ID.
 void debugGetDeviceId()
 {
-    size_t idLen;
+    size_t reportLen;
 
     mb_frame[1] = MB_FC_DEBUG_GET_DEVICE_ID;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
-    idLen = license_gate_device_id(&mb_frame[4], (size_t)(MB_RESPONSE_CAPACITY - 4));
-    mb_frame[3] = (uint8_t)idLen;
-    mb_frame_len = 4 + (int)idLen;
+    reportLen = license_id_report(&mb_frame[3], (size_t)(MB_RESPONSE_CAPACITY - 3));
+    if (reportLen == 0u)
+    {
+        mb_frame[3] = 0u;
+        reportLen = 1u;
+    }
+    mb_frame_len = 3 + (int)reportLen;
+}
+
+// PDU request:  [FC][board id:16]
+// PDU response: [FC][STATUS]: SUCCESS, BOARD_ID_TAKEN, LIC_CORRUPT (invalid ID),
+// LIC_UNSUPPORTED (no slot) or ERROR_OUT_OF_MEMORY (store failed).
+void debugProvisionBoardId(const uint8_t *id)
+{
+    uint8_t status;
+
+    switch (license_board_id_provision(id, LIC_BOARD_ID_SIZE))
+    {
+        case LIC_BOARD_ID_OK:          status = MB_DEBUG_SUCCESS; break;
+        case LIC_BOARD_ID_TAKEN:       status = MB_BOARD_ID_TAKEN; break;
+        case LIC_BOARD_ID_INVALID:     status = MB_DEBUG_LIC_CORRUPT; break;
+        case LIC_BOARD_ID_UNSUPPORTED: status = MB_DEBUG_LIC_UNSUPPORTED; break;
+        default:                       status = MB_DEBUG_ERROR_OUT_OF_MEMORY; break;
+    }
+    mb_frame[1] = MB_FC_PROVISION_BOARD_ID;
+    mb_frame[2] = status;
+    mb_frame_len = 3;
 }
 
 // ---------------------------------------------------------------------------
@@ -589,3 +586,65 @@ void debugReadLicense(void)
         mb_frame_len = 3;   // [FC][STATUS] only
     }
 }
+
+#ifdef HMI_TEST_READOUT
+#include "hmi_baremetal.h"
+
+// PDU request:  [FC][offset:u32 BE][max:u8]
+// PDU response: [FC][STATUS][total:u32 BE][len:u8][bytes...]
+//
+// Offset 0 holds the current display list, so every chunk comes from one frame;
+// the HMI starts no new frame until the last chunk has been read.
+void hmiGetDisplayList(uint32_t offset, uint8_t max_len)
+{
+    mb_frame[1] = MB_FC_HMI_GET_DL;
+    int32_t total = offset == 0 ? hmi_bm_dl_hold() : -1;
+    int32_t room = (int32_t)MB_RESPONSE_CAPACITY - 8;
+    int32_t want = max_len < room ? (int32_t)max_len : room;
+    int32_t n = hmi_bm_dl_read(offset, &mb_frame[8], want);
+    if (n < 0)
+    {
+        mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
+        mb_frame_len = 3;
+        return;
+    }
+    if (total < 0) total = 0;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = (uint8_t)((uint32_t)total >> 24);
+    mb_frame[4] = (uint8_t)((uint32_t)total >> 16);
+    mb_frame[5] = (uint8_t)((uint32_t)total >> 8);
+    mb_frame[6] = (uint8_t)total;
+    mb_frame[7] = (uint8_t)n;
+    mb_frame_len = (uint16_t)(8 + n);
+}
+
+// PDU request:  [FC]
+// PDU response: [FC][STATUS][n:u8][n x u32 BE]: frames drawn, bands pushed,
+// scan overruns, last logic frame (us), worst band (us), least free stack of
+// the loop task in bytes (0xFFFFFFFF where the platform cannot tell), why the
+// HMI is off (hmi_bm_off_reason_t, 0 while it runs), touch reads postponed.
+void hmiGetStats(void)
+{
+    hmi_bm_stats_t s;
+    hmi_bm_stats(&s);
+#if defined(ESP_PLATFORM)
+    const uint32_t stack_free = (uint32_t)uxTaskGetStackHighWaterMark(NULL);
+#else
+    const uint32_t stack_free = 0xFFFFFFFFu;
+#endif
+    const uint32_t words[] = {s.frames_drawn, s.bands_pushed, s.scan_overruns, s.last_logic_us, s.worst_band_us,
+                              stack_free, s.off_reason, s.touch_skips};
+    const uint8_t n = (uint8_t)(sizeof words / sizeof words[0]);
+    mb_frame[1] = MB_FC_HMI_GET_STATS;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = n;
+    for (uint8_t i = 0; i < n; i++)
+    {
+        mb_frame[4 + i * 4] = (uint8_t)(words[i] >> 24);
+        mb_frame[5 + i * 4] = (uint8_t)(words[i] >> 16);
+        mb_frame[6 + i * 4] = (uint8_t)(words[i] >> 8);
+        mb_frame[7 + i * 4] = (uint8_t)words[i];
+    }
+    mb_frame_len = (uint16_t)(4 + n * 4);
+}
+#endif

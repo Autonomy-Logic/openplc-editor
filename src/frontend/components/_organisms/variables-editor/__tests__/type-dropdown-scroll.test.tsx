@@ -35,7 +35,7 @@ describe('type dropdowns stay inside the window', () => {
     expect(store.getState().pouActions.create({ type: 'function', name: 'Scrolled', language: 'st' }).ok).toBe(true)
     render(<VariablesEditor name='Scrolled' />)
 
-    openSelect(screen.getByLabelText('Return type :'))
+    openSelect(screen.getByLabelText('Return type'))
 
     expectScrollsWithinTheWindow(screen.getByRole('listbox'))
   })
@@ -44,7 +44,7 @@ describe('type dropdowns stay inside the window', () => {
     expect(store.getState().pouActions.create({ type: 'function', name: 'Listed', language: 'st' }).ok).toBe(true)
     render(<VariablesEditor name='Listed' />)
 
-    openSelect(screen.getByLabelText('Return type :'))
+    openSelect(screen.getByLabelText('Return type'))
 
     for (const type of ['BOOL', 'DT', 'STRING', 'WSTRING']) {
       expect(screen.getByRole('option', { name: type })).toBeTruthy()

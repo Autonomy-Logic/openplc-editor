@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 
 import type { RuntimeUserRole } from '../../../../middleware/shared/ports/runtime-port'
+import {
+  DEFAULT_NEW_ACCOUNT_ROLE,
+  RUNTIME_ROLE_DESCRIPTIONS,
+  RUNTIME_ROLE_LABELS,
+  RUNTIME_USER_ROLES,
+} from '../../../../middleware/shared/utils/runtime-users/roles'
 import { Label } from '../../_atoms/label'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
@@ -33,6 +39,8 @@ interface RuntimeUserModalProps {
   initialRole?: RuntimeUserRole
   /** Show the Role selector (admin managing accounts). */
   showRole?: boolean
+  /** Roles the selector offers, in order. */
+  roleOptions?: readonly RuntimeUserRole[]
   /** Editing your OWN account: a password change must be confirmed with the
    *  current password (blocks a stolen session from silently resetting it). */
   requireCurrentPassword?: boolean
@@ -56,8 +64,9 @@ const RuntimeUserModal = (props: RuntimeUserModalProps) => {
     description,
     submitLabel,
     initialUsername = '',
-    initialRole = 'user',
+    initialRole = DEFAULT_NEW_ACCOUNT_ROLE,
     showRole = false,
+    roleOptions = RUNTIME_USER_ROLES,
     requireCurrentPassword = false,
     onSubmit,
   } = props
@@ -192,21 +201,36 @@ const RuntimeUserModal = (props: RuntimeUserModalProps) => {
           </div>
 
           {showRole && (
-            <div>
-              <Label htmlFor='runtime-user-role' className='mb-2 block text-sm'>
-                Role
-              </Label>
-              <select
-                id='runtime-user-role'
-                value={role}
-                onChange={(e) => setRole(e.target.value as RuntimeUserRole)}
-                className={inputClass}
-                disabled={isLoading}
-              >
-                <option value='admin'>Admin</option>
-                <option value='user'>User</option>
-              </select>
-            </div>
+            <fieldset>
+              <legend className='mb-2 block text-sm font-medium text-neutral-850 dark:text-neutral-300'>Role</legend>
+              <div className='flex flex-col gap-1'>
+                {roleOptions.map((option) => (
+                  <label
+                    key={option}
+                    className='flex cursor-pointer items-start gap-2 rounded-md border border-neutral-300 px-3 py-2 text-sm has-[:checked]:border-brand dark:border-neutral-700'
+                  >
+                    <input
+                      type='radio'
+                      name='runtime-user-role'
+                      value={option}
+                      checked={role === option}
+                      onChange={() => setRole(option)}
+                      disabled={isLoading}
+                      aria-label={RUNTIME_ROLE_LABELS[option]}
+                      className='mt-1 accent-brand'
+                    />
+                    <span className='flex flex-col'>
+                      <span className='font-medium text-neutral-850 dark:text-neutral-200'>
+                        {RUNTIME_ROLE_LABELS[option]}
+                      </span>
+                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                        {RUNTIME_ROLE_DESCRIPTIONS[option]}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           )}
 
           <div>

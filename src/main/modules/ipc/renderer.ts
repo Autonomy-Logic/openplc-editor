@@ -51,7 +51,9 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
-  RuntimeUserRole,
+  RuntimeHardwareIdResult,
+  RuntimeLicenseSyncResult,
+  RuntimeWireRole,
   UpdateUserParams,
   UsersInfoResult,
   WhoAmIResult,
@@ -189,6 +191,8 @@ const rendererProcessBridge = {
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
   loadAllLibraries: (): Promise<unknown[]> => ipcRenderer.invoke('libraries:load-all'),
+  loadBuildLibraries: (listedNames: string[]): Promise<{ archives: unknown[]; missing: string[] }> =>
+    ipcRenderer.invoke('libraries:load-build', listedNames),
   listInstalledLibraries: (): Promise<
     Array<{
       name: string
@@ -570,6 +574,15 @@ const rendererProcessBridge = {
 
   wasmToolchainCompile: (request: WasmCompileRequest): Promise<WasmCompileResult> =>
     ipcRenderer.invoke('wasm-toolchain:compile', request),
+  wasmToolchainHold: (holder: string, held: boolean): Promise<void> =>
+    ipcRenderer.invoke('wasm-toolchain:hold', holder, held),
+
+  hmiPreviewReadSources: (): Promise<{ root: string; files: Record<string, Uint8Array> }> =>
+    ipcRenderer.invoke('hmi-preview:read-sources'),
+  hmiPreviewReadRuntimeHeaders: (): Promise<Record<string, string>> =>
+    ipcRenderer.invoke('hmi-preview:read-runtime-headers'),
+  hmiPreviewReadShipped: (name: string): Promise<Uint8Array | null> =>
+    ipcRenderer.invoke('hmi-preview:read-shipped', name),
 
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
     ipcRenderer.invoke('util:get-preview-image', image, packagePath),
@@ -693,7 +706,7 @@ const rendererProcessBridge = {
     ipAddress: string,
     username: string,
     password: string,
-    role?: RuntimeUserRole,
+    role?: RuntimeWireRole,
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:create-user', ipAddress, username, password, role),
   runtimeListUsers: (ipAddress: string): Promise<ListUsersResult> =>
@@ -705,6 +718,12 @@ const rendererProcessBridge = {
     params: UpdateUserParams,
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:update-user', ipAddress, userId, params),
+  runtimeUpdateOwnAccount: (
+    ipAddress: string,
+    userId: number,
+    params: UpdateUserParams,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:update-own-account', ipAddress, userId, params),
   runtimeDeleteUser: (ipAddress: string, userId: number): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:delete-user', ipAddress, userId),
   runtimeLogin: (
@@ -739,6 +758,10 @@ const rendererProcessBridge = {
     switchPosition?: 'run' | 'stop'
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, includeStats),
+  runtimeGetHardwareId: (ipAddress: string): Promise<RuntimeHardwareIdResult> =>
+    ipcRenderer.invoke('runtime:get-hardware-id', ipAddress),
+  runtimeSyncLicenses: (ipAddress: string): Promise<RuntimeLicenseSyncResult> =>
+    ipcRenderer.invoke('runtime:sync-licenses', ipAddress),
   runtimeStartPlc: (ipAddress: string): Promise<{ success: boolean; error?: string; status?: string }> =>
     ipcRenderer.invoke('runtime:start-plc', ipAddress),
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
@@ -819,6 +842,10 @@ const rendererProcessBridge = {
   onRuntimeTokenRefreshed: (callback: (_event: IpcRendererEvent, newToken: string) => void) => {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)
+  },
+  onRuntimeSessionEnded: (callback: (_event: IpcRendererEvent) => void) => {
+    ipcRenderer.on('runtime:session-ended', callback)
+    return () => ipcRenderer.removeListener('runtime:session-ended', callback)
   },
 
   etherCATGetInterfaces: (

@@ -10,6 +10,8 @@ import { CppIcon } from '../../../assets/icons/project/Cpp'
 import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { FBDIcon } from '../../../assets/icons/project/FBD'
 import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
+import { HmiScreenIcon } from '../../../assets/icons/project/HmiScreen'
+import { HmiWidgetIcon } from '../../../assets/icons/project/HmiWidget'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
 import { LibraryIcon } from '../../../assets/icons/project/Library'
@@ -61,6 +63,9 @@ const TabIcons: Record<string, React.ReactNode> = {
   'library-manifest': <LibraryManifestIcon className='h-4 w-4 flex-shrink-0' />,
   'user-management': <UsersIcon className='h-4 w-4 flex-shrink-0' />,
   'persistent-storage': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
+  'hmi-screen': <HmiScreenIcon className='h-4 w-4 flex-shrink-0' />,
+  'hmi-widget': <HmiWidgetIcon className='h-4 w-4 flex-shrink-0' />,
+  'hmi-settings': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   // Same icon as the tree node for this screen, so the tab and the tree
   // agree. Without an entry here the tab rendered with no icon at all,
   // which every other device tab has.
@@ -100,6 +105,9 @@ const Tab = (props: ITabProps) => {
     | 'library-manifest'
     | 'user-management'
     | 'persistent-storage'
+    | 'hmi-screen'
+    | 'hmi-widget'
+    | 'hmi-settings'
     | 'diff-viewer' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
@@ -147,6 +155,13 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'diff-viewer') {
     languageOrDerivation = 'diff-viewer'
+  }
+  if (
+    fileDerivation?.type === 'hmi-screen' ||
+    fileDerivation?.type === 'hmi-widget' ||
+    fileDerivation?.type === 'hmi-settings'
+  ) {
+    languageOrDerivation = fileDerivation.type
   }
 
   const { file: associatedFile } = getFile({ name: fileName || '' })

@@ -10,34 +10,48 @@ import { BoundedWasmObjectCache } from '../wasm-object-cache'
 import { CountingClangMechanism, flushMicrotasks } from './fixtures/counting-clang-mechanism'
 import { FakeRunner } from './fixtures/fake-runner'
 
-const bytes = (n: number): CachedWasmObject => ({ object: new Uint8Array(n), dependencies: [['a.c', 'digest']] })
+const bytes = (n: number, digest = `d${n}`): CachedWasmObject => ({
+  object: new Uint8Array(n),
+  digest,
+  dependencies: [['a.c', 'digest']],
+  includeNames: ['a.c'],
+  shadowDigest: 'shadow',
+})
 
 describe('BoundedWasmObjectCache', () => {
   it('stores and returns objects with their dependencies', () => {
     const cache = new BoundedWasmObjectCache(100)
     const entry = bytes(10)
     cache.set('a', entry)
-    expect(cache.get('a')).toBe(entry)
-    expect(cache.get('missing')).toBeUndefined()
+    expect(cache.variants('a')).toEqual([entry])
+    expect(cache.variants('missing')).toEqual([])
     expect(cache.size).toBe(1)
     expect(cache.totalBytes).toBe(10)
   })
 
   it('evicts the least recently used objects when over budget', () => {
     const cache = new BoundedWasmObjectCache(30)
-    cache.set('a', bytes(10)).set('b', bytes(10)).set('c', bytes(10))
-    cache.get('a')
-    cache.set('d', bytes(10))
-    expect(cache.get('b')).toBeUndefined()
-    expect(cache.get('a')).toBeDefined()
-    expect(cache.get('c')).toBeDefined()
-    expect(cache.get('d')).toBeDefined()
+    cache.set('a', bytes(10, 'a')).set('b', bytes(10, 'b')).set('c', bytes(10, 'c'))
+    cache.touch('a')
+    cache.set('d', bytes(10, 'd'))
+    expect(cache.variants('b')).toEqual([])
+    for (const key of ['a', 'c', 'd']) expect(cache.variants(key)).toHaveLength(1)
     expect(cache.totalBytes).toBe(30)
   })
 
-  it('replaces an entry and keeps the byte count right', () => {
+  it('keeps one object per content under a key, most recent first, up to the variant limit', () => {
+    const cache = new BoundedWasmObjectCache(1000)
+    for (const digest of ['v1', 'v2', 'v3', 'v4', 'v5']) cache.set('unit', bytes(10, digest))
+    expect(cache.variants('unit').map((e) => e.digest)).toEqual(['v5', 'v4', 'v3', 'v2'])
+    cache.touch('v2')
+    cache.set('unit', bytes(10, 'v6'))
+    expect(cache.variants('unit').map((e) => e.digest)).toEqual(['v6', 'v2', 'v5', 'v4'])
+    expect(cache.size).toBe(4)
+  })
+
+  it('replaces an object of the same content and keeps the byte count right', () => {
     const cache = new BoundedWasmObjectCache(100)
-    cache.set('a', bytes(40)).set('a', bytes(5))
+    cache.set('a', bytes(40, 'same')).set('a', bytes(5, 'same'))
     expect(cache.size).toBe(1)
     expect(cache.totalBytes).toBe(5)
   })
@@ -45,8 +59,8 @@ describe('BoundedWasmObjectCache', () => {
   it('never keeps an object larger than the budget', () => {
     const cache = new BoundedWasmObjectCache(10)
     cache.set('a', bytes(5)).set('huge', bytes(11))
-    expect(cache.get('huge')).toBeUndefined()
-    expect(cache.get('a')).toBeDefined()
+    expect(cache.variants('huge')).toEqual([])
+    expect(cache.variants('a')).toHaveLength(1)
   })
 })
 
@@ -95,7 +109,7 @@ describe('createWasmCompileService', () => {
     const log: Array<[string, string]> = []
     const result = await service.compile(request, (m, l) => log.push([m, l]))
     expect(result.ok).toBe(false)
-    expect(log[0]).toEqual(['a.c:1:1: error: bad', 'error'])
+    expect(log.find(([, level]) => level === 'error')).toEqual(['a.c:1:1: error: bad', 'error'])
   })
 })
 
@@ -210,6 +224,50 @@ describe('createWasmCompileService over one clang worker', () => {
     expect(mechanism.started).toBe(0)
   })
 
+  it('keeps the worker loaded between builds while held, and ends it once the hold ends', async () => {
+    const { mechanism, service } = setup()
+
+    await service.setHeld('hmi-editor', true)
+    expect((await service.compile(units(2))).ok).toBe(true)
+    expect(mechanism.alive).toBe(1)
+    expect((await service.compile(units(3))).ok).toBe(true)
+    expect(mechanism.started).toBe(1)
+    await service.setHeld('other', true)
+    await service.setHeld('hmi-editor', false)
+    expect(mechanism.alive).toBe(1)
+    await service.setHeld('other', false)
+
+    expect(mechanism.alive).toBe(0)
+  })
+
+  it("lets go of one page's holds and keeps another's", async () => {
+    const { mechanism, service } = setup()
+    await service.setHeld('hmi-editor', true, 'page-1')
+    await service.setHeld('hmi-editor', true, 'page-2')
+    expect((await service.compile(units(2))).ok).toBe(true)
+
+    await service.releaseOwner('page-1')
+    expect(mechanism.alive).toBe(1)
+    await service.releaseOwner('page-2')
+
+    expect(mechanism.alive).toBe(0)
+  })
+
+  it('retries a toolchain that could not load on the next build while held', async () => {
+    const { mechanism, service } = setup()
+    await service.setHeld('hmi-editor', true)
+    mechanism.spawnError = new Error('no memory for the worker')
+
+    expect((await service.compile(units(2))).ok).toBe(false)
+    mechanism.spawnError = null
+    const retried = await service.compile(units(2))
+
+    expect(retried.ok).toBe(true)
+    expect(mechanism.spawnAttempts).toBe(2)
+    expect(mechanism.alive).toBe(1)
+    await service.setHeld('hmi-editor', false)
+  })
+
   it('leaves no clang worker alive once a successful build resolves', async () => {
     const { mechanism, service } = setup()
 
@@ -287,7 +345,8 @@ describe('createWasmCompileService over one clang worker', () => {
     const { mechanism, service } = setup()
     mechanism.autoReady = false
     const build = service.compile(units(2))
-    for (let round = 0; round < 200 && mechanism.started === 0; round++) await flushMicrotasks()
+    for (let round = 0; round < 200 && mechanism.started === 0; round++)
+      await new Promise((resolve) => setTimeout(resolve, 0))
     mechanism.workers[0]?.fail('the toolchain bundle could not be read')
 
     const result = await build

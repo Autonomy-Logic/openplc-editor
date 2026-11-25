@@ -52,6 +52,7 @@ import {
   switchBranch,
 } from '@root/backend/editor/edge-version-control'
 import { EsiProjectFiles } from '@root/backend/editor/ethercat'
+import { readFolderBytes, readFolderText } from '@root/backend/editor/hmi/hmi-preview-files'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
@@ -63,6 +64,7 @@ import {
 import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import type {
   DebugAnchorResult,
+  DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
   DebugStatusResult,
   DeviceDebugChannel,
@@ -109,15 +111,32 @@ import type {
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
+import type { RuntimeHardwareIdResult, RuntimeLicenseSyncResult } from '@root/middleware/shared/ports/runtime-port'
 import type {
   RuntimeCapabilitiesResult,
-  RuntimeUser,
-  RuntimeUserRole,
+  RuntimeWireRole,
   UpdateUserParams,
 } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig, PackageInstallProgress } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-gate/runtime-capabilities-response'
+import {
+  BAREMETAL_RUNTIME_LICENSE_KEYS,
+  BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
+  createInFlightByKey,
+  LINUX_RUNTIME_LICENSE_KEYS,
+  parseRuntimeLicenseDevKey,
+  readRuntimeHardwareId,
+  type RuntimeLicenseKeys,
+  syncRuntimeLicenses,
+  withRuntimeLicenseDevKey,
+} from '@root/middleware/shared/utils/licensing'
+import {
+  parseRuntimeJson,
+  parseRuntimeUser,
+  parseRuntimeUserList,
+  runtimeUpdateUserBody,
+} from '@root/middleware/shared/utils/runtime-users/wire'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -147,12 +166,8 @@ import {
 } from '../../../backend/editor/hardware/device-session-manager'
 import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
-import {
-  type DeviceIdentity,
-  inspectDeviceLicense,
-  type LicenseReadWritable,
-  resolveDeviceLicense,
-} from '../../../backend/editor/license/license-flow'
+import { checkDeviceActivation } from '../../../backend/editor/license/license-activation-client'
+import { createRuntimeLicenseMechanisms } from '../../../backend/editor/license/runtime-license-mechanisms'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import type { StartupDependencyCheck } from '../../../backend/editor/package-manager/startup-dependency-check'
 import {
@@ -170,7 +185,24 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import { getDesktopWasmCompileService } from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
+import {
+  getDesktopShippedObjects,
+  getDesktopWasmCompileService,
+} from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
+import {
+  armBoardLicenceBackup,
+  BoardBackupHolder,
+  openLinkWithBackup,
+  readBoardIdentityWithBackup,
+  restoreBoardLicenceFromBackup,
+} from '../../../backend/shared/license/board-licence-backup'
+import {
+  type DeviceIdentity,
+  identityFromSources,
+  inspectDeviceLicense,
+  type LicenseReadWritable,
+  resolveDeviceLicense,
+} from '../../../backend/shared/license/license-flow'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
   interpretPluginCommandResponse,
@@ -187,6 +219,31 @@ const EditSessionClientSchema = z.object({
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
+let devKeyCollisionWarned = false
+let devKeyAcceptedLogged = false
+/** Runtime licence keys of one product plus the `OPENPLC_RUNTIME_LICENSE_DEV_KEY` development key, if set. */
+const runtimeKeysWithDevKey = (keys: RuntimeLicenseKeys) => {
+  const devKey = parseRuntimeLicenseDevKey(process.env.OPENPLC_RUNTIME_LICENSE_DEV_KEY)
+  if (devKey && Object.prototype.hasOwnProperty.call(keys, devKey.keyId)) {
+    if (!devKeyCollisionWarned) {
+      devKeyCollisionWarned = true
+      logger.warn(
+        `OPENPLC_RUNTIME_LICENSE_DEV_KEY ignored: key_id ${devKey.keyId} belongs to a shipped key; use another key_id.`,
+      )
+    }
+  } else if (devKey && !devKeyAcceptedLogged) {
+    devKeyAcceptedLogged = true
+    logger.info(`OPENPLC_RUNTIME_LICENSE_DEV_KEY accepted as development key_id ${devKey.keyId}.`)
+  }
+  return withRuntimeLicenseDevKey(keys, devKey)
+}
+
+/** A request for the baremetal runtime product verifies the stored licence in full. */
+const licenseInput = (request: DeviceLicenseRequest) =>
+  request.packageId === BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID
+    ? { ...request, runtimeKeys: runtimeKeysWithDevKey(BAREMETAL_RUNTIME_LICENSE_KEYS) }
+    : request
+
 /** Why a channel could not be handed out. */
 interface ChannelUnavailable {
   error: string
@@ -196,9 +253,20 @@ interface ChannelUnavailable {
 /** The identity read is either `getDeviceId` (baremetal) or `getAnchor` (runtime-v4), never both. */
 type LicenseChannel = LicenseReadWritable &
   (
-    | { getDeviceId(): Promise<DebugDeviceIdResult>; getAnchor?: never }
+    | {
+        getDeviceId(): Promise<DebugDeviceIdResult>
+        provisionBoardId?(id: Uint8Array): Promise<DebugBoardIdProvisionResult>
+        getAnchor?: never
+      }
     | { getAnchor(): Promise<DebugAnchorResult>; getDeviceId?: never }
   )
+
+/** The compile flow's last message on its port, which carries the build and upload verdict. */
+function isCompileVerdict(message: unknown): message is { closePort: true; success: boolean } {
+  if (typeof message !== 'object' || message === null) return false
+  const m = message as { closePort?: unknown; success?: unknown }
+  return m.closePort === true && typeof m.success === 'boolean'
+}
 
 /** Whether a debug channel can carry the licensing flow: the two licence FCs plus one of the two identity reads. */
 function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
@@ -367,6 +435,9 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.webContents?.send('runtime:token-refreshed', newToken)
       this.deviceSession.getDebugClient()?.reauth?.(newToken)
     })
+    this.tokens.onSessionEnded(() => {
+      this.mainWindow?.webContents?.send('runtime:session-ended')
+    })
   }
 
   handleBootloaderGetCapabilities = (_event: IpcMainInvokeEvent, ipAddress: string, options?: unknown) => {
@@ -421,38 +492,47 @@ class MainProcessBridge implements MainIpcModule {
     ipAddress: string,
     username: string,
     password: string,
-    role?: RuntimeUserRole,
+    role?: RuntimeWireRole,
   ) => this.runtimeApi.createUser(ipAddress, username, password, role)
 
   handleRuntimeListUsers = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    const res = await this.makeRuntimeApiRequest<RuntimeUser[]>(ipAddress, '/api/get-users-info', (data) => {
-      const parsed: unknown = JSON.parse(data)
-      return Array.isArray(parsed) ? (parsed as RuntimeUser[]) : []
-    })
+    const res = await this.makeRuntimeApiRequest(ipAddress, '/api/get-users-info', (data) =>
+      parseRuntimeUserList(parseRuntimeJson(data)),
+    )
     return res.success ? { success: true, users: res.data } : { success: false, error: res.error }
   }
 
   handleRuntimeWhoAmI = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    const res = await this.makeRuntimeApiRequest<RuntimeUser>(
-      ipAddress,
-      '/api/whoami',
-      (data) => JSON.parse(data) as RuntimeUser,
+    const res = await this.makeRuntimeApiRequest(ipAddress, '/api/whoami', (data) =>
+      parseRuntimeUser(parseRuntimeJson(data)),
     )
-    return res.success ? { success: true, user: res.data } : { success: false, error: res.error }
+    if (!res.success) return { success: false, error: res.error }
+    return res.data ? { success: true, user: res.data } : { success: false, error: 'Unrecognised whoami reply' }
   }
 
-  handleRuntimeUpdateUser = async (
+  private updateRuntimeUser = async (ipAddress: string, userId: number, params: UpdateUserParams) => {
+    const body = JSON.stringify(runtimeUpdateUserBody(params))
+    const res = await this.makeRuntimeApiMutation('PUT', ipAddress, `/api/update-user/${userId}`, body)
+    return res.success ? { success: true } : { success: false, error: res.error }
+  }
+
+  handleRuntimeUpdateUser = (_event: IpcMainInvokeEvent, ipAddress: string, userId: number, params: UpdateUserParams) =>
+    this.updateRuntimeUser(ipAddress, userId, params)
+
+  handleRuntimeUpdateOwnAccount = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
     userId: number,
     params: UpdateUserParams,
   ) => {
-    const body: Record<string, string> = {}
-    if (params.username !== undefined) body.username = params.username
-    if (params.password !== undefined) body.password = params.password
-    if (params.currentPassword !== undefined) body.current_password = params.currentPassword
-    if (params.role !== undefined) body.role = params.role
-    const res = await this.makeRuntimeApiMutation('PUT', ipAddress, `/api/update-user/${userId}`, JSON.stringify(body))
+    const body = JSON.stringify(runtimeUpdateUserBody(params))
+    const res = await this.runtimeApi.makeOwnAccountMutation(
+      params,
+      'PUT',
+      ipAddress,
+      `/api/update-user/${userId}`,
+      body,
+    )
     return res.success ? { success: true } : { success: false, error: res.error }
   }
 
@@ -539,6 +619,20 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: getErrorMessage(error) }
     }
   }
+
+  handleRuntimeGetHardwareId = (_event: IpcMainInvokeEvent, ipAddress: string): Promise<RuntimeHardwareIdResult> =>
+    readRuntimeHardwareId(createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress))
+
+  /** Licence syncs in flight, one per runtime address. */
+  private readonly runtimeLicenseSyncs = createInFlightByKey<RuntimeLicenseSyncResult>()
+
+  handleRuntimeSyncLicenses = (_event: IpcMainInvokeEvent, ipAddress: string): Promise<RuntimeLicenseSyncResult> =>
+    this.runtimeLicenseSyncs(ipAddress, () =>
+      syncRuntimeLicenses(
+        createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress),
+        runtimeKeysWithDevKey(LINUX_RUNTIME_LICENSE_KEYS),
+      ),
+    )
 
   handleRuntimeStartPlc = (_event: IpcMainInvokeEvent, ipAddress: string) => this.restStartPlc(ipAddress)
 
@@ -842,6 +936,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('open-external-link', this.handleOpenExternalLink)
     this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
     this.registerHandle('libraries:load-all', this.handleLibrariesLoadAll)
+    this.registerHandle('libraries:load-build', this.handleLibrariesLoadBuild)
     this.registerHandle('libraries:list-installed', this.handleLibrariesListInstalled)
     this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
     this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
@@ -939,6 +1034,10 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('util:read-debug-file', this.handleReadDebugFile)
 
     this.registerHandle('wasm-toolchain:compile', this.handleWasmToolchainCompile)
+    this.registerHandle('wasm-toolchain:hold', this.handleWasmToolchainHold)
+    this.registerHandle('hmi-preview:read-sources', this.handleHmiPreviewReadSources)
+    this.registerHandle('hmi-preview:read-runtime-headers', this.handleHmiPreviewReadRuntimeHeaders)
+    this.registerHandle('hmi-preview:read-shipped', this.handleHmiPreviewReadShipped)
 
     this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
     this.registerHandle('debugger:plc-control', this.handleDebuggerPlcControl)
@@ -961,9 +1060,12 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:list-users', this.handleRuntimeListUsers)
     this.registerHandle('runtime:whoami', this.handleRuntimeWhoAmI)
     this.registerHandle('runtime:update-user', this.handleRuntimeUpdateUser)
+    this.registerHandle('runtime:update-own-account', this.handleRuntimeUpdateOwnAccount)
     this.registerHandle('runtime:delete-user', this.handleRuntimeDeleteUser)
     this.registerHandle('runtime:login', this.handleRuntimeLogin)
     this.registerHandle('runtime:get-status', this.handleRuntimeGetStatus)
+    this.registerHandle('runtime:get-hardware-id', this.handleRuntimeGetHardwareId)
+    this.registerHandle('runtime:sync-licenses', this.handleRuntimeSyncLicenses)
     this.registerHandle('runtime:start-plc', this.handleRuntimeStartPlc)
     this.registerHandle('runtime:stop-plc', this.handleRuntimeStopPlc)
     this.registerHandle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)
@@ -1246,6 +1348,15 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Loads bundled .stlib archives from `<resources>/strucpp/libs/`, alphabetically. Errors propagate. */
   handleLibrariesLoadAll = async (): Promise<unknown[]> => this.libraryManagerModule.loadAll()
+  /** The archives a build of a project listing `listedNames` compiles against (`loadEnabledArchives`). */
+  handleLibrariesLoadBuild = (
+    _event: IpcMainInvokeEvent,
+    listedNames: unknown,
+  ): { archives: unknown[]; missing: string[] } => {
+    if (!Array.isArray(listedNames) || !listedNames.every((name): name is string => typeof name === 'string'))
+      throw new Error('libraries:load-build expects a list of library names')
+    return this.libraryManagerModule.loadEnabledArchives(listedNames)
+  }
   handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
   handleLibrariesInstallFromFile = async () => {
     if (!this.mainWindow) return { success: false, error: 'No main window' }
@@ -2018,7 +2129,7 @@ class MainProcessBridge implements MainIpcModule {
   handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
-    const mainProcessPort = event.ports[0]
+    const mainProcessPort = this.observeCompileVerdict(event.ports[0])
     void this.#compileAfterStartupCheck(args, mainProcessPort).catch((error) => {
       mainProcessPort.postMessage({
         logLevel: 'error',
@@ -2026,6 +2137,23 @@ class MainProcessBridge implements MainIpcModule {
       })
       mainProcessPort.postMessage({ closePort: true })
       mainProcessPort.close()
+    })
+  }
+
+  /** `port` with its `{ closePort, success }` message also reported to the board licence backup. */
+  private observeCompileVerdict(port: MessagePortMain): MessagePortMain {
+    const holder = this.boardLicenceBackup
+    return new Proxy(port, {
+      get(target, prop) {
+        if (prop === 'postMessage') {
+          return (...args: Parameters<MessagePortMain['postMessage']>) => {
+            if (isCompileVerdict(args[0])) holder.uploadFinished(args[0].success)
+            target.postMessage(...args)
+          }
+        }
+        const value: unknown = Reflect.get(target, prop)
+        return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+      },
     })
   }
 
@@ -2183,6 +2311,49 @@ class MainProcessBridge implements MainIpcModule {
 
   handleWasmToolchainCompile = (_event: IpcMainInvokeEvent, request: unknown): Promise<WasmCompileResult> =>
     getDesktopWasmCompileService().compileRequest(request)
+
+  handleWasmToolchainHold = (event: IpcMainInvokeEvent, holder: unknown, held: unknown): Promise<void> => {
+    if (typeof holder !== 'string' || typeof held !== 'boolean')
+      return Promise.reject(new Error('wasm-toolchain:hold takes a holder name and a boolean'))
+    const owner = `renderer-${event.sender.id}`
+    this.releaseHoldsWhenPageEnds(event.sender, owner)
+    return getDesktopWasmCompileService().setHeld(holder, held, owner)
+  }
+
+  /** Pages whose toolchain holds are let go when the page navigates, reloads, crashes or closes. */
+  private readonly holdOwnerPages = new Set<number>()
+
+  /** Lets go of a page's toolchain holds when it navigates, reloads, crashes or closes, which runs none of its cleanup. */
+  private releaseHoldsWhenPageEnds(contents: WebContents, owner: string): void {
+    if (this.holdOwnerPages.has(contents.id)) return
+    this.holdOwnerPages.add(contents.id)
+    const release = () => {
+      getDesktopWasmCompileService()
+        .releaseOwner(owner)
+        .catch(() => undefined)
+    }
+    contents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) release()
+    })
+    contents.on('render-process-gone', release)
+    contents.once('destroyed', () => {
+      this.holdOwnerPages.delete(contents.id)
+      release()
+    })
+  }
+
+  handleHmiPreviewReadSources = async (): Promise<{ root: string; files: Record<string, Uint8Array> }> => ({
+    root: '',
+    files: await readFolderBytes(join(this.compilerModule.sourceDirectoryPath, 'hmi')),
+  })
+
+  handleHmiPreviewReadRuntimeHeaders = (): Promise<Record<string, string>> =>
+    readFolderText(this.compilerModule.strucppRuntimeDir)
+
+  handleHmiPreviewReadShipped = (_event: IpcMainInvokeEvent, name: unknown): Promise<Uint8Array | null> =>
+    typeof name === 'string'
+      ? getDesktopShippedObjects().read(name)
+      : Promise.reject(new Error('hmi-preview:read-shipped takes a file name'))
 
   handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
     this.hardwareModule.getBoardImagePreview(image, packagePath)
@@ -2506,7 +2677,24 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     port: string | null | undefined,
   ): Promise<{ released: boolean }> => {
+    await this.backUpBoardLicence(port)
     return { released: this.deviceSession.releaseSerialPort(port) }
+  }
+
+  /** Generated ID and licence of the board on the released port, for `readLicenseIdentity` after the upload. */
+  private readonly boardLicenceBackup = new BoardBackupHolder()
+
+  private async backUpBoardLicence(port: string | null | undefined): Promise<void> {
+    const link = this.deviceSession.getLink()
+    const taken = await armBoardLicenceBackup(this.boardLicenceBackup, this.deviceClient(), link, port)
+    if (!taken || !link) return
+    if ('error' in taken) {
+      this.traceDeviceLink(`release ${link.descriptor}: backup skipped — ${taken.error}`)
+    } else if (taken.backup) {
+      const { generatedId, blob } = taken.backup
+      const kept = [generatedId && 'board ID', blob && 'licence'].filter(Boolean).join(' and ')
+      this.traceDeviceLink(`release ${link.descriptor}: backed up ${kept}`)
+    }
   }
 
   /** The CONTROL channel's client (run/stop, status). */
@@ -2614,7 +2802,7 @@ class MainProcessBridge implements MainIpcModule {
       return { status: 'error', error: 'No usable serial or Modbus TCP connection was configured for this device.' }
     }
 
-    const result = await this.deviceSession.open(linkCandidates)
+    const result = await openLinkWithBackup(this.boardLicenceBackup, () => this.deviceSession.open(linkCandidates))
     const probe = this.takeDeviceLinkProbe()
     if (result.ok) return probe ?? { status: 'connected-with-firmware' }
 
@@ -2625,6 +2813,7 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Close the held link (user pressed Disconnect). */
   handleDeviceDisconnect = async (): Promise<{ success: boolean }> => {
+    this.boardLicenceBackup.linkClosed()
     this.deviceSession.close()
     this.deviceLinkProbe = null
     this.tracedChannelUses.clear()
@@ -2653,10 +2842,16 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     if (client.getDeviceId) {
-      const read = await client.getDeviceId()
+      const port = this.deviceSession.getLink()?.descriptor
+      const read = await readBoardIdentityWithBackup(this.boardLicenceBackup, client, port)
       const bad = settle(read)
       if (bad) return bad
-      return { identity: { kind: 'device-id', deviceId: read.deviceId ?? new Uint8Array(0) } }
+      const identity = identityFromSources(read.sources ?? [])
+      if ('error' in identity) return { error: identity.error, retryable: false } as const
+      const restore = await restoreBoardLicenceFromBackup(this.boardLicenceBackup, client, port, identity.anchor)
+      if (restore?.status === 'restored') this.traceDeviceLink('restored the licence backed up before the upload')
+      else if (restore?.status === 'failed') this.traceDeviceLink(`licence restore skipped — ${restore.error}`)
+      return { identity }
     }
 
     if (client.getAnchor) {
@@ -2714,7 +2909,7 @@ class MainProcessBridge implements MainIpcModule {
         const identity = await this.readLicenseIdentity(client)
         if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-        return await inspectDeviceLicense(client, { ...request, identity: identity.identity })
+        return await inspectDeviceLicense(client, { ...licenseInput(request), identity: identity.identity })
       } catch (error) {
         return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
       }
@@ -2736,7 +2931,11 @@ class MainProcessBridge implements MainIpcModule {
         const identity = await this.readLicenseIdentity(client)
         if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-        const report = await resolveDeviceLicense(client, { ...request, identity: identity.identity })
+        const report = await resolveDeviceLicense(
+          client,
+          { ...licenseInput(request), identity: identity.identity },
+          checkDeviceActivation,
+        )
         this.deviceSession.noteTraffic()
         return report
       } catch (error) {

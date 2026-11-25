@@ -1,5 +1,10 @@
 import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
 import type {
+  RuntimeCommercialLicense,
+  RuntimeHardwareElement,
+  RuntimeHardwareId,
+} from '../utils/licensing/runtime-commercial-license'
+import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
   EtherCATScanResponse,
@@ -24,17 +29,20 @@ export interface LoginResult {
 }
 
 /**
- * RBAC role for a runtime account. `admin` may manage every account;
- * `user` may edit only its own account and cannot create/delete users.
+ * Role of a runtime account. `admin` manages accounts; `engineer` uploads, starts and stops, reads logs and debugs;
+ * `operator` and `viewer` are HMI accounts that may only change their own password.
  */
-export type RuntimeUserRole = 'admin' | 'user'
+export type RuntimeUserRole = 'admin' | 'engineer' | 'operator' | 'viewer'
+
+/** A role name as sent to a runtime: one of the four roles, or `user` for an engineer on a runtime before 4.4.0. */
+export type RuntimeWireRole = RuntimeUserRole | 'user'
 
 export interface CreateUserParams {
   username: string
   password: string
   /** Role for the new account. Ignored for the unauthenticated first-user
    *  bootstrap (the runtime always makes the first user an admin). */
-  role?: RuntimeUserRole
+  role?: RuntimeWireRole
 }
 
 export type RuntimeConnectFailureKind = 'refused' | 'timeout' | 'host-unreachable' | 'network-unreachable' | 'other'
@@ -91,7 +99,7 @@ export interface UpdateUserParams {
   username?: string
   password?: string
   currentPassword?: string
-  role?: RuntimeUserRole
+  role?: RuntimeWireRole
 }
 
 export interface RuntimeStatusResult {
@@ -105,6 +113,44 @@ export interface RuntimeStatusResult {
   switchPosition?: 'run' | 'stop'
   error?: string
 }
+
+/** `GET /api/hardware-id`; `hardwareId` is null when the target derives none. */
+export type RuntimeHardwareIdResult =
+  | ({ success: true; elements: RuntimeHardwareElement[] } & RuntimeHardwareId)
+  | { success: false; error: string }
+
+/** One licence file sent to `POST /api/runtime-license`, identified by its order. */
+export interface RuntimeLicenseUploadOutcome {
+  orderId: string
+  stored: boolean
+  error?: string
+}
+
+/** A stored licence Edge no longer lists as active, and whether `DELETE /api/runtime-license` removed it. */
+export interface RuntimeLicenseRevocation {
+  orderId: string
+  removed: boolean
+  error?: string
+}
+
+/**
+ * The runtime's commercial licence as the editor verified it, and the Edge licences it uploaded.
+ * `detail` says why a licence could not be confirmed: Edge could not be reached, or the runtime
+ * reported another hardware ID when read back after an upload.
+ * `elements` are the runtime's hardware elements from `GET /api/hardware-id`, empty when unknown.
+ */
+export type RuntimeLicenseSyncResult =
+  | {
+      status: 'synced'
+      hardwareId: string
+      license: RuntimeCommercialLicense
+      uploads: RuntimeLicenseUploadOutcome[]
+      elements: RuntimeHardwareElement[]
+      revoked?: RuntimeLicenseRevocation
+      detail?: string
+    }
+  | { status: 'no-hardware-id' }
+  | { status: 'failed'; error: string }
 
 export interface CompilationStatusResult {
   success: boolean
@@ -317,11 +363,27 @@ export interface RuntimePort {
   /** Update an account's username, password and/or role. */
   updateUser(userId: number, params: UpdateUserParams): Promise<{ success: boolean; error?: string }>
 
+  /**
+   * Update the signed-in account. On success the session adopts the new username and password and, when the password
+   * changed, signs in again with it, so it stays connected after the runtime ends the account's sessions.
+   */
+  updateOwnAccount(userId: number, params: UpdateUserParams): Promise<{ success: boolean; error?: string }>
+
   /** Delete an account by id (admin only; cannot delete your own account). */
   deleteUser(userId: number): Promise<{ success: boolean; error?: string }>
 
   /** Get current PLC runtime status with optional timing statistics. */
   getStatus(includeStats?: boolean): Promise<RuntimeStatusResult>
+
+  /** Read the runtime's hardware ID and the element hashes it is computed from. */
+  getHardwareId?(): Promise<RuntimeHardwareIdResult>
+
+  /**
+   * Verify the stored licence offline, confirm it against Edge's active licences (short timeout,
+   * fail-open), remove a revoked one and install a missing one. Never throws; absent on platforms
+   * that do not check runtime licences.
+   */
+  syncRuntimeLicenses?(): Promise<RuntimeLicenseSyncResult>
 
   /**
    * Start the PLC program on the runtime. `status`, when present, carries the raw `status` field of the runtime's
@@ -379,6 +441,9 @@ export interface RuntimePort {
    * Returns unsubscribe function.
    */
   onTokenRefreshed?(callback: (newToken: string) => void): Unsubscribe
+
+  /** Subscribe to the end of the session: the runtime refused to sign the account in again. */
+  onSessionEnded?(callback: () => void): Unsubscribe
 
   /** Current runtime access token held by the platform's token authority, or null when not authenticated. */
   getAccessToken?(): string | null

@@ -81,9 +81,34 @@ export async function runClangJob(
   }
 }
 
+const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((x, i) => x === b[i])
+
+/**
+ * The files of `output` that a job wrote: those `input` does not hold with the same content, in the same folders. A
+ * worker replies with these only, so the inputs are not copied back.
+ */
+export function producedFiles(input: WasmToolchainTree, output: WasmToolchainTree): WasmToolchainTree {
+  const produced: WasmToolchainTree = {}
+  for (const [name, content] of Object.entries(output)) {
+    const before = input[name]
+    if (typeof content === 'string' || content instanceof Uint8Array) {
+      if (content === before) continue
+      if (content instanceof Uint8Array && before instanceof Uint8Array && sameBytes(content, before)) continue
+      produced[name] = content
+      continue
+    }
+    const inner =
+      before === undefined || typeof before === 'string' || before instanceof Uint8Array
+        ? content
+        : producedFiles(before, content)
+    if (Object.keys(inner).length > 0) produced[name] = inner
+  }
+  return produced
+}
+
 /**
  * The body of a clang worker: loads the toolchain, checks it runs, reports `ready`, then answers one job per
- * message. Rejects when the toolchain cannot load, which the worker turns into its own failure.
+ * message with the files it wrote (`producedFiles`). Rejects when the toolchain cannot load, which the worker turns into its own failure.
  */
 export async function serveClangWorker(loadModule: () => Promise<unknown>, port: ClangWorkerPort): Promise<void> {
   const loaded = await loadModule()
@@ -94,7 +119,12 @@ export async function serveClangWorker(loadModule: () => Promise<unknown>, port:
   port.onMessage((message) => {
     if (!isClangWorkerJob(message)) return
     runClangJob(loaded, message.argv, message.tree).then(
-      (result) => port.post({ type: 'result', id: message.id, result }),
+      (result) =>
+        port.post({
+          type: 'result',
+          id: message.id,
+          result: { ...result, tree: producedFiles(message.tree, result.tree) },
+        }),
       (error: unknown) =>
         port.post({ type: 'error', id: message.id, message: error instanceof Error ? error.message : String(error) }),
     )

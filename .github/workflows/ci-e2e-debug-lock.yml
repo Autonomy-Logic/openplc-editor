@@ -28,6 +28,9 @@ jobs:
       - name: Install strucpp
         run: npm run setup:strucpp
 
+      - name: Install the HMI widget libraries
+        run: npm run setup:hmi-widgets
+
       # --ignore-scripts also skips the postinstall that fetches the pinned Python runtime the simulator runs.
       - name: Cache the Python runtime
         uses: actions/cache@v4

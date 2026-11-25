@@ -119,3 +119,44 @@ describe('program build against the real strucpp', () => {
     expect(result.errors.some((error) => /\bIN\b/.test(error.raw.message))).toBe(true)
   })
 })
+
+describe('program build against libraries that need the HMI core', () => {
+  /** The pre-installed HMI libraries, as the setup installed them. */
+  const hmiLibraries = (): unknown[] =>
+    ['standard-widgets.stlib', 'hmi-alarms.stlib'].map((file) =>
+      loadStrucpp().loadStlibFromString(readFileSync(join(process.cwd(), 'vendor', 'hmi-widgets', file), 'utf-8')),
+    )
+  const buildWith = (source: string) =>
+    runProgramBuildPipeline({
+      source,
+      md5: '0123456789abcdef0123456789abcdef',
+      pous: [],
+      libraries: [...bundledLibraries(), ...hmiLibraries()],
+      missingLibraries: [],
+      hasCBlocks: false,
+    })
+
+  it('compiles a program that uses only POUs a PLC build can use, with the HMI libraries installed', () => {
+    const result = buildWith(
+      programSt(
+        '',
+        '    events : ARRAY[0..3] OF HMI_EVENT_ROW;\n    ok : BOOL;\n',
+        "  ok := HMI_LOG_EVENT(Message := 'start', Events := events);\n",
+      ),
+    )
+
+    expect(result.errors.map((error) => error.raw.message)).toEqual([])
+    expect(result.success).toBe(true)
+  })
+
+  it('fails early, naming the POU and the HMI core, when the program uses a widget', () => {
+    const result = buildWith(programSt('', '    button : HmiButton;\n', ''))
+
+    expect(result.success).toBe(false)
+    expect(result.errors.map((error) => error.raw.message)).toEqual([
+      expect.stringMatching(
+        /^HMIBUTTON \(library standard-widgets\) needs hmi_core\.h version \d+.*which this build does not provide$/,
+      ),
+    ])
+  })
+})

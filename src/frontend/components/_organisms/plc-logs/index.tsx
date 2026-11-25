@@ -2,6 +2,7 @@ import { debounce } from 'lodash'
 import { memo, useEffect, useMemo, useRef } from 'react'
 
 import { isV4Logs, RuntimeLogEntry, RuntimeLogLevel } from '../../../../middleware/shared/ports'
+import { engineeringActionRefusal } from '../../../../middleware/shared/utils/runtime-users/roles'
 import { useOpenPLCStore } from '../../../store'
 import formatTimestamp from '../../../utils/format-timestamp'
 import { newUuid } from '../../../utils/new-uuid'
@@ -25,6 +26,7 @@ const mapV4LevelToLogLevel = (level: RuntimeLogLevel): LogLevel => {
 const PlcLogs = memo(() => {
   const plcLogs = useOpenPLCStore((state) => state.workspace.plcLogs)
   const filters = useOpenPLCStore((state) => state.workspace.plcFilters)
+  const logsRefusal = useOpenPLCStore((state) => engineeringActionRefusal(state.runtimeConnection.accountRole, 'logs'))
   const bottomLogRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const userScrolledRef = useRef(false)
@@ -120,6 +122,9 @@ const PlcLogs = memo(() => {
       aria-label='PLC Logs'
       className='relative h-full w-full select-text overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
     >
+      {logsRefusal !== null && (
+        <p className='p-2 text-sm font-normal text-neutral-600 dark:text-neutral-400'>{logsRefusal}.</p>
+      )}
       {isV4
         ? v4DisplayLogs.map((entry, index) => (
             <LogComponent

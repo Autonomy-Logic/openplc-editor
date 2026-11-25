@@ -28,6 +28,8 @@ import type {
   S7CommServerSettings,
   S7CommSystemArea,
 } from '../../../../middleware/shared/ports/types'
+import type { HmiElementKind } from '../../../../middleware/shared/utils/hmi/references'
+import type { HmiSettings } from '../../../../middleware/shared/utils/hmi/settings'
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -277,6 +279,19 @@ export type ProjectActions = {
   reconcileGlobalVariableListText: (name: string) => ProjectResponse
   /** Rewrite the code view's buffer from the list. No-op when that view isn't open. */
   regenerateGlobalVariableListText: (name: string) => void
+
+  /** Adds a screen or widget block; the first one starts the project's HMI with default settings. */
+  createHmiElement: (kind: HmiElementKind, name: string, source: string) => void
+  /** Removes it and queues its file for deletion. */
+  deleteHmiElement: (kind: HmiElementKind, name: string) => void
+  /** Renames it, its own FUNCTION_BLOCK header included, and queues the old file for deletion. References are
+   *  `propagateHmiRename`'s. */
+  renameHmiElement: (kind: HmiElementKind, oldName: string, newName: string) => void
+  /** Renames every reference to a screen or widget block in the other HMI files and in HMI Settings. */
+  propagateHmiRename: (kind: HmiElementKind, oldName: string, newName: string) => void
+  updateHmiSource: (kind: HmiElementKind, name: string, source: string) => void
+  /** Replaces HMI Settings, also when the file on disk did not validate. */
+  updateHmiSettings: (settings: HmiSettings) => void
 
   // Data types
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse

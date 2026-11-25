@@ -13,7 +13,6 @@ import { HardwareModule } from '@root/backend/editor/hardware'
 import { LibraryManagerModule } from '@root/backend/editor/library-manager'
 import type { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import type { CompileProgramTransport } from '@root/middleware/adapters/editor/compile-program-flow'
-import type { StlibArchiveDTO } from '@root/middleware/shared/ports/library-port'
 
 import { createHeadlessCompileBridge, createProgressChannel } from './headless-bridge'
 
@@ -22,11 +21,15 @@ import { createHeadlessCompileBridge, createProgressChannel } from './headless-b
  * reaches the upload or status calls, so `compile` needs no credentials and no
  * device.
  */
-export function createCliCompileTransport(runtime: RuntimeApiClient | null): CompileProgramTransport {
+export function createCliCompileTransport(
+  runtime: RuntimeApiClient | null,
+  options: { hmiTestReadout?: boolean } = {},
+): CompileProgramTransport {
   return {
     getAvailableBoards: () => new HardwareModule().getAvailableBoards(),
 
-    loadAllLibraries: () => Promise.resolve<StlibArchiveDTO[]>(new LibraryManagerModule().loadAll()),
+    loadBuildLibraries: (listedNames) =>
+      Promise.resolve(new LibraryManagerModule().loadEnabledArchives(listedNames).archives),
 
     runCompileProgram: (compileArgs, onMessage) => {
       // The renderer hands the pipeline a `MessagePortMain`; here a plain
@@ -40,7 +43,7 @@ export function createCliCompileTransport(runtime: RuntimeApiClient | null): Com
         onClose: () => onMessage({ closePort: true }),
       })
 
-      void new CompilerModule({ dependencyHintSurface: 'cli' })
+      void new CompilerModule({ dependencyHintSurface: 'cli', hmiTestReadout: options.hmiTestReadout ?? false })
         .compileProgram(compileArgs, channel, createHeadlessCompileBridge(runtime))
         .catch((error: unknown) => {
           onMessage({ logLevel: 'error', message: error instanceof Error ? error.message : String(error) })

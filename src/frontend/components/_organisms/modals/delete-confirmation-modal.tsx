@@ -11,7 +11,14 @@ type ConfirmDeleteElementProps = {
   isOpen: boolean
 }
 
-type DeleteElementType = 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device'
+type DeleteElementType =
+  | 'pou'
+  | 'datatype'
+  | 'global-variable-list'
+  | 'server'
+  | 'remote-device'
+  | 'hmi-screen'
+  | 'hmi-widget'
 
 const DELETE_ELEMENT_TYPES: readonly DeleteElementType[] = [
   'pou',
@@ -19,6 +26,8 @@ const DELETE_ELEMENT_TYPES: readonly DeleteElementType[] = [
   'global-variable-list',
   'server',
   'remote-device',
+  'hmi-screen',
+  'hmi-widget',
 ]
 
 /** Legacy `leafLang` values, mapped onto the element types the modal deletes. */
@@ -93,6 +102,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
   const deleteDatatypeAction = store.datatypeActions.delete
   const deleteServerAction = store.serverActions.delete
   const deleteRemoteDeviceAction = store.remoteDeviceActions.delete
+  const deleteHmiAction = store.hmiActions.delete
   const deleteGlobalVariableListAction = store.globalVariableListActions.delete
 
   const modalData = modals['confirm-delete-element']?.data
@@ -204,6 +214,15 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
           toast({
             title: 'Remote device deleted success!',
             description: `Remote device "${name}" was successfully deleted.`,
+            variant: 'default',
+          })
+          break
+        case 'hmi-screen':
+        case 'hmi-widget':
+          deleteHmiAction(elementType === 'hmi-screen' ? 'screen' : 'widget', name)
+          toast({
+            title: elementType === 'hmi-screen' ? 'Screen deleted' : 'Widget block deleted',
+            description: `"${name}" was deleted. References to it are reported by the next build.`,
             variant: 'default',
           })
           break

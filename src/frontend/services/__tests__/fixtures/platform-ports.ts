@@ -121,7 +121,7 @@ function systemPort(log: PortCallLog): SystemPort {
     setStoreValue: () => note(log, 'system.setStoreValue'),
     openExternalLink: () => rejects(log, 'system.openExternalLink'),
     log: () => note(log, 'system.log'),
-    getEdgeFrontendUrl: () => throws(log, 'system.getEdgeFrontendUrl'),
+    getEdgeFrontendUrl: () => 'https://edge.example',
   }
 }
 

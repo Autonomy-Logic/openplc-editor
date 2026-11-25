@@ -12,6 +12,9 @@
  * `IN_OUT_MARKER_WIDTH` that block sizing reserves, so a long in-out name plus the arrow
  * cannot overflow the block.
  */
+/** The marker's arrow, drawn in a 12 x 9 box. */
+const IN_OUT_MARKER_PATH = 'M3.4 1.7 1.1 4.5l2.3 2.8M8.6 1.7l2.3 2.8-2.3 2.8M1.1 4.5h9.8'
+
 const InOutPinMarker = () => (
   <span
     // `role='img'` is what makes the `aria-label` an accessible name: on a bare span the label
@@ -24,7 +27,7 @@ const InOutPinMarker = () => (
   >
     <svg viewBox='0 0 12 9' fill='none' className='h-[9px] w-3' aria-hidden='true'>
       <path
-        d='M3.4 1.7 1.1 4.5l2.3 2.8M8.6 1.7l2.3 2.8-2.3 2.8M1.1 4.5h9.8'
+        d={IN_OUT_MARKER_PATH}
         stroke='currentColor'
         strokeWidth='1.2'
         strokeLinecap='round'
@@ -34,4 +37,4 @@ const InOutPinMarker = () => (
   </span>
 )
 
-export { InOutPinMarker }
+export { IN_OUT_MARKER_PATH, InOutPinMarker }

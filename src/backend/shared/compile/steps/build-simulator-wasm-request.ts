@@ -19,6 +19,19 @@ const SUPPORT_UNITS = [
   `${SIMULATOR_SUPPORT_DIR}/core/api/String.cpp`,
 ]
 
+/** C flags for the runtime's C units: the C++ flags' dialect, defines and include paths, without the C++-only include. */
+export const SIMULATOR_C_FLAGS = [
+  '-std=gnu11',
+  '-O1',
+  '-w',
+  '-DARDUINO=10819',
+  '-DARDUINO_ARCH_WASM',
+  `-I${SIMULATOR_SUPPORT_DIR}/stub`,
+  `-I${SIMULATOR_SUPPORT_DIR}/core`,
+  '-Isrc',
+  '-Iexamples/Baremetal',
+]
+
 /**
  * C++ flags for every unit: the dialect STruC++ generates for, the Arduino API include paths, no warnings, and the
  * Python block loader the generated stubs call, force-included as the runtime does.
@@ -54,12 +67,19 @@ const isCppUnit = (path: string): boolean =>
   /^src\/[^/]+\.cpp$/.test(path) ||
   (/^examples\/Baremetal\/[^/]+\.cpp$/.test(path) && !EXCLUDED_RUNTIME_UNIT.test(path))
 
+/** The runtime's C units, which arduino-cli compiles beside the C++ ones. */
+const isCUnit = (path: string): boolean => /^(src|examples\/Baremetal)\/[^/]+\.c$/.test(path)
+
 /**
  * Lays the composed firmware files out as one WebAssembly compile request: the sketch becomes a C++ unit with
  * `Arduino.h` included and its prototypes generated, the runtime and the project's units are compiled, the
- * network parts are left out, and the simulator's host shim and Arduino core are linked in.
+ * network parts are left out, and the simulator's host shim and Arduino core are linked in, with `libraryUnits`, the
+ * libraries' own units (`simulatorLibraryUnits`), whose files are among `firmwareFiles`.
  */
-export function buildSimulatorWasmRequest(firmwareFiles: Record<string, string>): SimulatorWasmRequestResult {
+export function buildSimulatorWasmRequest(
+  firmwareFiles: Record<string, string>,
+  libraryUnits: readonly WasmCompileUnit[] = [],
+): SimulatorWasmRequestResult {
   const sketch = firmwareFiles[SIMULATOR_SKETCH]
   if (sketch === undefined) return { ok: false, error: `The firmware files have no '${SIMULATOR_SKETCH}'.` }
   const missing = SUPPORT_UNITS.find((path) => firmwareFiles[path] === undefined)
@@ -78,16 +98,23 @@ export function buildSimulatorWasmRequest(firmwareFiles: Record<string, string>)
     addInoPrototypes(sketch, SIMULATOR_SKETCH),
   ].join('\n')
 
-  const units: WasmCompileUnit[] = [...Object.keys(files).filter(isCppUnit).sort(), ...SUPPORT_UNITS].map((source) => ({
-    source,
-    language: 'c++',
-  }))
+  const units: WasmCompileUnit[] = [
+    ...[...Object.keys(files).filter(isCppUnit).sort(), ...SUPPORT_UNITS].map(
+      (source): WasmCompileUnit => ({ source, language: 'c++' }),
+    ),
+    ...Object.keys(files)
+      .filter(isCUnit)
+      .sort()
+      .map((source): WasmCompileUnit => ({ source, language: 'c' })),
+    ...libraryUnits,
+  ]
 
   return {
     ok: true,
     request: {
       files,
       units,
+      cFlags: SIMULATOR_C_FLAGS,
       cxxFlags: SIMULATOR_CXX_FLAGS,
       linkFlags: SIMULATOR_LINK_FLAGS,
       output: SIMULATOR_MODULE,

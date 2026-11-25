@@ -30,6 +30,7 @@
 
 #include "openplc.h"
 #include "defines.h"
+#include "program_md5.h"
 #include "arduino_runtime_glue.h"
 #include "license_gate.h"
 #include "license_store.h"   // license_store_read + LIC_BLOB_SIZE (via license_blob.h)
@@ -45,6 +46,21 @@
 #include "opcua_server.h"
 #include "opcua_log.h"
 #include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
+
+// HMI host on the board's panel, present when the build adds it to the library.
+#if defined(__has_include)
+#if __has_include(<hmi_baremetal.h>)
+#include <hmi_baremetal.h>
+#define HMI_ENABLED 1
+#endif
+#endif
+#ifndef HMI_ENABLED
+#define HMI_ENABLED 0
+#endif
+#if HMI_ENABLED && defined(ESP_PLATFORM)
+// Stack of the loop() task, which runs the screens.
+SET_LOOP_TASK_STACK_SIZE(HMI_BM_LOOP_STACK_BYTES);
+#endif
 
 // Network device-discovery responder ("Search" in the editor). Feature-gated so
 // only targets declaring SUPPORTS_UDP_SCAN pull it in; unrelated to Modbus.
@@ -105,6 +121,14 @@ unsigned long scan_cycle;
 unsigned long last_run = 0;
 bool first_cycle = false;
 
+#if HMI_ENABLED
+// Microsecond clock the HMI schedules its work and raster deadlines with.
+static uint32_t hmi_clock_us(void)
+{
+    return (uint32_t)micros();
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // External sketch support
 // ---------------------------------------------------------------------------
@@ -150,8 +174,8 @@ void setup()
     // follow runtime_bind_located_vars(), because a retained variable may also
     // be located and its storage has to be bound before anything writes to it.
     //
-    // PROGRAM_MD5 is passed from here because the sketch is on defines.h's one
-    // legitimate include path and the glue is not.
+    // PROGRAM_MD5 comes from program_md5.h, which the sketch includes and the
+    // glue does not.
     runtime_retain_init(PROGRAM_MD5);
     runtime_retain_load();
 
@@ -164,36 +188,11 @@ void setup()
     // read RUN and start immediately, as they always have.
     runtime_init_plc_state();
 
-    // -----------------------------------------------------------------------
-    // License gate. Hand the stored license blob to the license-core so it can
-    // verify it and arm its demo timer.
-    //
-    // With no license-core linked, `license_gate_init()` is the weak default in
-    // license_gate_weak.cpp and this whole block is a harmless no-op: actuation
-    // then stays unconditionally allowed, i.e. a board that never had licensing
-    // behaves exactly as before. `millis()` gives the core the same time base the
-    // runtime uses, with no esp_timer dependency.
-    //
-    // THE HARDWARE ANCHOR IS NOT PASSED IN. An earlier design read `UniqueID`
-    // here and handed the bytes over, which made the board's IDENTITY a claim
-    // made by the OPEN firmware: licensing hardware you do not own cost one edit
-    // to this file, substituting the target's anchor. The license-core reads the
-    // silicon itself, inside the closed artifact, so there is nothing here to
-    // substitute. (FC 0x48 still REPORTS the anchor to the editor, so a purchase
-    // can be bound to this board — reporting an identity and asserting one are
-    // different things.)
-    // -----------------------------------------------------------------------
     {
-        // Zero-initialised: on a failed read the core is handed length 0, and a
-        // buffer of indeterminate bytes behind a zero length is the kind of detail
-        // that turns into a hard-to-place bug the first time someone reads past it.
         uint8_t lic_blob[LIC_BLOB_SIZE] = {0};
         size_t  lic_len = 0;
         if (license_store_read(lic_blob, sizeof(lic_blob), &lic_len) != LIC_STORE_OK)
         {
-            // EMPTY / CORRUPT / UNSUPPORTED / any error: nothing usable was read,
-            // so present a zero-length blob. The core's verify rejects it and
-            // starts the demo window; with no core the weak gate ignores the args.
             lic_len = 0;
         }
 
@@ -331,6 +330,10 @@ void setup()
     (*(volatile uint32_t *)0xE000E018u) = 0U;                    /* SYST_CVR */
     (*(volatile uint32_t *)0xE000E010u) = 0x00000007U;           /* SYST_CSR: CLK|TICKINT|EN */
 #endif
+
+    #if HMI_ENABLED
+        hmi_bm_init(hmi_clock_us);
+    #endif
 
     setupCycleDelay(base_tick_ns);
 
@@ -474,6 +477,10 @@ void scheduler()
         s7commtask(cycle_slack_us());
     #endif
 
+    #if HMI_ENABLED
+        hmi_bm_task(cycle_slack_us());
+    #endif
+
     // Protocol writes go to located storage raw, bypassing IECVar::set() and so
     // clobbering a force. Re-impose after ALL of them, not just Modbus.
     runtime_apply_located_forces();
@@ -527,6 +534,9 @@ void loop()
     #endif
     #if S7COMM_ENABLED
         s7commtask(cycle_slack_us());
+    #endif
+    #if HMI_ENABLED
+        hmi_bm_task(cycle_slack_us());
     #endif
 
     // Same repair as in scheduler(): the inter-cycle service writes raw too.
