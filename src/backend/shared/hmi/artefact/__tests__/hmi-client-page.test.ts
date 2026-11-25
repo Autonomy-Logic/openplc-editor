@@ -50,13 +50,23 @@ interface FakeResponse {
   headers: { get: (name: string) => string | null }
 }
 
-const respond = (status: number, body: unknown = {}): FakeResponse => ({
+const respond = (status: number, body: unknown = {}, headers: Record<string, string> = {}): FakeResponse => ({
   ok: status >= 200 && status < 300,
   status,
   json: () => Promise.resolve(body),
   arrayBuffer: () => Promise.resolve(new Uint8Array([0, 97, 115, 109]).buffer),
-  headers: { get: () => null },
+  headers: {
+    get: (name: string) =>
+      Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] ?? null,
+  },
 })
+
+/** HMI build IDs: the sha256 of an hmi.wasm, as the device names them. */
+const BUILD_A = 'a'.repeat(64)
+const BUILD_B = 'b'.repeat(64)
+
+/** hmi.wasm as the device serves it, with the build it was sealed as. */
+const screensModule = (build: string): FakeResponse => respond(200, {}, { 'X-HMI-Build': build })
 
 const token = (expSeconds: number, id: string, sid = 's1'): string =>
   `h.${btoa(JSON.stringify({ exp: expSeconds, jti: id, sid })).replace(/=+$/, '')}.s`
@@ -113,6 +123,8 @@ class FakeModule {
 
 interface Page {
   sockets: FakeSocket[]
+  /** Instances of hmi.wasm the page started. */
+  instances: () => number
   calls: string[]
   /** The Authorization header of each request, by path, in order. */
   auth: Map<string, Array<string | undefined>>
@@ -150,13 +162,18 @@ function loadPage(stored: string | null): Page {
     },
   })
   const module = new FakeModule()
+  let instances = 0
   Object.assign(WebAssembly, {
     compile: () => Promise.resolve({}),
-    instantiate: () => Promise.resolve({ exports: module.exports() }),
+    instantiate: () => {
+      instances++
+      return Promise.resolve({ exports: module.exports() })
+    },
   })
   new Function('window', readFileSync(join(CLIENT_DIR, 'hmi-client.js'), 'utf8'))(window)
   return {
     sockets,
+    instances: () => instances,
     calls,
     auth,
     module,
@@ -250,8 +267,8 @@ describe('the HMI browser client page', () => {
     const socket = page.sockets[0]
     socket.connected = true
     socket.fire('connect')
-    socket.fire('hmi_status', { state: 'live', role: 2 })
-    page.answer('hmi.wasm', respond(200))
+    socket.fire('hmi_status', { state: 'live', role: 2, build: BUILD_A })
+    page.answer('hmi.wasm', screensModule(BUILD_A))
     await settle()
     return page
   }
@@ -267,7 +284,7 @@ describe('the HMI browser client page', () => {
     refused.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'c') }))
     await settle()
     refused.sockets[0].connected = true
-    refused.sockets[0].fire('hmi_status', { state: 'live', role: 2 })
+    refused.sockets[0].fire('hmi_status', { state: 'live', role: 2, build: BUILD_A })
     refused.answer('hmi.wasm', respond(401))
     await settle()
     expect(formShown()).toBe(true)
@@ -281,7 +298,7 @@ describe('the HMI browser client page', () => {
     expect(page.module.role).toBe(2)
     expect(socket.sent.slice(0, 2)).toEqual([
       { t: 'o', n: 0 },
-      { t: 's', p: 0, n: 1 },
+      { t: 's', p: 0, n: 1, h: BUILD_A },
     ])
     expect(document.getElementById('notice')?.hidden).toBe(true)
     const canvas = document.getElementById('surface')
@@ -294,8 +311,8 @@ describe('the HMI browser client page', () => {
     page.module.page = 1
     await jest.advanceTimersByTimeAsync(60)
     expect(socket.sent.filter((e) => e.t === 's')).toEqual([
-      { t: 's', p: 0, n: 1 },
-      { t: 's', p: 1, n: 2 },
+      { t: 's', p: 0, n: 1, h: BUILD_A },
+      { t: 's', p: 1, n: 2, h: BUILD_A },
     ])
   })
 
@@ -341,8 +358,8 @@ describe('the HMI browser client page', () => {
     socket.connected = true
     socket.fire('connect')
     page.module.frameWrites = [0, 0, 2, 0, 0, 0, 1, 0, 1]
-    socket.fire('hmi_status', { state: 'live', role: 2 })
-    page.answer('hmi.wasm', respond(200))
+    socket.fire('hmi_status', { state: 'live', role: 2, build: BUILD_A })
+    page.answer('hmi.wasm', screensModule(BUILD_A))
     await settle()
     expect(socket.sent.slice(0, 3).map((e) => [e.t, e.t === 's' ? e.p : e.g])).toEqual([
       ['o', undefined],
@@ -357,8 +374,8 @@ describe('the HMI browser client page', () => {
     page.module.writes = [0, 0, 4, 0, 1, 5, 1, 0, 1, 0, 0, 4, 0, 1, 5, 1, 0, 0]
     await jest.advanceTimersByTimeAsync(60)
     expect(socket.sent.filter((e) => e.t === 'b')).toEqual([
-      { t: 'b', g: 4, b: 5, v: 1, n: 2 },
-      { t: 'b', g: 4, b: 5, v: 0, n: 3 },
+      { t: 'b', g: 4, b: 5, v: 1, n: 2, h: BUILD_A },
+      { t: 'b', g: 4, b: 5, v: 0, n: 3, h: BUILD_A },
     ])
   })
 
@@ -379,11 +396,88 @@ describe('the HMI browser client page', () => {
     const frames = page.module.frames
     await jest.advanceTimersByTimeAsync(500)
     expect(page.module.frames).toBe(frames)
-    page.sockets[0].fire('hmi_status', { state: 'live', role: 2 })
+    page.sockets[0].fire('hmi_status', { state: 'live', role: 2, build: BUILD_A })
     await settle()
     await jest.advanceTimersByTimeAsync(100)
     expect(page.module.frames).toBeGreaterThan(frames)
     expect(page.sockets[0].sent.filter((e) => e.t === 's').length).toBe(2)
+  })
+
+  it('reloads the screens when the device goes live with another build, sending nothing of the old one', async () => {
+    const page = await livePage()
+    const socket = page.sockets[0]
+    expect(page.instances()).toBe(1)
+    socket.fire('hmi_status', { state: 'stopped' })
+    socket.fire('hmi_status', { state: 'live', role: 2, build: BUILD_B })
+    page.module.writes = [0, 0, 1, 0, 0, 0, 1, 0, 1]
+    await jest.advanceTimersByTimeAsync(500)
+    expect(page.calls.filter((c) => c === 'hmi.wasm')).toHaveLength(2)
+    expect(socket.sent.filter((e) => e.t === 'w')).toEqual([])
+    expect(document.getElementById('notice')?.hidden).toBe(false)
+
+    page.answer('hmi.wasm', screensModule(BUILD_B))
+    await settle()
+    expect(page.instances()).toBe(2)
+    expect(document.getElementById('notice')?.hidden).toBe(true)
+    page.module.writes = [0, 0, 3, 0, 0, 0, 1, 0, 1]
+    await jest.advanceTimersByTimeAsync(60)
+    expect(socket.sent.filter((e) => e.t !== 'o').map((e) => [e.t, e.h])).toEqual([
+      ['s', BUILD_A],
+      ['s', BUILD_B],
+      ['w', BUILD_B],
+    ])
+  })
+
+  it('reloads the screens on a new build even when the device stays live', async () => {
+    const page = await livePage()
+    const socket = page.sockets[0]
+    socket.fire('hmi_status', { state: 'live', role: 2, build: BUILD_B })
+    const frames = page.module.frames
+    await jest.advanceTimersByTimeAsync(500)
+    expect(page.module.frames).toBe(frames)
+    page.answer('hmi.wasm', screensModule(BUILD_B))
+    await settle()
+    await jest.advanceTimersByTimeAsync(100)
+    expect(page.module.frames).toBeGreaterThan(frames)
+    expect(socket.sent.filter((e) => e.t === 's').map((e) => e.h)).toEqual([BUILD_A, BUILD_B])
+  })
+
+  it('waits with a notice while the device serves another build than the one live, then runs it', async () => {
+    const page = loadPage(token(now() + 900, 'a'))
+    page.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'b') }))
+    await settle()
+    const socket = page.sockets[0]
+    socket.connected = true
+    socket.fire('connect')
+    socket.fire('hmi_status', { state: 'live', role: 2, build: BUILD_A })
+    page.answer('hmi.wasm', screensModule(BUILD_B))
+    await settle()
+    await jest.advanceTimersByTimeAsync(500)
+    expect(page.instances()).toBe(0)
+    expect(document.getElementById('notice')?.textContent).toBe('HMI updating, please wait')
+    expect(socket.sent).toEqual([{ t: 'o', n: 0 }])
+
+    socket.fire('hmi_status', { state: 'stopped' })
+    socket.fire('hmi_status', { state: 'live', role: 2, build: BUILD_B })
+    await settle()
+    expect(page.calls.filter((c) => c === 'hmi.wasm')).toHaveLength(1)
+    expect(page.instances()).toBe(1)
+    expect(document.getElementById('notice')?.hidden).toBe(true)
+    expect(socket.sent.slice(1)).toEqual([{ t: 's', p: 0, n: 1, h: BUILD_B }])
+  })
+
+  it('runs no screens for a live status without a build', async () => {
+    const page = loadPage(token(now() + 900, 'a'))
+    page.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'b') }))
+    await settle()
+    const socket = page.sockets[0]
+    socket.connected = true
+    socket.fire('connect')
+    socket.fire('hmi_status', { state: 'live', role: 2 })
+    await settle()
+    expect(page.calls).not.toContain('hmi.wasm')
+    expect(document.getElementById('notice')?.textContent).toBe('HMI updating, please wait')
+    expect(socket.sent).toEqual([{ t: 'o', n: 0 }])
   })
 
   it('signs out through the device when a screen asks, and returns to the form', async () => {
@@ -414,7 +508,7 @@ describe('the HMI browser client page', () => {
     await settle()
     const socket = page.sockets[page.sockets.length - 1]
     socket.connected = true
-    socket.fire('hmi_status', { state: 'live', role: 2 })
+    socket.fire('hmi_status', { state: 'live', role: 2, build: BUILD_A })
     await settle()
     expect(page.auth.get('hmi.wasm')).toEqual([
       `Bearer ${token(now() + 900, 'b')}`,
