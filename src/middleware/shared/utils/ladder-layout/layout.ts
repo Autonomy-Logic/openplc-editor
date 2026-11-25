@@ -610,11 +610,11 @@ class RungLayoutBuilder {
     }
     this.label(node.id, {
       text: m.type,
-      x: x0 + s.blkPad,
+      x: x0 + m.inner / 2,
       y: top + s.blkHead / 2 + CENTRED_BASELINE,
       sizePx: T.nameSizePx,
       weight: 600,
-      anchor: 'start',
+      anchor: 'middle',
       role: 'blockType',
     })
     block.rows.forEach((row, index) => {
