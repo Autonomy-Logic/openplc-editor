@@ -29,6 +29,10 @@
   On ESP32 and ESP8266 Wi-Fi with `OPLC_NET_ENABLED`, ESP32 `MBTCP_ETHERNET`, NINA Wi-Fi and ESP32 Wi-Fi without
   `OPLC_NET_ENABLED`, `modbus_tcp.cpp` defines no `mbconfig_wifi_supervise()` and calls no `reconnect()`, `onEvent()`
   or `onStationMode*()`, and `loop()` names no `mbconfig_wifi_supervise`.
+  `bm_net::link_up()` preprocessed for ESP32 Wi-Fi is compiled with `g++` against a fake `WiFi` (status,
+  `STA.connected()`, `STA.linkUp()`, `localIP()`) and answers up only when the status is `WL_CONNECTED`, the station
+  is associated, its interface is up and its address is not `0.0.0.0`. On ESP8266, NINA and generic `MBTCP_WIFI` it
+  stays `return WiFi.status() == WL_CONNECTED;`, and no branch but ESP32 Wi-Fi names `STA`.
   Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 - `firmware-master-tcp-link.test.ts`: the TCP master's network link gate and Reconnect timing on the host. It copies
   the real master sources unchanged next to stand-ins for the network seam (a scripted `bm_net::Connection` and

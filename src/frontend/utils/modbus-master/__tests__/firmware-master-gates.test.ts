@@ -611,6 +611,147 @@ describeOnHost('baremetal_net.cpp answers bm_net::link_up() per adapter branch (
   })
 })
 
+/** A host program that runs `body` as `bool link_up()` against a fake `WiFi` set from argv: status, STA connected, STA link up, local IP. */
+const linkUpHarness = (body: string): string => `#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+enum wl_status_t { WL_IDLE_STATUS = 0, WL_CONNECTED = 3 };
+struct IPAddress {
+    uint32_t value;
+    explicit IPAddress(uint32_t address) : value(address) {}
+    bool operator!=(const IPAddress &other) const { return value != other.value; }
+};
+struct FakeSta {
+    bool associated;
+    bool interfaceUp;
+    bool connected() const { return associated; }
+    bool linkUp() const { return interfaceUp; }
+};
+struct FakeWiFi {
+    wl_status_t current;
+    uint32_t address;
+    FakeSta STA;
+    wl_status_t status() const { return current; }
+    IPAddress localIP() const { return IPAddress(address); }
+};
+static FakeWiFi WiFi;
+bool link_up()
+{
+${body}
+}
+int main(int argc, char **argv)
+{
+    if (argc != 5) return 2;
+    WiFi.current = std::atoi(argv[1]) == 3 ? WL_CONNECTED : WL_IDLE_STATUS;
+    WiFi.STA.associated = std::atoi(argv[2]) != 0;
+    WiFi.STA.interfaceUp = std::atoi(argv[3]) != 0;
+    WiFi.address = static_cast<uint32_t>(std::strtoul(argv[4], nullptr, 10));
+    std::printf("%d\\n", link_up() ? 1 : 0);
+    return 0;
+}
+`
+
+/** The station state one row of the ESP32 Wi-Fi truth table sets on the fake `WiFi`. */
+interface StationState {
+  status: 'WL_CONNECTED' | 'WL_IDLE_STATUS'
+  connected: boolean
+  linkUp: boolean
+  localIP: number
+}
+
+const STATION_ADDRESS = 0x1401a8c0
+
+const ESP32_WIFI_LINK_ROWS: Array<[string, boolean, StationState]> = [
+  [
+    'associated, interface up and addressed',
+    true,
+    { status: 'WL_CONNECTED', connected: true, linkUp: true, localIP: STATION_ADDRESS },
+  ],
+  [
+    'WL_CONNECTED kept through a disconnect (AUTH_EXPIRE)',
+    false,
+    { status: 'WL_CONNECTED', connected: false, linkUp: true, localIP: STATION_ADDRESS },
+  ],
+  [
+    'WL_CONNECTED with the interface down',
+    false,
+    { status: 'WL_CONNECTED', connected: true, linkUp: false, localIP: STATION_ADDRESS },
+  ],
+  [
+    'WL_CONNECTED with the address 0.0.0.0',
+    false,
+    { status: 'WL_CONNECTED', connected: true, linkUp: true, localIP: 0 },
+  ],
+  [
+    'WL_IDLE_STATUS with the other three up',
+    false,
+    { status: 'WL_IDLE_STATUS', connected: true, linkUp: true, localIP: STATION_ADDRESS },
+  ],
+]
+
+describeOnHost(
+  'bm_net::link_up() on ESP32 Wi-Fi answers up only when the station is associated, its interface up and addressed (MT-10)',
+  () => {
+    let dir = ''
+    let binary = ''
+
+    beforeAll(() => {
+      dir = mkdtempSync(join(tmpdir(), 'mb-master-link-up-'))
+      binary = join(dir, 'link-up')
+      const source = join(dir, 'link_up.cpp')
+      writeFileSync(source, linkUpHarness(linkUpBody(['BOARD_ESP32', 'MBTCP_WIFI'])))
+      const run = spawnSync('g++', ['-std=gnu++11', '-Wall', '-o', binary, source], {
+        encoding: 'utf-8',
+        env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
+      })
+      if (run.status !== 0) {
+        throw new Error(`link_up() did not build on the host:\n${run.stderr ?? ''}${run.error?.message ?? ''}`)
+      }
+    }, 120_000)
+
+    afterAll(() => {
+      if (dir !== '') rmSync(dir, { recursive: true, force: true })
+    })
+
+    it.each(ESP32_WIFI_LINK_ROWS)('%s: answers %s', (_row, expected, state) => {
+      const run = spawnSync(
+        binary,
+        [
+          state.status === 'WL_CONNECTED' ? '3' : '0',
+          state.connected ? '1' : '0',
+          state.linkUp ? '1' : '0',
+          String(state.localIP),
+        ],
+        { encoding: 'utf-8' },
+      )
+      if (run.status !== 0) throw new Error(`the link_up() harness failed:\n${run.stderr ?? ''}`)
+      expect(run.stdout.trim() === '1').toBe(expected)
+    })
+  },
+)
+
+/** The adapter families whose `link_up()` this demand leaves as it was, with the body each must keep, or `null` when only the absence of `STA` is pinned. */
+const LINK_UP_UNCHANGED: Array<[string, string[], string | null]> = [
+  ...LINK_UP_WIFI.filter(([family]) => family !== 'ESP32 Wi-Fi').map(
+    ([family, defines]): [string, string[], string | null] => [
+      family,
+      defines,
+      'return WiFi.status() == WL_CONNECTED;',
+    ],
+  ),
+  ['ESP32 MBTCP_ETHERNET', ['BOARD_ESP32', 'MBTCP_ETHERNET'], null],
+]
+
+describeOnHost('bm_net::link_up() stays as it was on every adapter but ESP32 Wi-Fi (MT-10)', () => {
+  it.each(LINK_UP_UNCHANGED)('%s: names no STA and keeps its body', (_family, defines, expected) => {
+    const body = linkUpBody(defines)
+    expect({
+      sta: /\bSTA\b/.test(body),
+      body: expected === null ? null : body.replace(/\s+/g, ' ').trim(),
+    }).toEqual({ sta: false, body: expected })
+  })
+})
+
 /** `modbus_tcp.cpp` preprocessed for `defines` with the skeleton stub, its own lines only. */
 const tcpUnit = (defines: string[]): string =>
   ownCode(
