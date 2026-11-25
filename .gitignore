@@ -87,3 +87,6 @@ scripts/dev-transpile-project.ts
 # Python runtime fetched at install time (python-runtime.json)
 vendor/python-runtime/
 vendor/hmi-widgets/
+
+# transient SBOM build output (release copies live on the security-archive branch)
+/sbom/
