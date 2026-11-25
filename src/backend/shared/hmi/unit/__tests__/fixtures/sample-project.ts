@@ -9,7 +9,7 @@ export const OVERVIEW = `{attribute 'hmi_theme' := 'Brand'}
 FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
     Body : HmiHorizontalStack;
-    Col : HmiVerticalStack := (Parent := 'Body', Gap := 8);
+    Col : HmiVerticalStack := (Parent := 'Body', Gap := 8, AutoSize := FALSE);
     Level : HmiTank := (Caption := 'Level', Parent := 'Col', MaxValue := 10.0);
     Run : HmiSwitch := (Caption := 'Run', Parent := 'Col');
     Speed : HmiSlider := (Caption := 'Speed', Parent := 'Body', MaxValue := 100.0, Step := 5.0);

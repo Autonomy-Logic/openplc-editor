@@ -202,9 +202,9 @@ describe('HMI unit generator', () => {
     const overview = result.sources['Overview.st']
     const build = /METHOD PROTECTED OVERRIDE Build : BOOL(.*?)END_METHOD/s.exec(overview)?.[1] ?? ''
     expect(build).toContain('Body.AutoSize := TRUE;')
-    expect(build).toContain('Col.AutoSize := TRUE;')
+    expect(build).not.toContain('Col.AutoSize')
     expect(build).not.toContain('Level.AutoSize')
-    expect(build.indexOf('Col.AutoSize')).toBeLessThan(build.indexOf('Attach('))
+    expect(build.indexOf('Body.AutoSize')).toBeLessThan(build.indexOf('Attach('))
     const gallery = generateHmiUnit({ ...sampleProject(), gallery: true, resolve: undefined })
     const source = Object.values(gallery.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_GALLERY_SCREEN}`))
     expect(source).not.toContain('HMI__Column.AutoSize')
@@ -466,7 +466,7 @@ describe('HMI unit generator', () => {
     const line = overview.split('\n').find((l) => l.includes('METHOD PROTECTED OVERRIDE Build'))
     expect(line?.trimStart().startsWith('END_VAR')).toBe(true)
     expect(line).toContain(
-      'UseTheme(5); Body.AutoSize := TRUE; Col.AutoSize := TRUE; Attach(ADR(Body), 0); Attach(ADR(Col), ADR(Body)); Attach(ADR(Level), ADR(Col)); ' +
+      'UseTheme(5); Body.AutoSize := TRUE; Attach(ADR(Body), 0); Attach(ADR(Col), ADR(Body)); Attach(ADR(Level), ADR(Col)); ' +
         'Attach(ADR(Run), ADR(Col)); Attach(ADR(Speed), ADR(Body));',
     )
     expect(line).toContain('IF Run.Changed THEN instance0.Main.Running := Run.NewValue; END_IF;')
