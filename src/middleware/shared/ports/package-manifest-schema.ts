@@ -100,6 +100,14 @@ const boardManagerUrl = z.string().refine(
   { message: 'must be an https:// URL' },
 )
 
+/**
+ * A package manifest as the editor reads it; every object passes unknown fields through. Declared fields: the
+ * compatibility floors (optional, since older packages lack them; typed and format-checked because the install gate
+ * compares them, while openplc-packages' `scripts/validate.ts` owns the authoring rules), `runtimeLicense` (read by the
+ * licence status; an unknown value is refused here), and per device `target.boardManagerUrl`, `target.uploadMethod`
+ * (constrained because it picks the upload path downstream, so a misspelt value is refused rather than taking the
+ * serial path), `capabilities.hmi` and `capabilities.hmiDataWidgets`.
+ */
 export const PackageManifestSchema = z
   .object({
     formatVersion: z.string().min(1),
@@ -108,20 +116,8 @@ export const PackageManifestSchema = z
         id: z.string().min(1),
         name: z.string().min(1),
         version: z.string().min(1),
-        // Compatibility floors (DOPE-448). Optional on purpose: packages built
-        // before these fields existed must keep installing, and a package that
-        // declares no floor declares no constraint. They are typed here rather
-        // than left to `.passthrough()` because the install gate compares them
-        // — a field a gate reads should not reach it as `unknown`.
-        //
-        // Authoring-side rules (minRuntimeVersion required iff a device targets
-        // runtime-v4, rejected otherwise) live in openplc-packages'
-        // `scripts/validate.ts`, per this file's split of responsibilities.
-        // The *format* is checked here because a floor nobody can parse is a
-        // constraint that silently does not apply — see `versionFloor`.
         minEditorVersion: versionFloor.optional(),
         minRuntimeVersion: versionFloor.optional(),
-        // Read by the licence status; an unknown value is refused here and dropped on read below.
         runtimeLicense: runtimeLicense.optional(),
       })
       .passthrough(),
@@ -129,18 +125,6 @@ export const PackageManifestSchema = z
       .array(
         z
           .object({
-            // Only `boardManagerUrl`, `uploadMethod`, `capabilities.hmi` and `capabilities.hmiDataWidgets` are
-            // declared; everything else on a device, on `target` and on
-            // `capabilities` still flows through untouched.
-            //
-            // `uploadMethod` is constrained rather than passed through because
-            // it ROUTES: it is typed `'serial' | 'ethernet'` downstream, and
-            // `BoardInfoResolver.#fromVppDevice` copies whatever is here into
-            // that field. Left to `.passthrough()`, a manifest saying
-            // `uploadMethod: "etherner"` would be carried as if it were a valid
-            // member of the union and simply not match 'ethernet' anywhere,
-            // silently taking the serial path — on a board whose only link is
-            // Ethernet. Refusing the manifest is the safer failure.
             target: z
               .object({
                 boardManagerUrl: boardManagerUrl.optional(),

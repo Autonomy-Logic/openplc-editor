@@ -78,7 +78,8 @@ const SAME_HEIGHT_EPS = 0.5
 
 /**
  * The SVG path of an LD wire without an engine route: a straight segment between its ends when they share a y (a
- * smoothstep's fixed offset would overshoot a short wire), else xyflow's smoothstep.
+ * smoothstep's fixed offset would overshoot a short wire), else xyflow's smoothstep. A same-height target left of its
+ * source (a trailing group's closing junction drawn on the rail) leaves nothing to draw.
  */
 export function ladderWirePath(ends: {
   sourceX: number
@@ -89,7 +90,6 @@ export function ladderWirePath(ends: {
   targetPosition: Position
 }): string {
   if (Math.abs(ends.sourceY - ends.targetY) <= SAME_HEIGHT_EPS) {
-    // A target left of its source (a trailing group's closing junction drawn on the rail) leaves nothing to draw.
     const fromX = Math.min(ends.sourceX, ends.targetX)
     return `M${fromX} ${ends.sourceY} L${ends.targetX} ${ends.sourceY}`
   }

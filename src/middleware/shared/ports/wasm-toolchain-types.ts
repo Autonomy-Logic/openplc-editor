@@ -46,7 +46,7 @@ export interface WasmCompileRequest {
   output?: string
 }
 
-/** One unit of a build: how long it took and whether its object came from the cache. */
+/** The units of a build and how many of their objects came from the cache. */
 export interface WasmCompileStats {
   units: number
   cached: number

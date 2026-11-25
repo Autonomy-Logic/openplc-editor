@@ -241,6 +241,10 @@ export type SharedWorkspaceActions = {
   hasUnsavedChanges: () => boolean
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
+  /**
+   * Loads an opened project. Every LD POU opens in the current layout and stays in it, issues only reported; a POU
+   * converted to that layout is marked updated, so the next save writes it back.
+   */
   handleOpenProjectResponse: (data: OpenProjectResponseData) => void
   /** Shared tail of both platforms' retrieve adapters: load the project, and mark it as having no location
    *  the user chose. */

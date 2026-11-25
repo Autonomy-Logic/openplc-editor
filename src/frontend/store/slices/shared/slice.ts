@@ -1119,7 +1119,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           const bodyValue = structuredClone(pou.body.value) as LadderFlowType
           restampedCount += restampFlowBlockVariants([bodyValue], systemLibraries, userPous)
           for (const rung of bodyValue.rungs ?? []) scanLegacyInOut(rung.nodes, pou.name)
-          // Every LD POU opens in the current layout and stays in it; issues are only reported.
           const migration = migrateLadderRungs(
             pou.name,
             bodyValue.rungs ?? [],
@@ -1455,7 +1454,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
 
       for (const flow of getState().ladderFlows) {
-        // A POU converted to the new layout stays updated, so the next save writes it back.
         getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: relaidPous.includes(flow.name) })
       }
       for (const flow of getState().fbdFlows) {

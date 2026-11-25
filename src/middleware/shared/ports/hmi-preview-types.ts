@@ -205,7 +205,6 @@ export interface HmiPreviewSurface {
   scale: number
 }
 
-/** A frame the Worker ran: the page it showed, its HMI_STATUS_* flags, changed pixels (null: none) and bounds. */
 /** A rectangle in logical units. */
 export interface HmiPreviewRect {
   x: number
@@ -214,6 +213,7 @@ export interface HmiPreviewRect {
   height: number
 }
 
+/** A frame the Worker ran: the page it showed, its HMI_STATUS_* flags, changed pixels (null: none) and bounds. */
 export interface HmiPreviewFrame {
   page: number
   status: number

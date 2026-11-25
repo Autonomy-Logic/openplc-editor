@@ -38,8 +38,9 @@ const geometryOf = (rung: RungLadderState): string =>
   ])
 
 /**
- * Lays out every rung of POU `pouName` with the current engine. A rung the engine cannot lay out without losing an
- * element keeps its geometry; any other issue, such as a changed compile order, is only reported as a warning.
+ * Lays out every rung of POU `pouName` with the current engine, geometry only, so pin variable boxes keep their
+ * variables. A rung the engine cannot lay out without losing an element keeps its geometry; any other issue, such as a
+ * changed compile order, is only reported as a warning.
  */
 export function migrateLadderRungs(
   pouName: string,
@@ -51,7 +52,6 @@ export function migrateLadderRungs(
   const migrated = rungs.map((rung, index) => {
     let next: RungLadderState
     try {
-      // Geometry only: rebuilding pin variable boxes here would drop their variables.
       next = applyRungLayout(rung, layoutRung(rung, src))
     } catch (error) {
       warnings.push(`${pouName}, rung ${index + 1}: kept as it was, the new layout failed (${String(error)}).`)

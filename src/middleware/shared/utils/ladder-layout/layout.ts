@@ -221,9 +221,12 @@ class RungLayoutBuilder {
     this.groupMeasures.clear()
   }
 
+  /**
+   * Aligns `group` to the end of the rung; its parallel coils share the widest coil's column, so their centred symbols
+   * and names line up vertically.
+   */
   alignToEnd(group: LdGroup): void {
     this.endAligned.add(group)
-    // Parallel coils share the widest coil's column, so their centred symbols and names line up vertically.
     const coils = group.branches
       .flat()
       .filter((element): element is LdCell => element.kind === 'cell' && element.node.type === 'coil')
@@ -337,6 +340,10 @@ class RungLayoutBuilder {
     return extent
   }
 
+  /**
+   * Measures a parallel group: its branches stacked, as wide as the widest branch plus one pad at the opening junction
+   * only, since the closing junction sits at the end of the widest branch.
+   */
   private group(group: LdGroup): GroupMeasure {
     const cached = this.groupMeasures.get(group)
     if (cached !== undefined) return cached
@@ -348,7 +355,6 @@ class RungLayoutBuilder {
     const widest = Math.max(0, ...branches.map((branch) => branch.w))
     const last = branches.length - 1
     const measure: GroupMeasure = {
-      // One pad at the opening junction only: the closing junction sits at the end of the widest branch.
       w: widest + this.s.parPad,
       top: branches[0]?.top ?? 0,
       bot: (offsets[last] ?? 0) + (branches[last]?.bot ?? 0),

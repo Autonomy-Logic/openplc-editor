@@ -126,9 +126,9 @@ const Rung = ({
     },
   ]
 
+  /** Opens the rung menu at the pointer in place of the canvas's radial menu. */
   const handleContextMenu = (event: MouseEvent<HTMLDivElement>) => {
     event.preventDefault()
-    // The canvas opens the radial menu on a right click; the rung menu replaces it here.
     event.stopPropagation()
     onSelect?.(rung.id, { toggle: false })
     setMenuAt({ x: event.clientX, y: event.clientY })
