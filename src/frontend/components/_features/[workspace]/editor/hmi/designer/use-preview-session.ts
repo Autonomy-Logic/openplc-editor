@@ -12,6 +12,7 @@ import type {
   HmiPreviewBuild,
   HmiPreviewElementId,
   HmiPreviewFrame,
+  HmiPreviewRect,
   HmiPreviewRequest,
   HmiPreviewSurface,
   HmiWidgetCatalog,
@@ -33,12 +34,18 @@ import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 
 type Built = Extract<HmiPreviewBuild, { ok: true }>
 
+/** Whether two rectangles are equal, null included. */
+const sameRect = (a: HmiPreviewRect | null, b: HmiPreviewRect | null): boolean =>
+  a === b || (a !== null && b !== null && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height)
+
 export type PreviewStatus = 'building' | 'ready' | 'failed' | 'stopped' | 'unavailable'
 
 export interface PreviewState {
   status: PreviewStatus
   errors: HmiDiagnostic[]
   bounds: HmiPreviewBounds[]
+  /** Extent of what the last frame drew, background left out; null when it drew nothing. */
+  drawn: HmiPreviewRect | null
   page: number
   /** The step a build is on; null when no build runs. */
   step: HmiBuildStep | null
@@ -186,6 +193,7 @@ export function usePreviewSession({
     status: port ? 'building' : 'unavailable',
     errors: [],
     bounds: [],
+    drawn: null,
     page: 0,
     step: null,
     waiting: false,
@@ -307,6 +315,7 @@ export function usePreviewSession({
           status: latest ? 'ready' : s.status,
           errors: latest ? [] : s.errors,
           bounds: first.bounds,
+          drawn: first.drawn ?? null,
           page: first.page,
           step: latest ? null : s.step,
           waiting: latest ? false : s.waiting,
@@ -346,9 +355,9 @@ export function usePreviewSession({
           pageRef.current = frame.page
           if (current && frame.page === current.pages[screen]) syncRef.current()
           setState((s) =>
-            sameBounds(s.bounds, frame.bounds) && s.page === frame.page
+            sameBounds(s.bounds, frame.bounds) && s.page === frame.page && sameRect(s.drawn, frame.drawn ?? null)
               ? s
-              : { ...s, bounds: frame.bounds, page: frame.page },
+              : { ...s, bounds: frame.bounds, drawn: frame.drawn ?? null, page: frame.page },
           )
         })
         .catch(() => undefined)

@@ -32,6 +32,7 @@ import {
   hmiThemeId,
   screenGrant,
 } from '@root/middleware/shared/utils/hmi/settings'
+import { hmiFixedDrawCalls } from '@root/middleware/shared/utils/hmi/widget-draw-checks'
 import { HMI_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
 import type { CompileOptions, StlibArchive } from 'strucpp'
 
@@ -43,6 +44,7 @@ import {
   type HmiSourceFile,
   type HmiUnitSources,
   WIDGET_PREVIEW_ELEMENT,
+  WIDGET_PREVIEW_MARGIN,
   WIDGET_PREVIEW_SCREEN,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { loadStrucpp } from '../../library/strucpp-runtime'
@@ -1327,6 +1329,8 @@ export function compileHmiWidgets(
           file: w.name,
           message: `${w.name} must be a FUNCTION_BLOCK that extends HmiElement or another widget`,
         })
+  for (const w of widgets)
+    for (const f of hmiFixedDrawCalls(w.source)) errors.push({ file: w.name, message: f.message, line: f.line })
   return { archives, catalog, errors }
 }
 
@@ -1365,16 +1369,21 @@ function previewTestValue(info: HmiWidgetInfo): string | undefined {
 /** Smallest box a widget preview gives a block whose natural size is 0, in logical units. */
 const WIDGET_PREVIEW_MIN = 24
 
-/** The screen a widget preview adds: the block once, at its preferred size, in the screen's top-left corner. */
+/** The screen a widget preview adds: the block once, floating at its preferred size, whatever the screen's size. */
 function widgetPreviewSource(info: HmiWidgetInfo): string {
   const value = previewTestValue(info)
   const assign = info.main && value !== undefined ? [`  ${WIDGET_PREVIEW_ELEMENT}.${info.main.name} := ${value};`] : []
+  const w = WIDGET_PREVIEW_ELEMENT
   return [
     `FUNCTION_BLOCK ${WIDGET_PREVIEW_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
     '    HMI__Row : HmiVerticalStack := (AutoSize := FALSE, Gap := 0);',
-    `    ${WIDGET_PREVIEW_ELEMENT} : ${info.name} := (Parent := 'HMI__Row', AutoSize := FALSE, MinWidth := ${WIDGET_PREVIEW_MIN}, MinHeight := ${WIDGET_PREVIEW_MIN});`,
+    `    ${w} : ${info.name} := (Parent := 'HMI__Row', Floating := TRUE, MinWidth := ${WIDGET_PREVIEW_MIN}, MinHeight := ${WIDGET_PREVIEW_MIN});`,
     '  END_VAR',
+    '  METHOD PROTECTED OVERRIDE Layout : BOOL',
+    `    ${w}.Place(${WIDGET_PREVIEW_MARGIN}, ${WIDGET_PREVIEW_MARGIN}, ${w}.MeasureWidth(), ${w}.MeasureHeight());`,
+    '    Layout := TRUE;',
+    '  END_METHOD',
     ...assign,
     'END_FUNCTION_BLOCK',
     '',

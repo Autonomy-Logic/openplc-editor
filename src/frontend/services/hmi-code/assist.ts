@@ -10,6 +10,7 @@ import { checkHmiBlock, type HmiCheckBlock, type HmiCheckSpan } from '../../../m
 import { type HmiAssistItem, hmiCompletions } from '../../../middleware/shared/utils/hmi/code-assist'
 import { type DesignerModel, parseDesignerBlock } from '../../../middleware/shared/utils/hmi/designer/designer-model'
 import { defaultHmiSettings } from '../../../middleware/shared/utils/hmi/settings'
+import { hmiFixedDrawCalls } from '../../../middleware/shared/utils/hmi/widget-draw-checks'
 import { projectLibraryNames } from '../../../middleware/shared/utils/library/project-libraries'
 import type { OpenPLCStore } from '../../store'
 import { parseHmiFileUri } from './uris'
@@ -85,18 +86,21 @@ export function attachHmiCodeAssist(options: HmiCodeAssistOptions): { dispose():
     for (const model of models) {
       const file = parseHmiFileUri(model.uri.toString())
       if (disposed || !file || model.isDisposed()) continue
-      const parsed = parseDesignerBlock(model.getValue(), (t) => catalog.widgets.has(t.toUpperCase()))
-      if (!parsed.ok) {
-        api.editor.setModelMarkers(model, MARKER_OWNER, [])
-        continue
-      }
-      const findings = checkHmiBlock(checkBlockOf(parsed.model), {
-        kind: file.kind,
-        fileName: file.name,
-        catalog,
-        settings,
-        screenMembers: options.screenMembers(),
-      })
+      const source = model.getValue()
+      const parsed = parseDesignerBlock(source, (t) => catalog.widgets.has(t.toUpperCase()))
+      const draws = file.kind === 'widget' ? hmiFixedDrawCalls(source) : []
+      const findings = [
+        ...(parsed.ok
+          ? checkHmiBlock(checkBlockOf(parsed.model), {
+              kind: file.kind,
+              fileName: file.name,
+              catalog,
+              settings,
+              screenMembers: options.screenMembers(),
+            })
+          : []),
+        ...draws,
+      ]
       const marker = (message: string, span: HmiCheckSpan): monaco.editor.IMarkerData => {
         const start = model.getPositionAt(span.start)
         const end = model.getPositionAt(Math.max(span.end, span.start + 1))
@@ -113,7 +117,10 @@ export function attachHmiCodeAssist(options: HmiCodeAssistOptions): { dispose():
       api.editor.setModelMarkers(
         model,
         MARKER_OWNER,
-        findings.map((f) => marker(f.message, f.span ?? parsed.model.nameSpan)),
+        findings.flatMap((f) => {
+          const span = f.span ?? (parsed.ok ? parsed.model.nameSpan : undefined)
+          return span ? [marker(f.message, span)] : []
+        }),
       )
     }
   }

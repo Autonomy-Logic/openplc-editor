@@ -70,6 +70,8 @@ export type HmiBuildSources = HmiUnitSources
 export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
 /** Element the widget preview screen shows the widget block as, at its preferred size. */
 export const WIDGET_PREVIEW_ELEMENT = 'HMI__Widget'
+/** Where the widget preview places the block, from the screen's top-left corner, in logical units. */
+export const WIDGET_PREVIEW_MARGIN = 12
 
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {
@@ -204,11 +206,21 @@ export interface HmiPreviewSurface {
 }
 
 /** A frame the Worker ran: the page it showed, its HMI_STATUS_* flags, changed pixels (null: none) and bounds. */
+/** A rectangle in logical units. */
+export interface HmiPreviewRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface HmiPreviewFrame {
   page: number
   status: number
   pixels: HmiPreviewPixels | null
   bounds: HmiPreviewBounds[]
+  /** Extent of everything the frame drew but the screen's background, clips applied; null when it drew nothing. */
+  drawn?: HmiPreviewRect | null
 }
 
 /** Messages a preview session sends its Worker; each gets one reply with the same id. */

@@ -218,8 +218,9 @@ describe('HMI unit generator', () => {
       result.sources[`${WIDGET_PREVIEW_SCREEN}.st`] ??
       Object.values(result.sources).find((t) => t.includes(WIDGET_PREVIEW_SCREEN))
     expect(source).toContain(
-      "HMI__Widget : Badge := (Parent := 'HMI__Row', AutoSize := FALSE, MinWidth := 24, MinHeight := 24);",
+      "HMI__Widget : Badge := (Parent := 'HMI__Row', Floating := TRUE, MinWidth := 24, MinHeight := 24);",
     )
+    expect(source).toContain('HMI__Widget.Place(12, 12, HMI__Widget.MeasureWidth(), HMI__Widget.MeasureHeight());')
     expect(source?.match(/: Badge :=/g)).toHaveLength(1)
     expect(source).toContain('HMI__Widget.Value := TRUE;')
     expect(result.elementIds).toContainEqual(

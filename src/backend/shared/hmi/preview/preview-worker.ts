@@ -143,7 +143,7 @@ async function answer(
       const { page, status } = instance.frame(request.timeMs)
       const { width, height, scale } = request.surface
       const pixels = instance.render(width, height, scale)
-      const frame = { page, status, pixels, bounds: instance.bounds() }
+      const frame = { page, status, pixels, bounds: instance.bounds(), drawn: instance.drawn() }
       return { reply: { id, ok: true, frame }, transfer: pixels ? [pixels.rgba.buffer] : [] }
     }
     case 'show':

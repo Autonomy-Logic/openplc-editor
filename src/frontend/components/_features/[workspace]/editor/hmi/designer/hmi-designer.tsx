@@ -19,6 +19,7 @@ import {
   type HmiThumbnail,
   type HmiWidgetCatalog,
   WIDGET_PREVIEW_ELEMENT,
+  WIDGET_PREVIEW_MARGIN,
   WIDGET_PREVIEW_SCREEN,
 } from '@root/middleware/shared/ports/hmi-preview-types'
 import { useHmiPreview, usePlatform } from '@root/middleware/shared/providers'
@@ -68,6 +69,7 @@ import {
   resizeProperties,
   type StackView,
 } from '@root/middleware/shared/utils/hmi/designer/designer-span'
+import { widgetOverflow } from '@root/middleware/shared/utils/hmi/designer/widget-overflow'
 import { HMI_DEVICE_PRESETS, hmiDevicePreset } from '@root/middleware/shared/utils/hmi/device-presets'
 import { lastOf } from '@root/middleware/shared/utils/hmi/last-of'
 import { hmiLibraryBlocks, hmiPlcVariables } from '@root/middleware/shared/utils/hmi/plc-variables'
@@ -831,8 +833,6 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   )
 }
 
-/** Room around a widget block's box in its preview: the screen's own padding, where drawing outside the box shows. */
-const WIDGET_MARGIN = 12
 /** Box a widget preview starts from, before the first build gives the block's preferred size. */
 const WIDGET_START = { width: 96, height: 96 }
 /** Room the widget preview has in its panel, in CSS pixels. */
@@ -843,25 +843,18 @@ export function HmiWidgetEditor({ name }: { name: string }) {
   const { request, ready } = useProjectRequest()
   const widgetRequest = useMemo(() => ({ ...request, widgetPreview: name }), [request, name])
   const [box, setBox] = useState(WIDGET_START)
-  const zoom = Math.max(
-    1,
-    Math.min(
-      WIDGET_MAX_ZOOM,
-      Math.floor(
-        Math.min(
-          WIDGET_PANEL.width / (box.width + 2 * WIDGET_MARGIN),
-          WIDGET_PANEL.height / (box.height + 2 * WIDGET_MARGIN),
-        ),
-      ),
-    ),
+  const zoom = Math.min(
+    WIDGET_MAX_ZOOM,
+    WIDGET_PANEL.width / (box.width + 2 * WIDGET_PREVIEW_MARGIN),
+    WIDGET_PANEL.height / (box.height + 2 * WIDGET_PREVIEW_MARGIN),
   )
   const device = useMemo(
     () => ({
       id: 'widget',
       label: 'Widget',
-      width: box.width + 2 * WIDGET_MARGIN,
-      height: box.height + 2 * WIDGET_MARGIN,
-      density: zoom,
+      width: box.width + 2 * WIDGET_PREVIEW_MARGIN,
+      height: box.height + 2 * WIDGET_PREVIEW_MARGIN,
+      density: Math.max(1, Math.ceil(zoom)),
     }),
     [box.width, box.height, zoom],
   )
@@ -883,6 +876,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
     if (shown && shown.width > 0 && shown.height > 0 && (shown.width !== box.width || shown.height !== box.height))
       setBox({ width: shown.width, height: shown.height })
   }, [shown, box.width, box.height])
+  const overflow = shown ? widgetOverflow(preview.drawn, shown) : null
   const toPreview = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
     return { x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom }
@@ -911,14 +905,14 @@ export function HmiWidgetEditor({ name }: { name: string }) {
         </div>
         <div
           className={cn(
-            'relative flex w-[380px] shrink-0 items-start justify-center overflow-auto p-6',
+            'relative flex w-[380px] shrink-0 flex-col items-center gap-3 overflow-auto p-6',
             CANVAS_AREA_CLASS,
           )}
           data-testid='hmi-canvas-area'
           data-preview={preview.status}
         >
           <CanvasBackdrop id={`hmi-widget-bg-${name}`} />
-          <div className='box shrink-0 rounded-lg'>
+          <div className='box relative shrink-0 rounded-lg'>
             <div className='relative shrink-0' style={{ width: device.width * zoom, height: device.height * zoom }}>
               <canvas
                 ref={canvas}
@@ -950,6 +944,15 @@ export function HmiWidgetEditor({ name }: { name: string }) {
               {progress && <PreviewLoading step={progress.step} dimmed={progress.dimmed} />}
             </div>
           </div>
+          {overflow && (
+            <p
+              className='relative rounded-md bg-amber-50 px-3 py-1 font-caption text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+              data-testid='hmi-widget-overflow'
+            >
+              {name} draws outside its box ({overflow}). Draw from Left, Top, Width and Height: in a screen, drawing
+              outside the box covers other elements.
+            </p>
+          )}
         </div>
       </div>
     </div>

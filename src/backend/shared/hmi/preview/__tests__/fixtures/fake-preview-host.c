@@ -18,6 +18,8 @@ static int32_t g_width, g_height, g_page, g_design, g_frames, g_status, g_dirty,
 static int32_t g_last_pointer[3], g_last_key;
 static uint8_t g_rgba[16 * 8 * 4];
 static int32_t g_bounds[2 * 5] = {1, 16, 32, 160, 80, 2, 0, 0, 16, 16};
+/* Drawn extent x0, y0, x1, y1 in Q4 lu: 2 x 3 lu at (1, 2). */
+static int32_t g_drawn[4] = {16, 32, 48, 80};
 static char g_text[256];
 static double g_value;
 
@@ -63,6 +65,7 @@ EXPORT("hmi_pv_key") void hmi_pv_key(uint32_t code) {
 }
 EXPORT("hmi_pv_bounds_count") int32_t hmi_pv_bounds_count(void) { return 2; }
 EXPORT("hmi_pv_bounds") const int32_t *hmi_pv_bounds(void) { return g_bounds; }
+EXPORT("hmi_pv_drawn") const int32_t *hmi_pv_drawn(void) { return g_drawn; }
 EXPORT("hmi_pv_set_num") int32_t hmi_pv_set_num(int32_t screen, int32_t setter, double v) {
     if (screen != 0 || setter != 1) return -1;
     g_value = v;

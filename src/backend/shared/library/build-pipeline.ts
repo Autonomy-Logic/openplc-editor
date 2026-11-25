@@ -31,6 +31,7 @@
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { checkPathId } from '@root/backend/shared/utils/path-safety'
 import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
+import { hmiFixedDrawCalls } from '@root/middleware/shared/utils/hmi/widget-draw-checks'
 
 import { compileStlib, type CompileStlibError, type CompileStlibSource } from './compile-stlib'
 
@@ -440,6 +441,11 @@ export function libraryBuildFromTranspiledSt(
       ],
     }
   }
+
+  const drawErrors = (aux?.widgetSources ?? []).flatMap((w) =>
+    hmiFixedDrawCalls(w.source).map((f) => ({ message: f.message, line: f.line, file: `${w.name}.st` })),
+  )
+  if (drawErrors.length > 0) return { success: false, errors: drawErrors }
 
   const headers = declaredHeaders(manifest)
   // Native sources ride in the same input array; strucpp routes on the file

@@ -8,6 +8,9 @@
 #include <string.h>
 
 #include "hmi_core.h"
+extern "C" {
+#include "hmi_internal.h"
+}
 #include "hmi_preview.h"
 #include "hmi_unit.h"
 #include "iec_fault.hpp"
@@ -189,6 +192,132 @@ HMI_PV_EXPORT("hmi_pv_bounds_count") int32_t hmi_pv_bounds_count(void) {
 HMI_PV_EXPORT("hmi_pv_bounds") const int32_t *hmi_pv_bounds(void) {
     hmi_session_use(g_session);
     return hmi_bounds_data();
+}
+
+namespace {
+
+/** Extent of what the last frame drew: x0, y0, x1, y1 in Q4 lu; x1 <= x0 when it drew nothing. */
+int32_t g_drawn[4];
+
+/** Adds a box, cut to the clip, to the drawn extent. */
+void add_drawn(int64_t x0, int64_t y0, int64_t x1, int64_t y1, const int64_t clip[4], bool clipped, bool *any) {
+    if (clipped) {
+        if (x0 < clip[0]) x0 = clip[0];
+        if (y0 < clip[1]) y0 = clip[1];
+        if (x1 > clip[2]) x1 = clip[2];
+        if (y1 > clip[3]) y1 = clip[3];
+    }
+    if (x1 <= x0 || y1 <= y0) return;
+    if (!*any || x0 < g_drawn[0]) g_drawn[0] = static_cast<int32_t>(x0);
+    if (!*any || y0 < g_drawn[1]) g_drawn[1] = static_cast<int32_t>(y0);
+    if (!*any || x1 > g_drawn[2]) g_drawn[2] = static_cast<int32_t>(x1);
+    if (!*any || y1 > g_drawn[3]) g_drawn[3] = static_cast<int32_t>(y1);
+    *any = true;
+}
+
+bool visible(uint32_t argb) { return (argb >> 24) != 0; }
+
+/** Works out g_drawn from the last frame's commands: every visible mark but the screen's clear, within its clip. */
+void measure_drawn() {
+    g_drawn[0] = g_drawn[1] = g_drawn[2] = g_drawn[3] = 0;
+    if (!g_dl || g_dl_len < HMI_DL_HEADER_SIZE) return;
+    const uint8_t *p = g_dl + HMI_DL_HEADER_SIZE, *end = g_dl + g_dl_len;
+    const uint32_t n = hmi_rd_u32(g_dl + 16);
+    int64_t clip[4] = {0, 0, 0, 0};
+    bool clipped = false, any = false;
+    for (uint32_t k = 0; k < n && p < end; k++) {
+        const uint8_t op = *p++;
+        const size_t avail = static_cast<size_t>(end - p);
+        switch (op) {
+        case HMI_OP_CLEAR:
+            p += HMI_PAYLOAD_CLEAR;
+            break;
+        case HMI_OP_RECT:
+        case HMI_OP_RECT_STROKE: {
+            const size_t sz = op == HMI_OP_RECT ? HMI_PAYLOAD_RECT : HMI_PAYLOAD_RECT_STROKE;
+            if (avail < sz) return;
+            const int64_t x = hmi_rd_i32(p), y = hmi_rd_i32(p + 4), w = hmi_rd_i32(p + 8), h = hmi_rd_i32(p + 12);
+            const int64_t half = op == HMI_OP_RECT ? 0 : llabs(static_cast<int64_t>(hmi_rd_i32(p + 20))) / 2;
+            if (visible(hmi_rd_u32(p + sz - 4))) add_drawn(x - half, y - half, x + w + half, y + h + half, clip, clipped, &any);
+            p += sz;
+            break;
+        }
+        case HMI_OP_LINE: {
+            if (avail < HMI_PAYLOAD_LINE) return;
+            const int64_t x1 = hmi_rd_i32(p), y1 = hmi_rd_i32(p + 4), x2 = hmi_rd_i32(p + 8), y2 = hmi_rd_i32(p + 12);
+            const int64_t half = llabs(static_cast<int64_t>(hmi_rd_i32(p + 16))) / 2;
+            if (visible(hmi_rd_u32(p + 20)))
+                add_drawn((x1 < x2 ? x1 : x2) - half, (y1 < y2 ? y1 : y2) - half, (x1 > x2 ? x1 : x2) + half,
+                          (y1 > y2 ? y1 : y2) + half, clip, clipped, &any);
+            p += HMI_PAYLOAD_LINE;
+            break;
+        }
+        case HMI_OP_CIRCLE:
+        case HMI_OP_ARC: {
+            const size_t sz = op == HMI_OP_CIRCLE ? HMI_PAYLOAD_CIRCLE : HMI_PAYLOAD_ARC;
+            if (avail < sz) return;
+            const int64_t cx = hmi_rd_i32(p), cy = hmi_rd_i32(p + 4);
+            int64_t r = llabs(static_cast<int64_t>(hmi_rd_i32(p + 8)));
+            if (op == HMI_OP_ARC) r += llabs(static_cast<int64_t>(hmi_rd_i32(p + 12))) / 2;
+            if (visible(hmi_rd_u32(p + sz - 4))) add_drawn(cx - r, cy - r, cx + r, cy + r, clip, clipped, &any);
+            p += sz;
+            break;
+        }
+        case HMI_OP_TEXT: {
+            if (avail < HMI_PAYLOAD_TEXT_HEAD) return;
+            const uint16_t len = hmi_rd_u16(p + 18);
+            if (avail < HMI_PAYLOAD_TEXT_HEAD + len) return;
+            const int64_t x = hmi_rd_i32(p), y = hmi_rd_i32(p + 4), size = hmi_rd_i32(p + 8);
+            const int64_t w = static_cast<int64_t>(hmi_text_width(reinterpret_cast<const char *>(p + 20), len,
+                                                                  static_cast<int32_t>(size / 16), p[12])) * 16;
+            const int64_t x0 = p[13] == HMI_ALIGN_CENTER ? x - w / 2 : p[13] == HMI_ALIGN_RIGHT ? x - w : x;
+            if (visible(hmi_rd_u32(p + 14))) add_drawn(x0, y, x0 + w, y + size, clip, clipped, &any);
+            p += HMI_PAYLOAD_TEXT_HEAD + len;
+            break;
+        }
+        case HMI_OP_CLIP:
+            if (avail < HMI_PAYLOAD_CLIP) return;
+            clip[0] = hmi_rd_i32(p);
+            clip[1] = hmi_rd_i32(p + 4);
+            clip[2] = clip[0] + hmi_rd_i32(p + 8);
+            clip[3] = clip[1] + hmi_rd_i32(p + 12);
+            clipped = true;
+            p += HMI_PAYLOAD_CLIP;
+            break;
+        case HMI_OP_UNCLIP:
+            clipped = false;
+            break;
+        case HMI_OP_POLY: {
+            if (avail < HMI_PAYLOAD_POLY_HEAD) return;
+            const uint16_t np = hmi_rd_u16(p + 4);
+            const size_t sz = HMI_PAYLOAD_POLY_HEAD + static_cast<size_t>(np) * 8u;
+            if (avail < sz || np == 0) return;
+            int64_t x0 = hmi_rd_i32(p + 6), y0 = hmi_rd_i32(p + 10), x1 = x0, y1 = y0;
+            for (uint16_t i = 1; i < np; i++) {
+                const int64_t x = hmi_rd_i32(p + 6 + static_cast<size_t>(i) * 8u);
+                const int64_t y = hmi_rd_i32(p + 10 + static_cast<size_t>(i) * 8u);
+                if (x < x0) x0 = x;
+                if (y < y0) y0 = y;
+                if (x > x1) x1 = x;
+                if (y > y1) y1 = y;
+            }
+            if (visible(hmi_rd_u32(p))) add_drawn(x0, y0, x1, y1, clip, clipped, &any);
+            p += sz;
+            break;
+        }
+        default:
+            return;
+        }
+    }
+}
+
+}  // namespace
+
+/** Extent of what the last frame drew, as x0, y0, x1, y1 in Q4 lu (x1 <= x0: nothing), clips applied, clear left out. */
+HMI_PV_EXPORT("hmi_pv_drawn") const int32_t *hmi_pv_drawn(void) {
+    hmi_session_use(g_session);
+    measure_drawn();
+    return g_drawn;
 }
 
 /** Sets a numeric or BOOL live property; returns 0, or -1 when there is no such setter or its screen is not shown. */

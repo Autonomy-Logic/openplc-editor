@@ -7,6 +7,7 @@ import type { HmiPreviewSession, HmiPreviewStart } from '../../../../middleware/
 import type {
   HmiPreviewBounds,
   HmiPreviewFrame,
+  HmiPreviewRect,
   HmiPreviewReply,
   HmiPreviewRequestMessage,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
@@ -48,19 +49,26 @@ function parseReply(value: unknown): HmiPreviewReply | null {
   return reply
 }
 
-const isBounds = (value: unknown): value is HmiPreviewBounds =>
+const isRect = (value: unknown): value is HmiPreviewRect =>
   isRecord(value) &&
-  typeof value.id === 'number' &&
   typeof value.x === 'number' &&
   typeof value.y === 'number' &&
   typeof value.width === 'number' &&
   typeof value.height === 'number'
 
+const isBounds = (value: unknown): value is HmiPreviewBounds =>
+  isRect(value) && 'id' in value && typeof value.id === 'number'
+
 /** A frame from the Worker, its pixels as a view in this realm whatever realm made them. */
 function parseFrame(value: unknown): HmiPreviewFrame | null {
   if (!isRecord(value) || typeof value.page !== 'number' || typeof value.status !== 'number') return null
   if (!Array.isArray(value.bounds) || !value.bounds.every(isBounds)) return null
-  const frame = { page: value.page, status: value.status, bounds: value.bounds }
+  const frame = {
+    page: value.page,
+    status: value.status,
+    bounds: value.bounds,
+    drawn: isRect(value.drawn) ? value.drawn : null,
+  }
   const { pixels } = value
   if (pixels === null) return { ...frame, pixels: null }
   if (!isRecord(pixels) || !ArrayBuffer.isView(pixels.rgba)) return null

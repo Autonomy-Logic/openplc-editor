@@ -39,12 +39,13 @@ describe('HmiPreviewInstance', () => {
     expect(() => preview.render(64, 64, 1)).toThrow('The preview could not draw the frame')
   })
 
-  it('reads bounds in logical units', async () => {
+  it('reads bounds and the drawn extent in logical units', async () => {
     const preview = await HmiPreviewInstance.create(fakeHost(), 16, 8)
     expect(preview.bounds()).toEqual([
       { id: 1, x: 1, y: 2, width: 10, height: 5 },
       { id: 2, x: 0, y: 0, width: 1, height: 1 },
     ])
+    expect(preview.drawn()).toEqual({ x: 1, y: 2, width: 2, height: 3 })
   })
 
   it('passes pointer input, keys, design mode and resizes to the module', async () => {

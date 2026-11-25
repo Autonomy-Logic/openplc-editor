@@ -9,6 +9,7 @@ import type {
   HmiPointerKind,
   HmiPreviewBounds,
   HmiPreviewPixels,
+  HmiPreviewRect,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 
 /** Pointer kinds of the core (`HMI_PTR_*` in `hmi_core.h`). */
@@ -32,6 +33,7 @@ interface HostFunctions {
   hmi_pv_key: NumericFunction
   hmi_pv_bounds_count: NumericFunction
   hmi_pv_bounds: NumericFunction
+  hmi_pv_drawn: NumericFunction
   hmi_pv_set_num: NumericFunction
   hmi_pv_text: NumericFunction
   hmi_pv_set_str: NumericFunction
@@ -106,6 +108,7 @@ export class HmiPreviewInstance {
       hmi_pv_key: bind('hmi_pv_key'),
       hmi_pv_bounds_count: bind('hmi_pv_bounds_count'),
       hmi_pv_bounds: bind('hmi_pv_bounds'),
+      hmi_pv_drawn: bind('hmi_pv_drawn'),
       hmi_pv_set_num: bind('hmi_pv_set_num'),
       hmi_pv_text: bind('hmi_pv_text'),
       hmi_pv_set_str: bind('hmi_pv_set_str'),
@@ -171,6 +174,12 @@ export class HmiPreviewInstance {
       bounds.push({ id, x: x / Q4, y: y / Q4, width: w / Q4, height: h / Q4 })
     }
     return bounds
+  }
+
+  /** Extent of what the last frame drew, background left out, in logical units; null when it drew nothing. */
+  drawn(): HmiPreviewRect | null {
+    const [x0, y0, x1, y1] = new Int32Array(this.memory.buffer, this.call.hmi_pv_drawn(), 4)
+    return x1 > x0 && y1 > y0 ? { x: x0 / Q4, y: y0 / Q4, width: (x1 - x0) / Q4, height: (y1 - y0) / Q4 } : null
   }
 
   /** Sets a numeric or BOOL live property of a screen; false when it has no such setter. */
