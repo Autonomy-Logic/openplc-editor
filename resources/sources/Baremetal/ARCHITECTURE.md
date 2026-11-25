@@ -280,7 +280,8 @@ class or link state itself.
 
 | Adapter branch | `link_up()` is true when |
 |---|---|
-| `BOARD_ESP32` with `MBTCP_WIFI`, `BOARD_ESP8266`, `BOARD_WIFININA` with `MBTCP_WIFI`, `BOARD_PICOW` and `BOARD_PORTENTA` with `MBTCP_WIFI`, the generic `MBTCP_WIFI` branch | `WiFi.status() == WL_CONNECTED` (on the ESP32 and ESP8266 cores this status means joined and addressed; on NINA it is one module status exchange, no send) |
+| `BOARD_ESP32` with `MBTCP_WIFI` | `WiFi.status() == WL_CONNECTED`, `WiFi.STA.connected()`, `WiFi.STA.linkUp()` and a non-zero `WiFi.localIP()` (on the ESP32 core 3.x the status can stay `WL_CONNECTED` through a disconnect and a static address is reported while the interface is down, so the station's association and the interface state are read too) |
+| `BOARD_ESP8266`, `BOARD_WIFININA` with `MBTCP_WIFI`, `BOARD_PICOW` and `BOARD_PORTENTA` with `MBTCP_WIFI`, the generic `MBTCP_WIFI` branch | `WiFi.status() == WL_CONNECTED` (on the ESP8266 core this status means joined and addressed; on NINA it is one module status exchange, no send) |
 | `BOARD_ESP32` with `MBTCP_ETHERNET` | `ETH.linkUp()` and a non-zero `ETH.localIP()` (`<ETH.h>` is included in `baremetal_net.cpp` for this build only) |
 | `MBETH_SPI` with the WIZnet `Ethernet.h` (W5100, W5200, W5500) | `Ethernet.linkStatus() != LinkOFF` (a W5100 answers `Unknown`, which counts as up) |
 | `MBETH_SPI` with `MBTCP_ETH_ENC28J60`, `MBETH_MBED_LWIP`, `BOARD_LOGO8` | always (no link query is relied on there) |

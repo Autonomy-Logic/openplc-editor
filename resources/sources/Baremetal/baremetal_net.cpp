@@ -379,7 +379,10 @@ bool link_up()
     return true;
 #elif defined(BOARD_ESP32) && defined(MBTCP_ETHERNET)
     return ETH.linkUp() && ETH.localIP() != IPAddress((uint32_t)0);
-#elif defined(BOARD_ESP32) || defined(BOARD_ESP8266) || defined(BM_NET_NINA) || \
+#elif defined(BOARD_ESP32)
+    return WiFi.status() == WL_CONNECTED && WiFi.STA.connected() && WiFi.STA.linkUp() &&
+           WiFi.localIP() != IPAddress((uint32_t)0);
+#elif defined(BOARD_ESP8266) || defined(BM_NET_NINA) || \
       ((defined(BOARD_PICOW) || defined(BOARD_PORTENTA)) && defined(MBTCP_WIFI))
     return WiFi.status() == WL_CONNECTED;
 #elif defined(MBETH_MBED_LWIP) || (defined(MBETH_SPI) && defined(MBTCP_ETH_ENC28J60))
