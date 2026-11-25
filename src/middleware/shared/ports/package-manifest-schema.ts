@@ -35,7 +35,8 @@
 import { z } from 'zod'
 
 import { isValidVersion } from '../../../frontend/utils/semver'
-import type { PackageManifest } from './types'
+import { hmiPanelCapabilitySchema } from '../utils/target-capabilities/hmi-panel'
+import type { PackageManifest, RuntimeLicenseMode } from './types'
 
 /**
  * A compatibility floor must be a version this codebase can compare.
@@ -60,6 +61,11 @@ const versionFloor = z
   .string()
   .min(1)
   .refine(isValidVersion, { message: 'must be a version like "4.3.2", "4.3", "4" or "v4.3.2"' })
+
+/** Values of `package.runtimeLicense`; mirrors openplc-packages' `schema/manifest.schema.json`. */
+export const RUNTIME_LICENSE_MODES = ['user', 'vpp', 'vendor'] as const satisfies readonly RuntimeLicenseMode[]
+
+const runtimeLicense = z.enum(RUNTIME_LICENSE_MODES)
 
 /**
  * A vendor board-manager index URL must be one we are willing to hand to
@@ -94,6 +100,14 @@ const boardManagerUrl = z.string().refine(
   { message: 'must be an https:// URL' },
 )
 
+/**
+ * A package manifest as the editor reads it; every object passes unknown fields through. Declared fields: the
+ * compatibility floors (optional, since older packages lack them; typed and format-checked because the install gate
+ * compares them, while openplc-packages' `scripts/validate.ts` owns the authoring rules), `runtimeLicense` (read by the
+ * licence status; an unknown value is refused here), and per device `target.boardManagerUrl`, `target.uploadMethod`
+ * (constrained because it picks the upload path downstream, so a misspelt value is refused rather than taking the
+ * serial path), `capabilities.hmi` and `capabilities.hmiDataWidgets`.
+ */
 export const PackageManifestSchema = z
   .object({
     formatVersion: z.string().min(1),
@@ -102,42 +116,24 @@ export const PackageManifestSchema = z
         id: z.string().min(1),
         name: z.string().min(1),
         version: z.string().min(1),
-        // Compatibility floors (DOPE-448). Optional on purpose: packages built
-        // before these fields existed must keep installing, and a package that
-        // declares no floor declares no constraint. They are typed here rather
-        // than left to `.passthrough()` because the install gate compares them
-        // — a field a gate reads should not reach it as `unknown`.
-        //
-        // Authoring-side rules (minRuntimeVersion required iff a device targets
-        // runtime-v4, rejected otherwise) live in openplc-packages'
-        // `scripts/validate.ts`, per this file's split of responsibilities.
-        // The *format* is checked here because a floor nobody can parse is a
-        // constraint that silently does not apply — see `versionFloor`.
         minEditorVersion: versionFloor.optional(),
         minRuntimeVersion: versionFloor.optional(),
+        runtimeLicense: runtimeLicense.optional(),
       })
       .passthrough(),
     devices: z
       .array(
         z
           .object({
-            // Only `boardManagerUrl` and `uploadMethod` are declared; everything
-            // else on a device — and on `target` itself — still flows through
-            // untouched.
-            //
-            // `uploadMethod` is constrained rather than passed through because
-            // it ROUTES: it is typed `'serial' | 'ethernet'` downstream, and
-            // `BoardInfoResolver.#fromVppDevice` copies whatever is here into
-            // that field. Left to `.passthrough()`, a manifest saying
-            // `uploadMethod: "etherner"` would be carried as if it were a valid
-            // member of the union and simply not match 'ethernet' anywhere,
-            // silently taking the serial path — on a board whose only link is
-            // Ethernet. Refusing the manifest is the safer failure.
             target: z
               .object({
                 boardManagerUrl: boardManagerUrl.optional(),
                 uploadMethod: z.enum(['serial', 'ethernet']).optional(),
               })
+              .passthrough()
+              .optional(),
+            capabilities: z
+              .object({ hmi: hmiPanelCapabilitySchema.nullable().optional(), hmiDataWidgets: z.boolean().optional() })
               .passthrough()
               .optional(),
           })
@@ -205,6 +201,23 @@ function withComparableFloorsOnly(value: unknown): unknown {
   return droppedAny ? { ...value, package: kept } : value
 }
 
+/**
+ * Return `value` without a `package.runtimeLicense` this codebase does not
+ * know, logging it. Same strict-at-entry / tolerant-on-read split as the
+ * floors: the package stays loadable and reads as one that declares no mode.
+ */
+function withKnownRuntimeLicenseOnly(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.package)) return value
+  const declared = value.package.runtimeLicense
+  if (declared === undefined || runtimeLicense.safeParse(declared).success) return value
+
+  console.warn(
+    `[package-manifest] installed package declares an unknown runtimeLicense (${JSON.stringify(declared)}); ignoring it`,
+  )
+  const { runtimeLicense: _dropped, ...kept } = value.package
+  return { ...value, package: kept }
+}
+
 /** True for a board-manager URL this codebase is willing to pass to arduino-cli. */
 function isUsableBoardManagerUrl(value: unknown): boolean {
   return value === undefined || (typeof value === 'string' && boardManagerUrl.safeParse(value).success)
@@ -261,5 +274,7 @@ function withUsableBoardManagerUrlsOnly(value: unknown): unknown {
  * silently trading one invisible outcome for another.
  */
 export function parseInstalledPackageManifest(value: unknown): PackageManifest | null {
-  return parsePackageManifest(withUsableBoardManagerUrlsOnly(withComparableFloorsOnly(value)))
+  return parsePackageManifest(
+    withKnownRuntimeLicenseOnly(withUsableBoardManagerUrlsOnly(withComparableFloorsOnly(value))),
+  )
 }

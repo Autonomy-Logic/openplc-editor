@@ -17,7 +17,7 @@
  * are stubbed since they spawn subprocesses we can't run in CI.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -139,6 +139,7 @@ describe('createEditorCompilerPlatformPort', () => {
   function makeContext(overrides?: Partial<EditorCompilerPlatformPortContext>): EditorCompilerPlatformPortContext {
     return {
       normalizedProjectPath: '/tmp/project',
+      hmiSourcesPath: '/tmp/resources/sources/hmi',
       compilationPath: '/tmp/project/build/Arduino Mega',
       sourceTargetFolderPath: '/tmp/project/build/Arduino Mega/src',
       boardTarget: 'Arduino Mega',
@@ -150,6 +151,7 @@ describe('createEditorCompilerPlatformPort', () => {
         makeRuntimeApiUpload: jest.fn(),
       },
       compressSourceFolder: jest.fn(),
+      wasmCompileService: { compile: jest.fn() },
       pollTimeoutMs: 1000,
       pollIntervalMs: 10,
       startTimeoutMs: 1000,
@@ -165,6 +167,75 @@ describe('createEditorCompilerPlatformPort', () => {
     const md5 = await port.computeMd5('hello world')
     // crypto.createHash('md5').update('hello world').digest('hex')
     expect(md5).toBe('5eb63bbbe01eeed093cb22bb8f5acdc3')
+  })
+
+  it('compileToWasm writes the request text files to the build folder, then compiles with the service', async () => {
+    const result = {
+      ok: true as const,
+      wasm: new Uint8Array([0, 97, 115, 109]),
+      stats: { units: 1, cached: 0 },
+      diagnostics: [],
+    }
+    const compile = jest.fn().mockResolvedValue(result)
+    const compilationPath = mkdtempSync(join(tmpdir(), 'wasm-build-'))
+    try {
+      const port = createEditorCompilerPlatformPort(
+        makeHandlers(),
+        makeContext({ compilationPath, wasmCompileService: { compile } }),
+      )
+      const request = {
+        files: { 'src/debug-map.json': '{"md5":"x"}', 'src/blob.bin': new Uint8Array([1]) },
+        units: [{ source: 'src/a.cpp', language: 'c++' as const }],
+      }
+      const log = jest.fn()
+
+      await expect(port.compileToWasm(request, log)).resolves.toBe(result)
+      expect(compile).toHaveBeenCalledWith(request, log)
+      expect(readFileSync(join(compilationPath, 'src', 'debug-map.json'), 'utf-8')).toBe('{"md5":"x"}')
+      expect(existsSync(join(compilationPath, 'src', 'blob.bin'))).toBe(false)
+    } finally {
+      rmSync(compilationPath, { recursive: true, force: true })
+    }
+  })
+
+  it('compileWasmModule compiles with the service and leaves the build folder alone', async () => {
+    const result = {
+      ok: true as const,
+      wasm: new Uint8Array([0, 97, 115, 109]),
+      stats: { units: 1, cached: 0 },
+      diagnostics: [],
+    }
+    const compile = jest.fn().mockResolvedValue(result)
+    const compilationPath = mkdtempSync(join(tmpdir(), 'wasm-module-'))
+    try {
+      const port = createEditorCompilerPlatformPort(
+        makeHandlers(),
+        makeContext({ compilationPath, wasmCompileService: { compile } }),
+      )
+      const request = { files: { 'client/a.c': 'int a;' }, units: [{ source: 'client/a.c', language: 'c' as const }] }
+      const log = jest.fn()
+      await expect(port.compileWasmModule(request, log)).resolves.toBe(result)
+      expect(compile).toHaveBeenCalledWith(request, log)
+      expect(existsSync(join(compilationPath, 'src'))).toBe(false)
+    } finally {
+      rmSync(compilationPath, { recursive: true, force: true })
+    }
+  })
+
+  it('readHmiSources reads the HMI sources folder as bytes by path', async () => {
+    const hmiSourcesPath = mkdtempSync(join(tmpdir(), 'hmi-sources-'))
+    try {
+      mkdirSync(join(hmiSourcesPath, 'client'))
+      writeFileSync(join(hmiSourcesPath, 'client', 'index.html'), '<html>')
+      const port = createEditorCompilerPlatformPort(makeHandlers(), makeContext({ hmiSourcesPath }))
+      const files = await port.readHmiSources()
+      expect(Object.keys(files)).toEqual(['client/index.html'])
+      const file = files['client/index.html']
+      expect(file).toBeInstanceOf(Uint8Array)
+      expect(typeof file === 'string' ? file : new TextDecoder().decode(file)).toBe('<html>')
+    } finally {
+      rmSync(hmiSourcesPath, { recursive: true, force: true })
+    }
   })
 
   // ---- uploadArduinoBoard — port wiring (regression for issue #5) ----
@@ -338,7 +409,13 @@ describe('createEditorCompilerPlatformPort', () => {
     // This stub answers every endpoint with a `/api/version` body, so
     // `/api/capabilities` yields no usable `runtimeVersion` and the probe
     // falls back — the exact shape of a runtime predating the endpoint.
-    expect(result).toEqual({ ok: true, version: '4.1.2', minEditorVersion: null, supportsProjectSnapshot: false })
+    expect(result).toEqual({
+      ok: true,
+      version: '4.1.2',
+      minEditorVersion: null,
+      supportsProjectSnapshot: false,
+      supportsHmi: false,
+    })
   })
 
   it('checkRuntimeVersion reads the editor floor from /api/capabilities when the device serves it', async () => {
@@ -356,7 +433,13 @@ describe('createEditorCompilerPlatformPort', () => {
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
       () => undefined,
     )
-    expect(result).toEqual({ ok: true, version: 'v4.2.0', minEditorVersion: '4.2.1', supportsProjectSnapshot: false })
+    expect(result).toEqual({
+      ok: true,
+      version: 'v4.2.0',
+      minEditorVersion: '4.2.1',
+      supportsProjectSnapshot: false,
+      supportsHmi: false,
+    })
   })
 
   it('checkRuntimeVersion falls back to /api/version when capabilities 404s', async () => {
@@ -373,7 +456,13 @@ describe('createEditorCompilerPlatformPort', () => {
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
       log,
     )
-    expect(result).toEqual({ ok: true, version: 'v4.1.7', minEditorVersion: null, supportsProjectSnapshot: false })
+    expect(result).toEqual({
+      ok: true,
+      version: 'v4.1.7',
+      minEditorVersion: null,
+      supportsProjectSnapshot: false,
+      supportsHmi: false,
+    })
     // The 404 is the normal answer from every deployed runtime — it must not
     // nag the user on every upload.
     expect(log).not.toHaveBeenCalled()
@@ -393,7 +482,13 @@ describe('createEditorCompilerPlatformPort', () => {
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
       log,
     )
-    expect(result).toEqual({ ok: true, version: null, minEditorVersion: null, supportsProjectSnapshot: false })
+    expect(result).toEqual({
+      ok: true,
+      version: null,
+      minEditorVersion: null,
+      supportsProjectSnapshot: false,
+      supportsHmi: false,
+    })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Could not reach runtime'), 'warning')
   })
 
@@ -410,7 +505,13 @@ describe('createEditorCompilerPlatformPort', () => {
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
       log,
     )
-    expect(result).toEqual({ ok: true, version: null, minEditorVersion: null, supportsProjectSnapshot: false })
+    expect(result).toEqual({
+      ok: true,
+      version: null,
+      minEditorVersion: null,
+      supportsProjectSnapshot: false,
+      supportsHmi: false,
+    })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('probe blew up'), 'warning')
   })
 

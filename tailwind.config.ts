@@ -55,6 +55,7 @@ module.exports = {
       },
       animation: {
         'slide-in-l-to-r': 'slideInLToR 1s ease-in-out',
+        'indeterminate-bar': 'indeterminateBar 1.4s ease-in-out infinite',
         'slide-in-r-to-l': 'slideInRToL 0.5s ease-in-out',
         slideDown: "slideDown 300ms ease-in-out",
 				slideUp: "slideUp 300ms ease-in-out",
@@ -65,6 +66,10 @@ module.exports = {
       },
     },
     keyframes: {
+      indeterminateBar: {
+        '0%': { transform: 'translateX(-100%)' },
+        '100%': { transform: 'translateX(340%)' },
+      },
       slideInLToR: {
         '0%': { opacity: 0, transform: 'translateX(-100%)' },
         '100%': { opacity: 1, transform: 'translateX(0)' },

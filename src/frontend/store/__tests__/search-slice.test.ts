@@ -35,6 +35,7 @@ describe('createSearchSlice', () => {
     expect(state.sensitiveCase).toBe(false)
     expect(state.regularExpression).toBe(false)
     expect(state.searchNodePosition).toEqual({ x: 0, y: 0 })
+    expect(state.revealRequestId).toBe(0)
   })
 
   // -------------------------------------------------------------------------
@@ -147,5 +148,12 @@ describe('createSearchSlice', () => {
     expect(state.sensitiveCase).toBe(false)
     expect(state.regularExpression).toBe(false)
     expect(state.searchNodePosition).toEqual({ x: 0, y: 0 })
+  })
+  it('requestReveal bumps the reveal request on every call, and clearSearch keeps it', () => {
+    store.getState().searchActions.requestReveal()
+    store.getState().searchActions.requestReveal()
+    expect(store.getState().revealRequestId).toBe(2)
+    store.getState().searchActions.clearSearch()
+    expect(store.getState().revealRequestId).toBe(2)
   })
 })

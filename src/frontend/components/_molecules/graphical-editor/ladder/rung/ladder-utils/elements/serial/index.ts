@@ -6,6 +6,7 @@ import { checkIfElementIsNode } from '../../../../../../../_atoms/graphical-edit
 import { ParallelNode, PlaceholderNode } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { connectNodes } from '../../edges'
 import { buildGenericNode, isNodeOfType } from '../../nodes'
+import { spliceNodeIntoEdgeChain } from '../core'
 import { removePlaceholderElements } from '../placeholder'
 import { getElementPositionBasedOnPlaceholderElement, getPreviousElement, getPreviousElementsByEdge } from '../utils'
 
@@ -48,6 +49,18 @@ export const appendSerialConnection = <T>(
    * Get the previous elements (based on the related node)
    */
   const relatedNode = placeholder.selected.data.relatedNode as Node
+  if (relatedNode.data.branchContext) {
+    const splicedEdges = spliceNodeIntoEdgeChain(
+      newEdges,
+      relatedNode.id,
+      relatedNode,
+      placeholder.selected.data.position === 'left' ? 'left' : 'right',
+      newElement,
+    )
+    if (!splicedEdges) return { nodes: removePlaceholderElements(rung.nodes), edges: rung.edges }
+    return { nodes: newNodes, edges: splicedEdges, newNode: newElement }
+  }
+
   const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdge(
     { ...rung, nodes: newNodes, edges: newEdges },
     relatedNode,

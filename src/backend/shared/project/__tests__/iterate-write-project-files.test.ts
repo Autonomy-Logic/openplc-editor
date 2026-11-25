@@ -18,6 +18,7 @@ const baseFiles: WriteProjectFiles = {
   pouFiles: [],
   serverFiles: [],
   remoteDeviceFiles: [],
+  hmiFiles: [],
   dataTypeFiles: [],
   deletions: [],
 }
@@ -131,6 +132,7 @@ describe('iterateWriteProjectFiles', () => {
     it('yields each data type file preserving relativePath verbatim', () => {
       const entries = collect({
         ...baseFiles,
+        hmiFiles: [],
         dataTypeFiles: [
           { relativePath: 'datatypes/Motor.dt', content: 'TYPE\n  Motor : STRUCT\n  END_STRUCT;\nEND_TYPE\n' },
           { relativePath: 'datatypes/Color.dt', content: 'TYPE\n  Color : (Red);\nEND_TYPE\n' },
@@ -186,6 +188,7 @@ describe('iterateWriteProjectFiles', () => {
         pouFiles: [{ relativePath: 'pous/programs/a.st', content: 'A' }],
         serverFiles: [{ relativePath: 'devices/servers/s.json', content: 'S' }],
         remoteDeviceFiles: [{ relativePath: 'devices/remote/r.json', content: 'R' }],
+        hmiFiles: [],
         dataTypeFiles: [{ relativePath: 'datatypes/T.dt', content: 'T' }],
       })
       expect(entries.map((e) => e.category)).toEqual([

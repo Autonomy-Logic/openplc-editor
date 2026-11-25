@@ -8,7 +8,7 @@ const TitleBarRightSlot = () => {
 
   return (
     <div id='title-bar-right-slot' className='flex items-center justify-end'>
-      {caps.isNativeApplication && OS === 'win32' && <WindowControls />}
+      {caps.isNativeApplication && (OS === 'win32' || OS === 'linux') && <WindowControls />}
     </div>
   )
 }

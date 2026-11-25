@@ -23,6 +23,9 @@ release/app/dist
 release/app/configs
 release/build
 release/relay
+release/yowasp-clang
+release/hmi-objects
+release/package-trust
 configs/dll
 
 .idea
@@ -53,21 +56,14 @@ C_runtime/**/*.o
 resources/st-compiler/**.spec
 
 # External tool binaries (downloaded by scripts/download-binaries.ts)
-# arduino-cli stays committed since we don't own its releases
 resources/strucpp/
 resources/bin/**
-# Git will not re-include a file whose ancestor directory is excluded, and `bin/**` excludes
-# the platform/arch directories too — so the two exceptions below only bite once these are
-# re-included. Without them a NEWLY downloaded arduino-cli is invisible to git, and the six
-# committed ones survive only because they were already tracked when the rule landed.
 !resources/bin/
 !resources/bin/*/
 !resources/bin/*/*/
 !resources/bin/*/*/arduino-cli
 !resources/bin/*/*/arduino-cli.exe
-# A local build leaves xml2st, iec2c/iec2iec and .binary-metadata.json here, plus
-# timestamped .xml2st-backup-* copies. They are downloaded artefacts, not sources —
-# 123 MB of them were swept into a PR by a `git add -A` before this rule existed.
+# Downloaded xml2st, iec2c/iec2iec, .binary-metadata.json and .xml2st-backup-* copies
 resources/sources/MatIEC/
 
 # Playwright
@@ -76,7 +72,7 @@ playwright-report
 /blob-report/
 /playwright/.cache/
 
-# Claude Code session state (a running session's id and pid — never a project artefact)
+# Claude Code session state (a running session's id and pid)
 .claude/scheduled_tasks.lock
 
 # Development build of the headless CLI (see webpack.config.cli.dev.ts)
@@ -85,7 +81,12 @@ openplc-cli.dev.js.map
 /clang-worker.js
 /clang-worker.js.map
 
-# Local scratch script for transpiling a project outside the app. Untracked on
-# purpose (8d3dc446c) and listed here because a broad `git add -A` has twice put
-# it back into a feature branch's PR.
+# Local scratch script for transpiling a project outside the app
 scripts/dev-transpile-project.ts
+
+# Python runtime fetched at install time (python-runtime.json)
+vendor/python-runtime/
+vendor/hmi-widgets/
+
+# transient SBOM build output (release copies live on the security-archive branch)
+/sbom/

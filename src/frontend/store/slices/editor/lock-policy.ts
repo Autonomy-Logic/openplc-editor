@@ -15,6 +15,7 @@ export function editorLockPolicy(type: EditorModel['type']): EditorLockPolicy {
       return 'read-only'
     case 'plc-persistent-storage':
     case 'plc-user-management':
+    case 'plc-hmi-settings':
       return 'host-locked'
     case 'plc-textual':
     case 'plc-graphical':
@@ -30,6 +31,7 @@ export function editorLockPolicy(type: EditorModel['type']): EditorLockPolicy {
     case 'plc-library-manifest':
     case 'plc-ethercat-device':
     case 'plc-ethercat-module':
+    case 'plc-hmi':
       return 'self-locked'
     default: {
       const unreachable: never = type

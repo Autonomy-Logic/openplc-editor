@@ -25,6 +25,9 @@ export type TabsProps = {
     | { type: 'ethercat-device'; busName: string; deviceId: string }
     | { type: 'ethercat-module'; busName: string; deviceId: string; moduleId: string }
     | { type: 'diff-viewer'; filePath: string }
+    | { type: 'hmi-screen' }
+    | { type: 'hmi-widget' }
+    | { type: 'hmi-settings' }
   configuration?: Record<string, unknown>
 }
 

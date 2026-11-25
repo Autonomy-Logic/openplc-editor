@@ -20,6 +20,8 @@ type RenameImpactModalProps = {
   confirmDescription?: string
   cancelLabel?: string
   cancelDescription?: string
+  /** A third choice between confirm and cancel, shown only when given. */
+  alternative?: { label: string; description: string; onChoose: () => void }
   onConfirm: () => void
   onCancel: () => void
 }
@@ -38,6 +40,7 @@ export const RenameImpactModal = ({
   confirmDescription = 'All references will be updated to use the new name',
   cancelLabel = 'No, keep references unchanged',
   cancelDescription = 'References will remain with the old name and will no longer match the renamed variable, causing them to become unresolved references',
+  alternative,
   onConfirm,
   onCancel,
 }: RenameImpactModalProps) => {
@@ -145,6 +148,11 @@ export const RenameImpactModal = ({
               <li>
                 <span className='font-semibold'>{confirmLabel}:</span> {confirmDescription}
               </li>
+              {alternative && (
+                <li>
+                  <span className='font-semibold'>{alternative.label}:</span> {alternative.description}
+                </li>
+              )}
               <li>
                 <span className='font-semibold'>{cancelLabel}:</span> {cancelDescription}
               </li>
@@ -159,6 +167,14 @@ export const RenameImpactModal = ({
           >
             {cancelLabel}
           </button>
+          {alternative && (
+            <button
+              onClick={alternative.onChoose}
+              className='h-8 w-full rounded bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+            >
+              {alternative.label}
+            </button>
+          )}
           <button onClick={onConfirm} className='h-8 w-full rounded bg-brand px-3 py-1 text-xs text-white'>
             {confirmLabel}
           </button>

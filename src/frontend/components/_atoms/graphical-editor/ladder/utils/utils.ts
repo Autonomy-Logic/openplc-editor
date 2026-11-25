@@ -1,20 +1,17 @@
+import { legacyBlockSize } from '@root/middleware/shared/utils/ladder-layout'
 import { Position } from '@xyflow/react'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
-import {
-  blockInputVariables,
-  blockOutputVariables,
-  IN_OUT_MARKER_WIDTH,
-} from '../../../../../utils/graphical/in-out-pin-rules'
+import { blockInputVariables, blockOutputVariables } from '../../../../../utils/graphical/in-out-pin-rules'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import {
   getVariableRestrictionType as _getVariableRestrictionType,
   validateVariableType as _validateVariableType,
 } from '../../../../../utils/PLC/validate-variable-type'
 import { buildHandle } from '../handle'
-import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
+import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET } from './constants'
 import type { BasicNodeData, BlockVariant } from './types'
 
 // `pouName` is the bound POU for the caller's editor instance — see
@@ -126,33 +123,9 @@ export const getBlockSize = (
     y: number
   },
 ) => {
-  const inputVariables = blockInputVariables(variant.variables)
-  const inputConnectors = inputVariables.map((variable) => variable.name)
+  const inputConnectors = blockInputVariables(variant.variables).map((variable) => variable.name)
   const outputConnectors = blockOutputVariables(variant.variables).map((variable) => variable.name)
-
-  const blockHeight =
-    DEFAULT_BLOCK_CONNECTOR_Y +
-    24 +
-    Math.max(inputConnectors.length - 1, outputConnectors.length - 1) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
-
-  let variableInputWidth = 0
-  let variableOutputWidth = 0
-  const blockNameWidth = variant.name.length * 12
-  inputVariables.forEach((input) => {
-    // An in-out pin also renders the ⟷ marker after its name; pay for it here so a long
-    // name plus the arrow cannot overflow the block.
-    const inputWidth = input.name.length * 12 + (input.class === 'inOut' ? IN_OUT_MARKER_WIDTH : 0)
-    if (inputWidth > variableInputWidth) variableInputWidth = inputWidth
-  })
-  outputConnectors.forEach((output) => {
-    const outputWidth = output.length * 12
-    if (outputWidth > variableOutputWidth) variableOutputWidth = outputWidth
-  })
-
-  const blockWidth = Math.min(
-    Math.max(variableInputWidth + 18 + variableOutputWidth, blockNameWidth),
-    DEFAULT_BLOCK_WIDTH,
-  )
+  const { width: blockWidth, height: blockHeight } = legacyBlockSize(variant)
 
   const leftHandles = inputConnectors.map((connector, index) =>
     buildHandle({
@@ -199,7 +172,12 @@ export const getBlockSize = (
   }
 }
 
-export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean) => {
+/**
+ * A block variant with EN/ENO added when execution control is on. It is forced on, and locked, when the first input
+ * or output cannot take BOOL; `executionControl` undefined (a block being placed) turns it on unless both are exactly
+ * BOOL, so a block on ANY pins starts with EN/ENO and the user may turn it off.
+ */
+export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean | undefined) => {
   const inputConnectors = blockInputVariables(variantLib.variables).map((variable) => ({
     name: variable.name,
     type: variable.type,
@@ -215,12 +193,16 @@ export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, exe
     outputConnectors.length === 0 ||
     !validateVariableType('BOOL', outputConnectors[0].type.value.toUpperCase()).isValid
 
+  const exactlyBool =
+    inputConnectors[0]?.type.value.toUpperCase() === 'BOOL' && outputConnectors[0]?.type.value.toUpperCase() === 'BOOL'
+  const wanted = (executionControl ?? !exactlyBool) || mustHaveExecutionControlEnabled
+
   const existingEN = variantLib.variables.find((v) => v.name === 'EN')
   const existingENO = variantLib.variables.find((v) => v.name === 'ENO')
   const others = variantLib.variables.filter((v) => v.name !== 'EN' && v.name !== 'ENO')
 
   let newVariables = others
-  if (executionControl || mustHaveExecutionControlEnabled) {
+  if (wanted) {
     const EN = existingEN || {
       name: 'EN',
       class: 'input',
@@ -236,7 +218,7 @@ export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, exe
 
   return {
     variant: { ...variantLib, variables: newVariables },
-    executionControl: executionControl || mustHaveExecutionControlEnabled,
+    executionControl: wanted,
     lockExecutionControl: mustHaveExecutionControlEnabled,
   }
 }

@@ -78,4 +78,16 @@ describe('ProjectTreeLeaf search highlight', () => {
     const highlight = container.querySelector('span.bg-brand-light')
     expect(highlight?.textContent).toBe('Ether')
   })
+
+  it('marks the open leaf with the neutral background in light theme and neutral-900 in dark', () => {
+    const unselected = render(<ProjectTreeLeaf leafLang='fbd' leafType='function-block' label='Taktgeber' />)
+    expect(unselected.container.querySelector('li')?.className).not.toMatch(/(^| )bg-neutral-100( |$)/)
+    unselected.unmount()
+    store.getState().editorActions.setEditor({ type: 'available', meta: { name: 'Taktgeber' } })
+    const { container } = render(<ProjectTreeLeaf leafLang='fbd' leafType='function-block' label='Taktgeber' />)
+    const row = container.querySelector('li')?.className ?? ''
+    expect(row).toMatch(/(^| )bg-neutral-100( |$)/)
+    expect(row).toContain('dark:bg-neutral-900')
+    expect(row).not.toMatch(/(^| )bg-slate-50( |$)/)
+  })
 })

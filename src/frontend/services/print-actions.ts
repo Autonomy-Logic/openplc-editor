@@ -20,10 +20,12 @@ import type { ProjectPort } from '../../middleware/shared/ports/project-port'
 import type {
   FBDRungState,
   PLCPou,
+  PLCProjectData,
   PLCVariable,
   PouLanguage,
   RungLadderState,
 } from '../../middleware/shared/ports/types'
+import { pouLabelSource } from '../../middleware/shared/utils/ladder-layout/labels'
 import type { OpenPLCStore } from '../store'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 import { OPENPLC_LIGHT_EDITOR_FOREGROUND, resolveOpenPlcTokenColor } from '../utils/monaco/openplc-theme-data'
@@ -131,14 +133,20 @@ async function coloredLinesForSt(pouName: string, sourceText: string): Promise<C
  * runtime ever produces — see `export-actions.ts`'s identical narrowing cast,
  * the same invariant every other body-reading consumer already relies on.
  */
-async function buildPrintPou(pou: PLCPou): Promise<PrintPou | null> {
+async function buildPrintPou(pou: PLCPou, project: PLCProjectData): Promise<PrintPou | null> {
   const variables = toPrintVars(pou.interface?.variables ?? [])
   const language = pou.body.language as PouLanguage
 
   switch (language) {
     case 'ld': {
       if (!isLadderBody(pou.body.value)) return null
-      return { name: pou.name, kind: 'ld', rungs: pou.body.value.rungs, variables }
+      return {
+        name: pou.name,
+        kind: 'ld',
+        rungs: pou.body.value.rungs,
+        variables,
+        labels: pouLabelSource(project, pou.name),
+      }
     }
     case 'fbd': {
       if (!isFbdBody(pou.body.value)) return null
@@ -171,7 +179,7 @@ export async function collectSelectedPous(store: OpenPLCStore, selectedNames: st
   const pous: PrintPou[] = []
   for (const pou of project.data.pous) {
     if (!selected.has(pou.name)) continue
-    const printPou = await buildPrintPou(pou)
+    const printPou = await buildPrintPou(pou, project.data)
     if (printPou) pous.push(printPou)
   }
   return pous

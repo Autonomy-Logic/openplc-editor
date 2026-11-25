@@ -1,38 +1,15 @@
 import { memo } from 'react'
 
-import { cn } from '../../../../utils/cn'
-import { CustomHandle } from './handle'
-import { DEFAULT_PARALLEL_HEIGHT, DEFAULT_PARALLEL_WIDTH } from './utils/constants'
+import { CustomHandle, ladderHandleStyle } from './handle'
 import type { ParallelProps } from './utils/types'
 
-const Parallel = ({ selected, data }: ParallelProps) => {
+/** A parallel junction node: a point on its junction line; the routed wires draw the line, so it draws nothing. */
+const Parallel = ({ data }: ParallelProps) => {
   return (
     <>
-      <div
-        className={cn('hover:ring-2 hover:ring-brand', {
-          'ring-2 ring-brand': selected,
-        })}
-        style={{
-          width: DEFAULT_PARALLEL_WIDTH,
-          height: DEFAULT_PARALLEL_HEIGHT,
-        }}
-      >
-        <svg
-          style={{
-            width: DEFAULT_PARALLEL_WIDTH,
-            height: DEFAULT_PARALLEL_HEIGHT,
-          }}
-        >
-          <rect
-            width={DEFAULT_PARALLEL_WIDTH}
-            height={DEFAULT_PARALLEL_HEIGHT}
-            className='stroke-[--xy-edge-stroke-default]'
-            fill='none'
-          />
-        </svg>
-      </div>
+      <div style={{ width: 1, height: 1 }} />
       {data.handles.map((handle, index) => (
-        <CustomHandle key={index} {...handle} />
+        <CustomHandle key={index} {...handle} style={ladderHandleStyle(handle)} />
       ))}
     </>
   )

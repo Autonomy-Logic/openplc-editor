@@ -12,6 +12,8 @@ type BlockOutputDebugBadgesProps = {
   outputVariables: Array<{ name: string; class: string; type: { definition: string; value: string } }>
   connectorStartY: number
   connectorOffsetY: number
+  /** The y a badge centres on: the output pin's wire, when the block knows it; else spaced from the start y. */
+  connectorYOf?: (outputName: string) => number | undefined
   blockWidth: number
   /** Output names that already have a variable node connected showing its own badge. */
   connectedOutputNames?: Set<string>
@@ -33,6 +35,7 @@ const BlockOutputDebugBadges = ({
   outputVariables,
   connectorStartY,
   connectorOffsetY,
+  connectorYOf,
   blockWidth,
   connectedOutputNames,
 }: BlockOutputDebugBadgesProps) => {
@@ -67,7 +70,7 @@ const BlockOutputDebugBadges = ({
             key={outputVar.name}
             className='pointer-events-none absolute'
             style={{
-              top: connectorStartY + index * connectorOffsetY - 10,
+              top: connectorYOf?.(outputVar.name) ?? connectorStartY + index * connectorOffsetY - 10,
               left: blockWidth,
             }}
           >

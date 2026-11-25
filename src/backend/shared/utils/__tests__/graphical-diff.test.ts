@@ -1,4 +1,18 @@
-import { computeGraphicalDiff } from '@root/backend/shared/utils/graphical-diff'
+import { loadCorpusProject } from '@root/backend/shared/transpilers/st-transpiler/__tests__/ld-relayout-corpus/corpus'
+import {
+  corpusLabelSource,
+  loadedRungs,
+  relayout,
+  savedRungs,
+} from '@root/backend/shared/transpilers/st-transpiler/__tests__/ld-relayout-corpus/relayout'
+import {
+  renamedRung,
+  seriesRung,
+} from '@root/backend/shared/transpilers/st-transpiler/__tests__/ld-relayout-corpus/rung-builder'
+import { computeGraphicalDiff, type DiffStatus } from '@root/backend/shared/utils/graphical-diff'
+import type { RungLadderState } from '@root/middleware/shared/ports/types'
+import { EMPTY_LABEL_SOURCE } from '@root/middleware/shared/utils/ladder-layout/labels'
+import { applyRungLayout, layoutRung } from '@root/middleware/shared/utils/ladder-layout/layout'
 import type { Edge, Node } from '@xyflow/react'
 
 type Rung = { id?: string; nodes: Node[]; edges?: Edge[] }
@@ -240,7 +254,133 @@ describe('computeGraphicalDiff — rung alignment', () => {
   })
 })
 
+/** Types the diff never highlights; they stay `unchanged` on both sides. */
+const STRUCTURAL = new Set(['powerRail', 'parallel', 'placeholder', 'parallelPlaceholder', 'mockNode', 'variable'])
+
+/** A rung as the editor stores it: laid out by the engine with no located variable. */
+const laidOut = (rung: RungLadderState): RungLadderState => applyRungLayout(rung, layoutRung(rung, EMPTY_LABEL_SOURCE))
+
+/** The saved geometry of a node: position and size. */
+const geometryOf = (node: Node) => [node.position.x, node.position.y, node.width, node.height]
+
+const statusesOf = (map: Map<string, DiffStatus>, ids: readonly string[]) =>
+  Object.fromEntries(ids.map((id) => [id, map.get(id)]))
+
+describe('computeGraphicalDiff — LD marking after a re-layout (BDD-50, AC19)', () => {
+  it('a renamed contact is the only modified element, though the engine shifted its neighbours', () => {
+    const untouched = laidOut(
+      seriesRung('rung_one', [
+        { kind: 'contact', id: 'x', name: 'X' },
+        { kind: 'coil', id: 'y', name: 'Y' },
+      ]),
+    )
+    const before = seriesRung('rung_two', [
+      { kind: 'contact', id: 'start', name: 'Start' },
+      { kind: 'contact', id: 'b', name: 'B' },
+      { kind: 'coil', id: 'm', name: 'Motor' },
+    ])
+    const head = laidOut(before)
+    const work = laidOut(renamedRung(before, { Start: 'Start_Button_Main_Line' }))
+    const moved = (id: string) =>
+      geometryOf(head.nodes.find((node) => node.id === id) ?? head.nodes[0]).join() !==
+      geometryOf(work.nodes.find((node) => node.id === id) ?? work.nodes[0]).join()
+    expect({ b: moved('b'), m: moved('m') }).toEqual({ b: true, m: true })
+
+    const { nodeDiffMaps, changedIndexes } = diffLd([untouched, head], [untouched, work])
+
+    const ids = ['x', 'y', 'start', 'b', 'm']
+    const expected = { x: 'unchanged', y: 'unchanged', start: 'modified', b: 'unchanged', m: 'unchanged' }
+    expect({
+      original: statusesOf(nodeDiffMaps.original, ids),
+      current: statusesOf(nodeDiffMaps.current, ids),
+      changedIndexes,
+    }).toEqual({ original: expected, current: expected, changedIndexes: [1] })
+  })
+
+  it('an old-layout commit against the migrated POU marks exactly the elements whose saved geometry changed', () => {
+    const basic = loadCorpusProject('ld-corpus-basic')
+    const src = corpusLabelSource(basic, 'Main')
+    const migrated = relayout(loadedRungs(basic, 'Main'), src)
+    const old = savedRungs(basic, 'Main')
+    const head = [migrated[0], ...old.slice(1)]
+
+    const { nodeDiffMaps } = diffLd(head, migrated)
+
+    const expected: Record<string, DiffStatus> = {}
+    const actual: Record<string, DiffStatus | undefined> = {}
+    migrated.forEach((rung, index) => {
+      for (const node of rung.nodes) {
+        const original = head[index].nodes.find((candidate) => candidate.id === node.id)
+        const relaidOut = original !== undefined && geometryOf(original).join() !== geometryOf(node).join()
+        expected[node.id] = !STRUCTURAL.has(node.type ?? '') && relaidOut ? 'modified' : 'unchanged'
+        actual[node.id] = nodeDiffMaps.current.get(node.id)
+      }
+    })
+    expect(Object.values(expected)).toContain('modified')
+    expect(Object.values(expected)).toContain('unchanged')
+    expect(actual).toEqual(expected)
+  })
+
+  it('a pure re-layout marks an element whose only saved-geometry change is its size', () => {
+    const sized = (node: Node, width: number): Node => ({ ...node, width, height: 14 })
+    const head: Rung[] = [{ id: 'r1', nodes: [sized(contact('NODE_a', 'A', 100), 22), coil('NODE_q', 'Q', 300)] }]
+    const work: Rung[] = [{ id: 'r1', nodes: [sized(contact('NODE_a', 'A', 100), 40), coil('NODE_q', 'Q', 300)] }]
+
+    const { nodeDiffMaps } = diffLd(head, work)
+
+    expect(statusesOf(nodeDiffMaps.current, ['NODE_a', 'NODE_q'])).toEqual({ NODE_a: 'modified', NODE_q: 'unchanged' })
+  })
+
+  it('a resized element stays unchanged when another element of its rung changed content', () => {
+    const sized = (node: Node, width: number): Node => ({ ...node, width, height: 14 })
+    const head: Rung[] = [{ id: 'r1', nodes: [sized(contact('NODE_a', 'A', 100), 22), coil('NODE_q', 'Q', 300)] }]
+    const work: Rung[] = [{ id: 'r1', nodes: [sized(contact('NODE_a', 'A', 100), 40), coil('NODE_q', 'Q2', 300)] }]
+
+    const { nodeDiffMaps } = diffLd(head, work)
+
+    expect(statusesOf(nodeDiffMaps.current, ['NODE_a', 'NODE_q'])).toEqual({ NODE_a: 'unchanged', NODE_q: 'modified' })
+  })
+
+  it('a moved element stays unchanged when an element was added to its rung', () => {
+    const head: Rung[] = [{ id: 'r1', nodes: [contact('NODE_a', 'A', 100), coil('NODE_q', 'Q', 300)] }]
+    const work: Rung[] = [
+      { id: 'r1', nodes: [contact('NODE_a', 'A', 100), contact('NODE_b', 'B', 200), coil('NODE_q', 'Q', 400)] },
+    ]
+
+    const { nodeDiffMaps } = diffLd(head, work)
+
+    expect(statusesOf(nodeDiffMaps.current, ['NODE_a', 'NODE_b', 'NODE_q'])).toEqual({
+      NODE_a: 'unchanged',
+      NODE_b: 'added',
+      NODE_q: 'unchanged',
+    })
+  })
+
+  it('a moved element stays unchanged when an element was removed from its rung', () => {
+    const head: Rung[] = [
+      { id: 'r1', nodes: [contact('NODE_a', 'A', 100), contact('NODE_b', 'B', 200), coil('NODE_q', 'Q', 400)] },
+    ]
+    const work: Rung[] = [{ id: 'r1', nodes: [contact('NODE_a', 'A', 100), coil('NODE_q', 'Q', 300)] }]
+
+    const { nodeDiffMaps } = diffLd(head, work)
+
+    expect({
+      removed: nodeDiffMaps.original.get('NODE_b'),
+      moved: nodeDiffMaps.current.get('NODE_q'),
+    }).toEqual({ removed: 'removed', moved: 'unchanged' })
+  })
+})
+
 describe('computeGraphicalDiff — FBD', () => {
+  it('still marks a moved FBD element modified next to a rebound one', () => {
+    const original = fbd({ nodes: [contact('NODE_a', 'IN1', 100), coil('NODE_b', 'OUT', 300)] })
+    const current = fbd({ nodes: [contact('NODE_a', 'IN2', 100), coil('NODE_b', 'OUT', 340)] })
+
+    const { nodeDiffMaps } = computeGraphicalDiff(original, current, 'pous/programs/main.fbd')
+
+    expect(statusesOf(nodeDiffMaps.current, ['NODE_a', 'NODE_b'])).toEqual({ NODE_a: 'modified', NODE_b: 'modified' })
+  })
+
   it('reports a rebound variable as modified rather than add + remove', () => {
     const original = fbd({ nodes: [contact('NODE_a', 'IN1', 100), coil('NODE_b', 'OUT', 300)] })
     const current = fbd({ nodes: [contact('NODE_a', 'IN2', 100), coil('NODE_b', 'OUT', 300)] })

@@ -12,7 +12,7 @@
  */
 
 import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
-import type { ProjectPort } from '../../middleware/shared/ports/project-port'
+import type { ProjectPort, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
 import type { OpenPLCStore } from '../store'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 import { toast } from '../utils/toast'
@@ -72,20 +72,9 @@ export async function executeSaveProjectAs(
   const state = store.getState()
   const contents = buildAllProjectFileContents(store)
 
-  const files = {
-    projectPath: picked.path,
-    projectJson: contents['project.json'] ?? '',
-    deviceConfig: contents['devices/configuration.json'],
-    pinMapping: contents['devices/pin-mapping.json'],
-    libraryManifest: contents['library.json'],
-    pouFiles: toEntries(contents, 'pous/'),
-    serverFiles: toEntries(contents, 'devices/servers/'),
-    remoteDeviceFiles: toEntries(contents, 'devices/remote/'),
-    dataTypeFiles: toEntries(contents, 'datatypes/'),
-    // Nothing to delete: this is a fresh destination, and carrying deletions
-    // from the old location would remove files there that were never copied.
-    deletions: [],
-  }
+  // Nothing to delete: this is a fresh destination, and carrying deletions
+  // from the old location would remove files there that were never copied.
+  const files = writeProjectFilesFromContents(contents, picked.path)
 
   if (staleFlows.length > 0) {
     // Same rule the ordinary save applies: a flow that failed validation keeps
@@ -134,6 +123,41 @@ export async function executeSaveProjectAs(
     variant: 'default',
   })
   return { success: true, projectPath: picked.path }
+}
+
+/** Every file of the open project, with its pending deletions, as a save to its current path writes them. */
+export function buildWriteProjectFiles(store: OpenPLCStore): WriteProjectFiles {
+  const state = store.getState()
+  return writeProjectFilesFromContents(
+    buildAllProjectFileContents(store),
+    state.project.meta.path,
+    state.pendingDeletions,
+  )
+}
+
+/**
+ * A project's files, by relative path, in the shape a platform writes. `deletions` are dropped when this same write
+ * names the path, compared ignoring case for case-folding filesystems.
+ */
+export function writeProjectFilesFromContents(
+  contents: Record<string, string>,
+  projectPath: string,
+  deletions: readonly string[] = [],
+): WriteProjectFiles {
+  const written = new Set(Object.keys(contents).map((p) => p.toLowerCase()))
+  return {
+    projectPath,
+    projectJson: contents['project.json'] ?? '',
+    deviceConfig: contents['devices/configuration.json'],
+    pinMapping: contents['devices/pin-mapping.json'],
+    libraryManifest: contents['library.json'],
+    pouFiles: toEntries(contents, 'pous/'),
+    serverFiles: toEntries(contents, 'devices/servers/'),
+    remoteDeviceFiles: toEntries(contents, 'devices/remote/'),
+    dataTypeFiles: toEntries(contents, 'datatypes/'),
+    hmiFiles: toEntries(contents, 'hmi/'),
+    deletions: [...new Set(deletions)].filter((p) => !written.has(p.toLowerCase())),
+  }
 }
 
 /** The entries under one directory prefix, as the write shape expects. */

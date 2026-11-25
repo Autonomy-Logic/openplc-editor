@@ -20,7 +20,10 @@
 
 import { spawnSync } from 'node:child_process'
 
+import { app } from 'electron'
+
 import { ExitCode } from '../cli/exit-codes'
+import { relaunchWithWaylandHint, waylandRelaunchArgs } from './wayland-relaunch'
 
 /**
  * Is this process a CLI invocation?
@@ -115,5 +118,8 @@ function reportLoadFailureAndExit(error: unknown): never {
 if (isCliInvocation(process.argv)) {
   if (!relaunchForLinuxCli()) import('../cli/main').catch(reportLoadFailureAndExit)
 } else {
-  void import('./main')
+  const startGui = () => void import('./main')
+  const waylandArgs = waylandRelaunchArgs(process.argv, process.env, process.platform, app.isPackaged)
+  if (waylandArgs) relaunchWithWaylandHint(waylandArgs, startGui)
+  else startGui()
 }

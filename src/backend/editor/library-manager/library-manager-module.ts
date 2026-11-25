@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { basename, extname, join } from 'path'
+import { basename, dirname, extname, join } from 'path'
 
 import type { CatalogTransportPort } from '../../../middleware/shared/ports/catalog-transport-port'
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
@@ -13,7 +13,10 @@ import {
   prepareStlibUpload,
 } from '../../shared/library/prepare-library-upload'
 import { downloadPublicLibrary } from '../../shared/library/public-catalog-client'
+import { selectBuildLibraryArchives } from '../../shared/library/select-library-archives'
+import { stlibArchiveFromText } from '../../shared/library/stlib-archive-json'
 import { validatePathId } from '../../shared/utils/path-safety'
+import { libraryObjectFileName } from '../../shared/wasm-toolchain/library-objects'
 import { assertPathContained } from '../utils/path-containment'
 import { createDesktopCatalogTransport } from './desktop-catalog-transport'
 import type { LibraryRegistry } from './types'
@@ -67,9 +70,9 @@ function withOverriddenManifestMetadata(
  * Two physical sources merge into one in-memory catalogue:
  *
  *   - **Bundled** — every `.stlib` shipping in the strucpp resources
- *     dir.  Discovered fresh each session (no on-disk registry
- *     entry), flagged `bundled: true`, never uninstallable.  Future
- *     strucpp releases that add libraries automatically grow this set.
+ *     dir and in the HMI widgets dir (the pinned openplc-hmi-widgets
+ *     release).  Discovered fresh each session (no on-disk registry
+ *     entry), flagged `bundled: true`, never uninstallable.
  *
  *   - **User-installed** — `.stlib` archives the user imports
  *     directly + CODESYS `.lib`/`.library` files run through
@@ -85,12 +88,19 @@ export class LibraryManagerModule {
   private librariesDir: string
   private registryPath: string
   private bundledDir: string
+  private hmiWidgetsDir: string
   private catalogTransport: CatalogTransportPort
 
-  constructor(opts?: { librariesDir?: string; bundledDir?: string; catalogTransport?: CatalogTransportPort }) {
+  constructor(opts?: {
+    librariesDir?: string
+    bundledDir?: string
+    hmiWidgetsDir?: string
+    catalogTransport?: CatalogTransportPort
+  }) {
     this.librariesDir = opts?.librariesDir ?? join(app.getPath('userData'), 'libraries')
     this.registryPath = join(this.librariesDir, 'registry.json')
     this.bundledDir = opts?.bundledDir ?? this.resolveDefaultBundledDir()
+    this.hmiWidgetsDir = opts?.hmiWidgetsDir ?? this.resolveDefaultHmiWidgetsDir()
     // The catalog transport is injected so tests can stub HTTP — the
     // default desktop impl reads `OPENPLC_EDGE_API_URL` lazily on
     // every request, so it picks up env changes without restarting.
@@ -111,12 +121,38 @@ export class LibraryManagerModule {
    *     packaged builds because strucpp isn't declared in
    *     `release/app/package.json`'s `dependencies`, so
    *     electron-builder prunes it out of the asar.
+   *
+   *   - **Built, not packaged** (`release/app/dist/main/main.js` run directly, as the e2e suite does): the app path is
+   *     `release/app`, which has no strucpp, so the working directory's `node_modules` is read instead.
    */
   private resolveDefaultBundledDir(): string {
     if (app.isPackaged) {
       return join(process.resourcesPath, 'strucpp', 'libs')
     }
-    return join(app.getAppPath(), 'node_modules', 'strucpp', 'libs')
+    const fromApp = join(app.getAppPath(), 'node_modules', 'strucpp', 'libs')
+    return existsSync(fromApp) ? fromApp : join(process.cwd(), 'node_modules', 'strucpp', 'libs')
+  }
+
+  /**
+   * The pre-installed HMI widget libraries (`npm run setup:hmi-widgets`): `vendor/hmi-widgets/` in a checkout,
+   * `process.resourcesPath/hmi-widgets/` when packaged.
+   */
+  private resolveDefaultHmiWidgetsDir(): string {
+    if (app.isPackaged) return join(process.resourcesPath, 'hmi-widgets')
+    const fromApp = join(app.getAppPath(), 'vendor', 'hmi-widgets')
+    return existsSync(fromApp) ? fromApp : join(process.cwd(), 'vendor', 'hmi-widgets')
+  }
+
+  /** The `.stlib` files of the bundled directories, strucpp's first, each sorted by file name. */
+  private bundledFiles(): string[] {
+    return [this.bundledDir, this.hmiWidgetsDir].flatMap((dir) =>
+      existsSync(dir)
+        ? readdirSync(dir)
+            .filter((f) => f.endsWith('.stlib'))
+            .sort()
+            .map((f) => join(dir, f))
+        : [],
+    )
   }
 
   // -------------------------------------------------------------------------
@@ -190,31 +226,18 @@ export class LibraryManagerModule {
    * dependency list so a library that references external symbols —
    * an OSCAT function, say — resolves at compile time).
    *
-   * Bundled libraries are always-on and included unconditionally;
-   * user libraries are filtered by `enabledNames`.  `missing` lists
+   * Selection is `selectBuildLibraryArchives`: bundled libraries
+   * always, user-installed ones by `enabledNames`.  `missing` lists
    * enabled names that have no archive on disk so the caller can
    * surface a single "install or remove" error before strucpp runs,
    * instead of strucpp's per-symbol "function not found" cascade.
    */
   loadEnabledArchives(enabledNames: string[]): { archives: StlibArchiveDTO[]; missing: string[] } {
-    const archives: StlibArchiveDTO[] = []
-    for (const archive of this.readBundledArchives()) archives.push(archive)
     const registry = this.readRegistry()
-    const missing: string[] = []
-    for (const name of enabledNames) {
-      const entry = registry.libraries[name]
-      if (!entry) {
-        missing.push(name)
-        continue
-      }
-      const archive = this.readUserArchive(name, entry.stlibPath)
-      if (!archive) {
-        missing.push(name)
-        continue
-      }
-      archives.push(archive)
-    }
-    return { archives, missing }
+    const installed = Object.entries(registry.libraries)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, info]) => ({ name, archive: this.readUserArchive(name, info.stlibPath) }))
+    return selectBuildLibraryArchives(this.readBundledArchives(), installed, enabledNames)
   }
 
   /**
@@ -242,10 +265,9 @@ export class LibraryManagerModule {
       }
     }
 
-    if (!existsSync(this.bundledDir)) return null
-    for (const file of readdirSync(this.bundledDir).filter((f) => f.endsWith('.stlib'))) {
+    for (const file of this.bundledFiles()) {
       try {
-        const text = readFileSync(join(this.bundledDir, file), 'utf-8')
+        const text = readFileSync(file, 'utf-8')
         const parsed = JSON.parse(text) as { manifest?: { name?: unknown } }
         if (parsed.manifest?.name === name) return text
       } catch {
@@ -384,6 +406,42 @@ export class LibraryManagerModule {
     }
   }
 
+  /**
+   * The file next to a user-installed library's archive that holds its compiled object of `kind`, named by
+   * `libraryObjectFileName`; null for a library this machine keeps no files next to (bundled, unknown, or a name or
+   * kind that is not a plain file name part).
+   */
+  private libraryObjectPath(name: string, kind: string): string | null {
+    try {
+      validatePathId(name, 'name')
+    } catch {
+      return null
+    }
+    const entry = this.readRegistry().libraries[name]
+    if (!entry) return null
+    try {
+      assertPathContained(this.librariesDir, entry.stlibPath, `library[${name}].stlibPath`)
+    } catch {
+      return null
+    }
+    const fileName = libraryObjectFileName(basename(entry.stlibPath), kind)
+    return fileName === null ? null : join(dirname(entry.stlibPath), fileName)
+  }
+
+  /** The bytes of a library's compiled object of `kind`, as stored next to its archive; null when there are none. */
+  readLibraryObject(name: string, kind: string): Uint8Array | null {
+    const path = this.libraryObjectPath(name, kind)
+    if (path === null || !existsSync(path)) return null
+    return new Uint8Array(readFileSync(path))
+  }
+
+  /** Stores a library's compiled object of `kind` next to its archive; does nothing for a library with no folder. */
+  writeLibraryObject(name: string, kind: string, bytes: Uint8Array): void {
+    const path = this.libraryObjectPath(name, kind)
+    if (path === null || !existsSync(dirname(path))) return
+    writeFileSync(path, bytes)
+  }
+
   // -------------------------------------------------------------------------
   // Install paths
   // -------------------------------------------------------------------------
@@ -486,23 +544,14 @@ export class LibraryManagerModule {
   private bundledNamesCache: Set<string> | null = null
 
   /** Discover bundled archives.  Cached for the process lifetime
-   *  because the strucpp resources dir doesn't change at runtime. */
+   *  because the bundled directories don't change at runtime. */
   private readBundledArchives(): StlibArchiveDTO[] {
     if (this.bundledArchivesCache) return this.bundledArchivesCache
-    if (!existsSync(this.bundledDir)) {
-      this.bundledArchivesCache = []
-      this.bundledNamesCache = new Set()
-      return []
-    }
-    const entries = readdirSync(this.bundledDir)
-      .filter((f) => f.endsWith('.stlib'))
-      .sort()
     const archives: StlibArchiveDTO[] = []
     const names = new Set<string>()
-    for (const file of entries) {
+    for (const file of this.bundledFiles()) {
       try {
-        const raw = JSON.parse(readFileSync(join(this.bundledDir, file), 'utf-8')) as unknown
-        const archive = this.coerceArchive(raw)
+        const archive = stlibArchiveFromText(readFileSync(file, 'utf-8'))
         if (archive) {
           archives.push(archive)
           names.add(archive.manifest.name)
@@ -531,25 +580,10 @@ export class LibraryManagerModule {
     }
     if (!existsSync(stlibPath)) return null
     try {
-      const raw = JSON.parse(readFileSync(stlibPath, 'utf-8')) as unknown
-      return this.coerceArchive(raw)
+      return stlibArchiveFromText(readFileSync(stlibPath, 'utf-8'))
     } catch {
       return null
     }
-  }
-
-  /**
-   * Light-touch validation that an unknown JSON blob has the
-   * `StlibArchive` shape the rest of the editor expects.  Doesn't
-   * try to schema-validate every field — we trust strucpp's
-   * compileStlib output and the .stlib format spec — but guards
-   * against catastrophic mismatches (missing manifest, no name).
-   */
-  private coerceArchive(raw: unknown): StlibArchiveDTO | null {
-    if (!raw || typeof raw !== 'object') return null
-    const obj = raw as { manifest?: unknown }
-    if (!obj.manifest || typeof obj.manifest !== 'object') return null
-    return raw as StlibArchiveDTO
   }
 
   private readRegistry(): LibraryRegistry {

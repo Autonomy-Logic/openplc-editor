@@ -110,6 +110,8 @@ export interface ProbeRuntimeVersionResult {
    * user to wonder later why the project cannot be retrieved.
    */
   supportsProjectSnapshot: boolean
+  /** Whether uploads may carry an `hmi/` folder, as declared by `hmi` at `GET /api/capabilities`; false otherwise. */
+  supportsHmi: boolean
 }
 
 /**
@@ -130,18 +132,19 @@ export async function probeRuntimeVersion(opts: ProbeRuntimeVersionOptions): Pro
     const result = await opts.fetchVersion()
     if (!result.success) {
       opts.log(`Could not reach runtime: ${result.error}`, 'warning')
-      return { version: null, minEditorVersion: null, supportsProjectSnapshot: false }
+      return { version: null, minEditorVersion: null, supportsProjectSnapshot: false, supportsHmi: false }
     }
     return {
       version: extractVersionFromBody(result.body),
       minEditorVersion: null,
       // `/api/version` predates the capability, so there is nothing to read.
       supportsProjectSnapshot: false,
+      supportsHmi: false,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     opts.log(`Runtime version probe failed: ${message}`, 'warning')
-    return { version: null, minEditorVersion: null, supportsProjectSnapshot: false }
+    return { version: null, minEditorVersion: null, supportsProjectSnapshot: false, supportsHmi: false }
   }
 }
 
@@ -187,6 +190,7 @@ async function tryFetchCapabilities(opts: ProbeRuntimeVersionOptions): Promise<P
       minEditorVersion,
       // Absent or non-boolean means no: a runtime that stores snapshots says so.
       supportsProjectSnapshot: extractBooleanField(result.body, 'projectSnapshot') === true,
+      supportsHmi: extractBooleanField(result.body, 'hmi') === true,
     }
   } catch {
     return null

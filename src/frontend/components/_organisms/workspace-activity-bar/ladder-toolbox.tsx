@@ -1,4 +1,8 @@
+import type { Node } from '@xyflow/react'
+
+import { pouLabelSource } from '../../../../middleware/shared/utils/ladder-layout'
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
+import { usePouSnapshot } from '../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -17,13 +21,13 @@ export const LadderToolbox = () => {
     editorActions: { updateModelVariables },
     ladderFlows,
     ladderFlowActions,
-    project: {
-      data: { pous },
-    },
+    project: { data: projectData },
     projectActions: { deleteVariable },
   } = useOpenPLCStore()
+  const { pous } = projectData
 
   const isEditingLocked = useIsEditingLocked()
+  const { captureAndPush } = usePouSnapshot()
 
   const editorName = editor.meta.name
   const pou = pous.find((pou) => pou.name === editorName)
@@ -36,15 +40,12 @@ export const LadderToolbox = () => {
     event.dataTransfer.setData('text/plain', iconType)
     event.dataTransfer.effectAllowed = 'move'
 
-    // Safari/WebKit: Create a visible drag image with better contrast
     const iconElement = event.currentTarget.firstElementChild as HTMLElement
     if (iconElement) {
-      // Get the button's background color to preserve theme (light/dark mode)
       const buttonElement = event.currentTarget.parentElement
       const computedStyle = buttonElement ? window.getComputedStyle(buttonElement) : null
       const bgColor = computedStyle?.backgroundColor || 'rgb(255, 255, 255)'
 
-      // Create a wrapper matching the button style
       const dragImage = document.createElement('div')
       dragImage.style.backgroundColor = bgColor
       dragImage.style.borderRadius = '6px'
@@ -53,15 +54,12 @@ export const LadderToolbox = () => {
       dragImage.style.position = 'absolute'
       dragImage.style.top = '-1000px'
 
-      // Clone the icon into the wrapper
       const iconClone = iconElement.cloneNode(true) as HTMLElement
       dragImage.appendChild(iconClone)
       document.body.appendChild(dragImage)
 
-      // Set as drag image (adjusted offset for smaller wrapper)
       event.dataTransfer.setDragImage(dragImage, 16, 16)
 
-      // Clean up after drag starts
       setTimeout(() => dragImage.remove(), 0)
     }
   }
@@ -70,12 +68,25 @@ export const LadderToolbox = () => {
     if (isEditingLocked) return
 
     const allNodesToRemove = flow?.rungs.flatMap((rung) => resolveSelectedNodes(rung)) || []
+    if (allNodesToRemove.length === 0) return
+
+    captureAndPush(editor.meta.name)
+
+    const remainingRungs: Array<{ nodes: Node[] }> = []
 
     flow?.rungs.forEach((rung) => {
       const selectedNodes = resolveSelectedNodes(rung)
-      if (selectedNodes.length === 0) return
+      if (selectedNodes.length === 0) {
+        remainingRungs.push(rung)
+        return
+      }
 
-      const { nodes: newNodes, edges: newEdges } = removeElements({ ...rung }, selectedNodes)
+      const { nodes: newNodes, edges: newEdges } = removeElements(
+        { ...rung },
+        selectedNodes,
+        pouLabelSource(projectData, editor.meta.name),
+      )
+      remainingRungs.push({ nodes: newNodes })
       ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rung.id, nodes: newNodes })
       ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rung.id, edges: newEdges })
       ladderFlowActions.setSelectedNodes({
@@ -85,11 +96,10 @@ export const LadderToolbox = () => {
       })
     })
 
-    if (pou && allNodesToRemove.length > 0) {
-      const allRungs = flow?.rungs || []
+    if (pou) {
       const allVariables = pou.interface?.variables || []
 
-      const variablesToDelete = getFunctionBlockVariablesToCleanup(allNodesToRemove, allRungs, allVariables)
+      const variablesToDelete = getFunctionBlockVariablesToCleanup(allNodesToRemove, remainingRungs, allVariables)
 
       variablesToDelete.forEach((variableName) => {
         const variableIndex = allVariables.findIndex((v) => v.name.toLowerCase() === variableName.toLowerCase())

@@ -3,6 +3,7 @@ import { ReactNode } from 'react'
 import { cn } from '../../../../utils/cn'
 import { ConnectorSVGComponent } from './svg/connector-svg'
 import { ContinuationSVGComponent } from './svg/continuation-svg'
+import { FBD_MONO_CLASS } from './utils/block-style'
 import {
   CONNECTION_ELEMENT_HEIGHT,
   CONNECTION_ELEMENT_WIDTH,
@@ -44,7 +45,7 @@ export const ConnectionVisual = ({
             nameSlot
           ) : (
             <span
-              className={cn('w-full truncate text-center text-xs leading-3', {
+              className={cn('w-full truncate text-center text-xs leading-3', FBD_MONO_CLASS, {
                 'text-red-500': inputError,
               })}
             >

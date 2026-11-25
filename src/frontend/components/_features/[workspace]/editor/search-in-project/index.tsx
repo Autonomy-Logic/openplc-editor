@@ -91,7 +91,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
   const {
     project: { data, meta },
     searchQuery,
-    searchActions: { setSearchQuery, setSearchResults, setSensitiveCase, setRegularExpression },
+    searchActions: { setSearchQuery, setSearchResults, setSensitiveCase, setRegularExpression, requestReveal },
   } = useOpenPLCStore()
 
   useEffect(() => {
@@ -209,6 +209,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       matches: result.matches,
       searchCounts: result.matches.length,
     })
+    requestReveal()
     onClose()
   }
 

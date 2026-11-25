@@ -1,0 +1,36 @@
+{
+  "product": "openplc-editor",
+  "title": "OpenPLC Editor",
+  "subtitle": "desktop IEC 61131-3 PLC programming IDE (Electron + React)",
+  "version": "",
+  "assessedAt": null,
+  "sbomBasename": "open-plc-editor",
+  "ecosystem": "npm",
+  "securityContact": "Autonomy Logic security team",
+  "advisorySource": "GitHub Advisory Database via osv-scanner (OSV) (equivalent to Dependabot)",
+  "_note_ids": "Every triage entry lists the advisory ids it accounts for. build-report.mjs cross-checks the live post-suppression scan against these: an advisory no entry claims is reported in section 4a as untriaged instead of being silently omitted.",
+  "_note_counts": "advisories/counts describe the last FULL assessment and are only rendered when the report is built without a live scan. With --osv-raw/--osv-delta the numbers come from that run.",
+  "advisories": { "total": 0, "critical": 0, "high": 0, "moderate": 0, "low": 0 },
+  "counts": {
+    "affected": { "n": 0, "sev": "not assessed" },
+    "mitigated": { "n": 0, "sev": "not assessed" },
+    "notAffected": { "n": 0, "pct": "not assessed" }
+  },
+  "headline": "No reachability assessment has been recorded yet for this product. The advisory numbers in this report come from the live scan; every advisory surfacing after the VEX baseline is listed in section 4a until it is triaged.",
+  "scope": "OpenPLC Editor is a desktop IDE for programming PLCs in the IEC 61131-3 languages, built with Electron and React and distributed as installers built by electron-builder. This assessment covers the complete transitive npm dependency graph resolved in <code>package-lock.json</code> (build and renderer) and <code>release/app/package-lock.json</code> (native runtime modules packaged with the app).",
+  "scopeNote": "The SBOM covers the npm dependency graph. Not in it: the Electron/Chromium runtime binaries downloaded by electron-builder, artifacts fetched at install or build time from pinned manifests (the WebAssembly Python runtime and its wheels in <code>python-runtime.json</code>, the STruCpp compiler release in <code>binary-versions.json</code>), the toolchain packages whose licences live in <code>third-party-licenses/</code>, and the C/C++ sources vendored under <code>resources/sources/</code>.",
+  "methodologyNote": "Advisory data was obtained from the GitHub Advisory Database via <code>osv-scanner (OSV)</code> (equivalent to GitHub Dependabot alerts). The source of truth for shipped versions is the committed lockfiles (<code>package-lock.json</code> and <code>release/app/package-lock.json</code>).",
+  "licenseNote": "Not yet reviewed.",
+  "affected": [],
+  "mitigated": [],
+  "notAffected": [],
+  "remediation": [
+    "Triage every advisory listed in section 4a and record a CISA VEX determination for each in <code>security/report-config.json</code> or <code>osv-scanner.toml</code>."
+  ],
+  "practices": [
+    { "practice": "Deterministic installs from a committed lockfile (npm ci in CI)", "status": "In place" },
+    { "practice": "SBOM generated per release in CycloneDX and SPDX", "status": "In place" },
+    { "practice": "CI security gate runs on every pull request and blocks newly-introduced critical advisories", "status": "In place" },
+    { "practice": "That gate configured as a required status check, so it blocks the merge", "status": "Not yet enforced" }
+  ]
+}

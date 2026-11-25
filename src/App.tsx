@@ -34,7 +34,6 @@ import { configureSaveResume } from './frontend/services/resume-save-after-sign-
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { OpenPLCStoreProvider, useOpenPLCStore } from './frontend/store'
 import { selectIsEditingLocked } from './frontend/store/slices/workspace/selectors'
-import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
 import { listenForProviderSignIns } from './middleware/adapters/editor/edge-account-adapter'
 import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
 import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
@@ -61,11 +60,7 @@ const hydrateLibraries = () => {
   // archive shape doesn't).  Both feed the same slice so the tree
   // and the manager stay in sync.
   Promise.all([editorPorts.library.loadAll(), editorPorts.library.listInstalled()])
-    .then(([archives, installed]) => {
-      const actions = appStore.getState().libraryActions
-      actions.setSystemLibraries(stlibsToSystemLibraries(archives))
-      actions.setBundledLibraryNames(installed.filter((l) => l.bundled).map((l) => l.name))
-    })
+    .then(([archives, installed]) => appStore.getState().libraryActions.applyInstalledLibraries(archives, installed))
     .catch((err) => {
       console.error('Failed to load .stlib libraries:', err)
     })

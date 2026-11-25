@@ -129,3 +129,26 @@ describe('Project Libraries tab, missing libraries callout', () => {
     expect(projectRefNames()).toEqual(['ghost-lib', 'other-ghost'])
   })
 })
+
+describe('Project Libraries tab, one library list', () => {
+  beforeEach(() => {
+    store = createTestStore()
+  })
+
+  afterEach(() => cleanup())
+
+  it('lists every installed library, widget libraries included, with no kind', () => {
+    const installed: InstalledLibrary[] = [
+      { name: 'iec-standard-fb', version: '1.0.0', bundled: true, installedAt: '', origin: 'bundled' },
+      { name: 'standard-widgets', version: '1.0.0', bundled: true, installedAt: '', origin: 'bundled' },
+      { name: 'hmi-alarms', version: '1.0.0', bundled: true, installedAt: '', origin: 'bundled' },
+      { name: 'extra-widgets', version: '1.0.0', bundled: false, installedAt: '', origin: 'stlib' },
+      { name: 'demo-utils', version: '2.1.0', bundled: false, installedAt: '', origin: 'stlib' },
+    ]
+    render(<ProjectLibrariesTab installed={installed} />, { wrapper: createStoreWrapper(store) })
+
+    const text = document.body.textContent ?? ''
+    for (const shown of ['iec-standard-fb', 'standard-widgets', 'hmi-alarms', 'extra-widgets', 'demo-utils'])
+      expect(text).toContain(shown)
+  })
+})

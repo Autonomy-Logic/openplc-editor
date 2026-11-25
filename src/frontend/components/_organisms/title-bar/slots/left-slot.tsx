@@ -8,7 +8,7 @@ export const TitleBarLeftSlot = () => {
   const path = useOpenPLCStore((state) => state.project.meta.path)
   const OS = useOpenPLCStore((state) => state.workspace.systemConfigs.OS)
 
-  if (caps.isNativeApplication && OS !== 'win32') {
+  if (caps.isNativeApplication && OS !== 'win32' && OS !== 'linux') {
     return <div className='flex items-center justify-start gap-1 px-4 py-0.5' />
   }
 

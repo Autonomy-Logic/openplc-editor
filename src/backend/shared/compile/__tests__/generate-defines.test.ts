@@ -14,7 +14,7 @@
  */
 
 import type { DevicePin } from '../../types/PLC/devices'
-import { type BoardHalsDefinesEntry, generateDefinesContent } from '../steps/generate-defines'
+import { type BoardHalsDefinesEntry, generateDefinesContent, generateProgramMd5Header } from '../steps/generate-defines'
 
 function makePin(overrides: { pin: string | number; pinType: DevicePin['pinType']; address?: string }): DevicePin {
   return {
@@ -27,7 +27,6 @@ function makePin(overrides: { pin: string | number; pinType: DevicePin['pinType'
 const EMPTY_INPUTS = {
   boardEntry: undefined as BoardHalsDefinesEntry | undefined,
   devicePinMapping: [] as DevicePin[],
-  buildMD5Hash: 'abc123',
   boardRuntime: 'arduino-cli',
 }
 
@@ -66,15 +65,18 @@ describe('generateDefinesContent — board defines section', () => {
   })
 })
 
-describe('generateDefinesContent — PROGRAM_MD5', () => {
-  it('always emits PROGRAM_MD5 with the supplied hash', () => {
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, buildMD5Hash: 'deadbeef' })
-    expect(out).toContain('//Program MD5\n#define PROGRAM_MD5 "deadbeef"\n\n')
+describe('PROGRAM_MD5', () => {
+  it('lives in program_md5.h with the supplied hash', () => {
+    expect(generateProgramMd5Header('deadbeef')).toBe('#pragma once\n#define PROGRAM_MD5 "deadbeef"\n')
   })
 
   it('emits PROGRAM_MD5 even with an empty hash string', () => {
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, buildMD5Hash: '' })
-    expect(out).toContain('#define PROGRAM_MD5 ""')
+    expect(generateProgramMd5Header('')).toContain('#define PROGRAM_MD5 ""')
+  })
+
+  it('is not in defines.h, for the simulator or a board', () => {
+    expect(generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'simulator' })).not.toContain('PROGRAM_MD5')
+    expect(generateDefinesContent(EMPTY_INPUTS)).not.toContain('PROGRAM_MD5')
   })
 })
 
@@ -479,7 +481,7 @@ describe('generateDefinesContent — process image', () => {
 })
 
 describe('generateDefinesContent — full output snapshot', () => {
-  it('produces the canonical defines.h for a typical simulator project', () => {
+  it('produces the canonical defines.h for a typical simulator project, with no pins whatever the mapping says', () => {
     const out = generateDefinesContent({
       boardEntry: { define: ['__AVR_ATmega2560__'] },
       devicePinMapping: [
@@ -487,7 +489,6 @@ describe('generateDefinesContent — full output snapshot', () => {
         makePin({ pin: 3, pinType: 'digitalInput' }),
         makePin({ pin: 13, pinType: 'digitalOutput' }),
       ],
-      buildMD5Hash: '0123456789abcdef0123456789abcdef',
       boardRuntime: 'simulator',
     })
 
@@ -496,9 +497,6 @@ describe('generateDefinesContent — full output snapshot', () => {
         '// Board defines',
         '#define __AVR_ATmega2560__',
         '',
-        '',
-        '//Program MD5',
-        '#define PROGRAM_MD5 "0123456789abcdef0123456789abcdef"',
         '',
         '//Comms Configuration',
         '#define SIMULATOR_MODE',
@@ -510,13 +508,13 @@ describe('generateDefinesContent — full output snapshot', () => {
         '',
         '',
         '//IO Config',
-        '#define PINMASK_DIN 2, 3',
+        '#define PINMASK_DIN ',
         '#define PINMASK_AIN ',
-        '#define PINMASK_DOUT 13',
+        '#define PINMASK_DOUT ',
         '#define PINMASK_AOUT ',
-        '#define NUM_DISCRETE_INPUT 2',
+        '#define NUM_DISCRETE_INPUT 0',
         '#define NUM_ANALOG_INPUT 0',
-        '#define NUM_DISCRETE_OUTPUT 1',
+        '#define NUM_DISCRETE_OUTPUT 0',
         '#define NUM_ANALOG_OUTPUT 0',
         '',
         '',
@@ -529,7 +527,6 @@ describe('generateDefinesContent — full output snapshot', () => {
     const out = generateDefinesContent({
       boardEntry: { define: 'PIN_LED=13' },
       devicePinMapping: [makePin({ pin: 4, pinType: 'analogInput' })],
-      buildMD5Hash: 'ff'.repeat(16),
       boardRuntime: 'arduino-cli',
     })
 
@@ -538,9 +535,6 @@ describe('generateDefinesContent — full output snapshot', () => {
         '// Board defines',
         '#define PIN_LED=13',
         '',
-        '',
-        '//Program MD5',
-        '#define PROGRAM_MD5 "ffffffffffffffffffffffffffffffff"',
         '',
         '//Debugger',
         '#define DEBUGGER_ENABLED',

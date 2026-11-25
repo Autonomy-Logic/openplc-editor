@@ -1,5 +1,6 @@
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
-import { stlibsToSystemLibraries, stlibToSystemLibrary } from '../stlib-to-system-library'
+import { libraryPouRequirements } from '../../../middleware/shared/utils/library/pou-requirements'
+import { projectPlcLibraries, stlibsToSystemLibraries, stlibToSystemLibrary } from '../stlib-to-system-library'
 
 function makeArchive(overrides: Partial<StlibArchiveDTO['manifest']> = {}): StlibArchiveDTO {
   return {
@@ -238,5 +239,47 @@ describe('stlibsToSystemLibraries', () => {
 
   it('returns an empty list for an empty input', () => {
     expect(stlibsToSystemLibraries([])).toEqual([])
+  })
+})
+
+describe('stlibsToSystemLibraries — what a PLC build can use', () => {
+  /** A mixed library: a widget whose chunk needs the HMI core, and a plain function block and function. */
+  const mixed = {
+    ...makeArchive({
+      name: 'mixed',
+      namespace: 'mixed',
+      functions: [{ name: 'SCALE', returnType: 'INT', parameters: [] }],
+      functionBlocks: [
+        { name: 'HMIDIAL', inputs: [], outputs: [], inouts: [] },
+        { name: 'COUNTER', inputs: [], outputs: [], inouts: [] },
+      ],
+    }),
+    chunks: [
+      { name: 'HMIDIAL', kind: 'functionBlock', deps: [], headers: [{ name: 'hmi_core.h', version: '1' }] },
+      { name: 'COUNTER', kind: 'functionBlock', deps: [], headers: [] },
+      { name: 'SCALE', kind: 'function', deps: [{ library: 'mixed', name: 'COUNTER' }], headers: [] },
+    ],
+    dependencies: [],
+  }
+  mixed.manifest = { ...mixed.manifest, ...{ headers: ['hmi_core.h'] } }
+
+  it('lists only the POUs whose requirements a PLC build meets, and keeps the library', () => {
+    const [library] = stlibsToSystemLibraries([mixed])
+    expect(library.name).toBe('mixed')
+    expect(library.pous.map((p) => p.name).sort()).toEqual(['COUNTER', 'SCALE'])
+  })
+
+  it('shows a project only the libraries it uses, without the POUs its PLC build cannot use', () => {
+    const plain = makeArchive({ name: 'plain' })
+    const archives = [mixed, plain]
+    const system = archives.map(stlibToSystemLibrary)
+    const libraries = projectPlcLibraries(system, libraryPouRequirements(archives), ['mixed'])
+    expect(libraries.map((l) => l.name)).toEqual(['mixed'])
+    expect(libraries[0].pous.map((p) => p.name).sort()).toEqual(['COUNTER', 'SCALE'])
+  })
+
+  it('keeps every POU of an archive without chunk requirements', () => {
+    const [library] = stlibsToSystemLibraries([makeArchive({ name: 'a' })])
+    expect(library.pous).toEqual(stlibToSystemLibrary(makeArchive({ name: 'a' })).pous)
   })
 })

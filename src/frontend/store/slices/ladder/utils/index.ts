@@ -1,6 +1,11 @@
 import { Edge, Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import {
+  EMPTY_LABEL_SOURCE,
+  type LadderLabelSource,
+  relayoutRung,
+} from '../../../../../middleware/shared/utils/ladder-layout'
 import { nodesBuilder } from '../../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type {
   BasicNodeData,
@@ -15,13 +20,16 @@ import type {
   PowerRailNode,
   VariableNode,
 } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
-import { updateDiagramElementsPosition } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { generateNumericUUID } from '../../../../utils/generate-uuid'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { newUuid } from '../../../../utils/new-uuid'
 import { RungLadderState } from '../types'
 
-export const duplicateLadderRung = (editorName: string, rung: RungLadderState): RungLadderState => {
+export const duplicateLadderRung = (
+  editorName: string,
+  rung: RungLadderState,
+  labelSource: LadderLabelSource = EMPTY_LABEL_SOURCE,
+): RungLadderState => {
   const nodeMaps: { [key: string]: Node } = rung.nodes.reduce(
     (acc, node) => {
       acc[node.id] = {
@@ -227,79 +235,7 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
   // leaving the duplicated diagram visually broken. Re-run the (branch-aware)
   // layout solver so the block re-expands and every element is repositioned
   // against the actual node set.
-  const laidOut = updateDiagramElementsPosition(newRung, newRung.defaultBounds as [number, number])
-
-  return { ...newRung, nodes: laidOut.nodes, edges: laidOut.edges }
-}
-
-/**
- * Checks if a function block variable is still in use by any block in the flows.
- * This is used to determine if a variable should be deleted when a function block is removed.
- *
- * @param variableName - Name of the variable to check (case-insensitive)
- * @param allRungs - All rungs/diagrams (must have nodes property)
- * @returns true if the variable is still in use, false otherwise
- */
-export const isFunctionBlockVariableInUse = (variableName: string, allRungs: Array<{ nodes: Node[] }>): boolean => {
-  const normalizedName = variableName.toLowerCase()
-
-  for (const rung of allRungs) {
-    for (const node of rung.nodes) {
-      if (node.type === 'block') {
-        const blockNode = node as BlockNode<BlockVariant>
-        const blockVariableName = blockNode.data.variable?.name?.toLowerCase()
-
-        if (blockVariableName === normalizedName && blockNode.data.variant.type === 'function-block') {
-          return true
-        }
-      }
-    }
-  }
-
-  return false
-}
-
-/**
- * Gets all function block variables that should be cleaned up after nodes are removed.
- * Returns an array of variable names that are no longer in use.
- *
- * @param removedNodes - Nodes that were removed
- * @param allRungs - All rungs/diagrams (must have nodes property)
- * @param allVariables - All variables in the POU
- * @returns Array of variable names to delete
- */
-export const getFunctionBlockVariablesToCleanup = (
-  removedNodes: Node[],
-  allRungs: Array<{ nodes: Node[] }>,
-  allVariables: PLCVariable[],
-): string[] => {
-  const variablesToCheck = new Set<string>()
-
-  for (const node of removedNodes) {
-    if (node.type === 'block') {
-      const blockNode = node as BlockNode<BlockVariant>
-      if (blockNode.data.variant.type === 'function-block') {
-        const variableName = blockNode.data.variable?.name
-        if (variableName) {
-          variablesToCheck.add(variableName)
-        }
-      }
-    }
-  }
-
-  const variablesToDelete: string[] = []
-
-  for (const variableName of variablesToCheck) {
-    const variable = allVariables.find((v) => v.name.toLowerCase() === variableName.toLowerCase())
-
-    if (variable && variable.type.definition === 'derived') {
-      if (!isFunctionBlockVariableInUse(variableName, allRungs)) {
-        variablesToDelete.push(variableName)
-      }
-    }
-  }
-
-  return variablesToDelete
+  return relayoutRung(newRung, labelSource)
 }
 
 /**

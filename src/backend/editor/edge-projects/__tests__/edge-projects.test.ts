@@ -434,6 +434,7 @@ describe('saveCloudProject', () => {
     pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'x := TRUE;' }],
     serverFiles: [],
     remoteDeviceFiles: [],
+    hmiFiles: [],
     dataTypeFiles: [],
     deletions: [],
   }
@@ -592,6 +593,7 @@ describe('local working copy', () => {
     pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'x := TRUE;' }],
     serverFiles: [],
     remoteDeviceFiles: [],
+    hmiFiles: [],
     dataTypeFiles: [],
     deletions: [],
   }

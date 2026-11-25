@@ -34,6 +34,7 @@ const makeFiles = (overrides: Partial<WriteProjectFiles> = {}): WriteProjectFile
   pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'PROGRAM main\nEND_PROGRAM' }],
   serverFiles: [],
   remoteDeviceFiles: [],
+  hmiFiles: [],
   dataTypeFiles: [{ relativePath: 'datatypes/Color.dt', content: 'TYPE\n  Color : (Red);\nEND_TYPE\n' }],
   deletions: [],
   ...overrides,
