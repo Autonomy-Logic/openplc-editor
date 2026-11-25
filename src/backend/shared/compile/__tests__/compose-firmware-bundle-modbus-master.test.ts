@@ -7,6 +7,7 @@ const baseInput = {
   strucppFiles: {},
   cBlocks: { header: '// Empty file\n', code: null as string | null },
   definesH: '#define PROGRAM_MD5 ""\n',
+  programMd5H: '#pragma once\n#define PROGRAM_MD5 ""\n',
   firmwareSkeleton: { 'src/modbus_master_config.h': STUB },
 }
 
