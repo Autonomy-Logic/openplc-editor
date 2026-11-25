@@ -85,8 +85,8 @@ const LineChart = ({ data, isBool = false, range, now, startTime, label }: LineC
       stroke: { curve: 'stepline' as const, width: 2 },
       tooltip: { enabled: false },
       states: {
-        hover: { filter: { type: 'none' } },
-        active: { filter: { type: 'none' } },
+        hover: { filter: { type: 'none' as const } },
+        active: { filter: { type: 'none' as const } },
       },
       markers: { size: 0 },
       theme: { mode: 'dark' as const },
