@@ -275,10 +275,6 @@ function locVar(name: string, location: string, cls: PLCVariable['class'] = 'loc
   return { name, class: cls, type: { definition: 'base-type', value: 'BOOL' }, location, documentation: '' }
 }
 
-/** Seed a Runtime v4 target so the cap-gated address pool counts
- *  Modbus claims. Producer-edit actions (addIOGroup, updateIOGroup …)
- *  rely on `caps.modbusTcpMaster || caps.modbusRtuMaster` to count sibling groups when
- *  allocating addresses. */
 /** Land the board catalogue WITHOUT selecting a board — the project-load moment
  *  where discovery finishes and target capabilities become resolvable. Split out
  *  of `seedRuntimeV4Board` so a test can land the catalogue while the project's

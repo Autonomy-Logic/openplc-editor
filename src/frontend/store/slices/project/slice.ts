@@ -238,11 +238,6 @@ function seedIOPoints(
   }))
 }
 
-// `createVariable`, `updateVariable`, and `deleteVariable` below are reachable from outside the variables-editor
-// itself — block drops, autocomplete "Add variable", block deletion, node type changes, etc. When that POU's
-// variables editor is in text mode, the in-memory `pou.interface.variables` array and the `editor.variable.code`
-// buffer are two views of the same data.
-
 type ProjectSetState = StoreApi<ProjectSliceRoot>['setState']
 type ProjectGetState = () => ProjectSliceRoot
 
@@ -562,8 +557,6 @@ const reconcileVariablesText = (
   }
 }
 
-/** Fold a variables mutation back into the declaration text. */
-/** A POU's declaration text, the artifact the project file actually stores. */
 /** Rewrite `AT <oldAlias>` to `AT <newAlias>` in a POU's declaration text. */
 const renameAliasInText = (text: string, oldAlias: string, newAlias: string): string => {
   const escaped = oldAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')

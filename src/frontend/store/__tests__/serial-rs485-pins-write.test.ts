@@ -1,12 +1,6 @@
 import type { OpenPLCStore } from '@root/frontend/store'
 import { createTestStore } from '@root/frontend/store/testing'
 
-/**
- * The Serial screen state of a project saved by 4.3.x carries the single
- * RS-485 pin as `enable_rs485_en_pin` and `rs485_en_pin`. The first write of
- * the per-UART map removes that pair in the same update.
- */
-
 const LEGACY_SERIAL = { baud_rate: '115200', enable_rs485_en_pin: true, rs485_en_pin: '17' }
 
 let store: OpenPLCStore

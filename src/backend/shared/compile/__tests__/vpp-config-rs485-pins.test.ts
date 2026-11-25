@@ -1,11 +1,5 @@
 import { generateVppConfigContent } from '../steps/generate-vpp-config'
 
-/**
- * `vpp_config.h` for the Serial screen. The nested `rs485_en_pins` object
- * flattens with the emitter's existing rule, `VPP_<SCREEN>_<PATH>` upper-cased,
- * so each UART gets `VPP_SERIAL_RS485_EN_PINS_<UART>`.
- */
-
 const PREAMBLE = [
   '// vpp_config.h — auto-generated, do not edit by hand.',
   '//',

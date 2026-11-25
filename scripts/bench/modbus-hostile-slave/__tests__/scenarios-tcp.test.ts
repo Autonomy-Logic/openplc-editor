@@ -369,7 +369,6 @@ describe('TC28 over TCP: the slave 1 answers late after 20 prompt ones', () => {
     return current
   }
 
-  /** Plays the 20 prompt unit-1 polls, each followed by a unit-2 poll; returns the next free transaction id. */
   async function playPromptPolls(slave: OpenSlave): Promise<number> {
     let tid = 1
     for (let poll = 0; poll < TC28_PROMPT_POLLS; poll += 1) {

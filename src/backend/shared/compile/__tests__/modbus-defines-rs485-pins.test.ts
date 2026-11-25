@@ -1,11 +1,5 @@
 import { generateModbusDefines } from '../steps/modbus-defines'
 
-/**
- * `MBSERIAL_TXPIN` comes from `resolveRs485Pins`: the pin of the UART the
- * Modbus RTU server uses, and nothing when that UART has none. The FX3U HALs
- * test `#ifndef MBSERIAL_TXPIN`, so the define stays.
- */
-
 type Rs485Board = NonNullable<Parameters<typeof generateModbusDefines>[4]>
 
 const MEGA_UARTS = ['Serial', 'Serial1', 'Serial2', 'Serial3']

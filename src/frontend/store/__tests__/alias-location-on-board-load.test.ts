@@ -14,8 +14,6 @@ import { createLibrarySlice } from '../slices/library'
 import { createProjectSlice } from '../slices/project/slice'
 import type { ProjectSliceRoot } from '../slices/project/types'
 
-/** Board-load contract under the single-field variable-location model. */
-
 function makeStore() {
   return createStore<ProjectSliceRoot>()((...args) => ({
     ...createProjectSlice(...args),

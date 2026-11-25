@@ -1,5 +1,3 @@
-/** The serial line, resolved the same way for the screen and the compiler. */
-
 /** What the firmware falls back to, and what every package declares. */
 export const DEFAULT_SERIAL_BAUD = '115200'
 

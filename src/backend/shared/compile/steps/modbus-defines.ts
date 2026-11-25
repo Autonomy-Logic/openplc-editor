@@ -158,9 +158,6 @@ function formatIpForDefine(raw: string): string {
   return raw.split('.').join(', ')
 }
 
-// Defaults mirror the `default` values declared in the canonical VPP Modbus screen
-// (`packages/com.openplc.arduino/screens/modbus.json`).
-
 const TCP_DEFAULTS = {
   tcp_interface: 'Ethernet' as const,
 }

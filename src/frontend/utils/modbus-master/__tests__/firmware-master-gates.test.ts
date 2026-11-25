@@ -730,7 +730,7 @@ describeOnHost(
   },
 )
 
-/** The adapter families whose `link_up()` this demand leaves as it was, with the body each must keep, or `null` when only the absence of `STA` is pinned. */
+/** The adapter families whose `link_up()` body is pinned, with the body each must keep, or `null` when only the absence of `STA` is pinned. */
 const LINK_UP_UNCHANGED: Array<[string, string[], string | null]> = [
   ...LINK_UP_WIFI.filter(([family]) => family !== 'ESP32 Wi-Fi').map(
     ([family, defines]): [string, string[], string | null] => [
