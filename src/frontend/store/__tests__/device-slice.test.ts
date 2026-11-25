@@ -12,7 +12,17 @@ import { createLibrarySlice } from '../slices/library'
 import { createProjectSlice } from '../slices/project/slice'
 import type { ProjectSliceRoot } from '../slices/project/types'
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function makeStore() {
+  // The device slice reads from project + console (alias-sync trigger
+  // inside setAvailableOptions); the project slice in turn now needs
+  // editor + library state for its variables-text reconcile helpers.
+  // Use ProjectSliceRoot (the most expansive of the cross-slice
+  // unions) as the store type so every composed slice creator's
+  // `getState()` resolves.
   return createStore<ProjectSliceRoot>()((...args) => ({
     ...createDeviceSlice(...args),
     ...createProjectSlice(...args),
@@ -22,7 +32,13 @@ function makeStore() {
   }))
 }
 
-/** Returns the active board's pin array. */
+/**
+ * Returns the active board's pin array — the post-refactor shape
+ * keys pins by `configuration.deviceBoard`, so tests that used to
+ * read `pinMapping.pins` directly look up the active bucket here.
+ * Defaults the empty array so tests against a fresh store (where
+ * no actions have created the bucket yet) still get `[]`.
+ */
 function activePins(state: { deviceDefinitions: DeviceSlice['deviceDefinitions'] }): DevicePin[] {
   const board = state.deviceDefinitions.configuration.deviceBoard
   return state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []
@@ -90,7 +106,14 @@ function makeEthercatStatus(overrides?: Partial<EtherCATRuntimeStatusResponse>):
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe('createDeviceSlice', () => {
+  // -----------------------------------------------------------------------
+  // Initial state
+  // -----------------------------------------------------------------------
   describe('initial state', () => {
     it('has default available options', () => {
       const store = makeStore()
@@ -145,6 +168,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // serial connection (D72 persistent link)
+  // -----------------------------------------------------------------------
   describe('serial connection', () => {
     it('setDeviceConnectionStatus updates status and port', () => {
       const store = makeStore()
@@ -182,6 +208,10 @@ describe('createDeviceSlice', () => {
     })
 
     it('setDeviceConnectionStatus records both media when the manager reports them', () => {
+      // What `useDeviceConnectionMonitor` actually forwards. `debugTransport` is a
+      // separate fact from `transport`: the debug poll sizes its batches to the
+      // debug medium, and a v4 session (control over REST, debug over a WebSocket)
+      // has no control transport at all.
       const store = makeStore()
       store.getState().deviceActions.setDeviceConnectionStatus('connected', '192.168.0.9', null, 'websocket')
       expect(store.getState().deviceConnection).toEqual({
@@ -199,6 +229,8 @@ describe('createDeviceSlice', () => {
     })
 
     it('setDeviceConnectionStatus leaves the media untouched when they are omitted', () => {
+      // A status-only update (the optimistic 'connecting') must not wipe what the
+      // manager last reported.
       const store = makeStore()
       store.getState().deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu', 'rtu')
       store.getState().deviceActions.setDeviceConnectionStatus('connecting')
@@ -223,6 +255,9 @@ describe('createDeviceSlice', () => {
     })
 
     it('clearDeviceConnection leaves licensing alone — the link and the entitlement are separate facts', () => {
+      // A link that drops and comes back does not change what the device is
+      // entitled to run. Clearing the licence here would make the badge blank on
+      // every reconnect and force a needless round trip to learn nothing new.
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport({
         deviceId: '659a3520540f803625ddc34081e893d3',
@@ -233,6 +268,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // VPP licensing
+  // -----------------------------------------------------------------------
   describe('device licensing', () => {
     const LICENSED = {
       deviceId: '659a3520540f803625ddc34081e893d3',
@@ -240,6 +278,8 @@ describe('createDeviceSlice', () => {
     }
 
     it('starts idle with nothing known', () => {
+      // The state every non-licensable board stays in: nothing runs, so nothing is
+      // known, and the UI shows no licensing affordance at all.
       expect(makeStore().getState().deviceLicense).toEqual({
         phase: 'idle',
         report: null,
@@ -258,6 +298,9 @@ describe('createDeviceSlice', () => {
     })
 
     it('startDeviceLicenseCheck KEEPS the last report instead of blanking it', () => {
+      // Blanking would make the badge flicker Licensed -> nothing -> Licensed on
+      // every refresh, and a refresh that failed would leave the UI knowing LESS
+      // than before it asked. `phase` is what says "asking".
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.startDeviceLicenseCheck()
@@ -280,6 +323,9 @@ describe('createDeviceSlice', () => {
     })
 
     it('preserves the outcome union verbatim, including the entitlement distinction', () => {
+      // The whole point of the union surviving to the store: the UI branches on
+      // `entitlementChecked` to decide between offering a purchase and offering a
+      // re-check. A store that flattened this to a boolean would lose it.
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport({
         deviceId: '659a3520540f803625ddc34081e893d3',
@@ -321,6 +367,9 @@ describe('createDeviceSlice', () => {
     })
 
     it('setAwaitingPurchase stamps the absolute deadline and clears it', () => {
+      // The window is a wall-clock deadline recorded in the store — not a tick
+      // counter in the poll effect — so a remounted effect resumes the SAME
+      // window, a skipped tick costs nothing, and the state is inspectable.
       vi.useFakeTimers()
       try {
         vi.setSystemTime(1_755_000_000_000)
@@ -335,6 +384,8 @@ describe('createDeviceSlice', () => {
     })
 
     it('setAwaitingPurchase leaves the report and phase alone', () => {
+      // The watch is ORTHOGONAL to what is known: opening it must not blank the
+      // last report (the badge would flicker) nor fake an in-flight phase.
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.setAwaitingPurchase(true)
@@ -346,6 +397,9 @@ describe('createDeviceSlice', () => {
     })
 
     it('landing a report does NOT end the watch by itself — the poll effect owns that', () => {
+      // An unlicensed report mid-wait is the EXPECTED state (webhook not done
+      // yet); if the store ended the watch on every landing, the first poll tick
+      // would kill the watch it serves.
       const store = makeStore()
       store.getState().deviceActions.setAwaitingPurchase(true)
       store.getState().deviceActions.setDeviceLicenseReport({
@@ -363,6 +417,15 @@ describe('createDeviceSlice', () => {
     })
 
     it('a board change drops the license AND the purchase watch — both were bound to the OLD board', () => {
+      // setDeviceBoard already wipes everything else that is board-specific
+      // (platform options, the pin-table row, vendor-screen data). A licence
+      // report is just as board-specific: it was verified against the previous
+      // board's deviceId and its VPP's productId. Kept across a switch, the badge
+      // asserts possession for hardware that is no longer selected, and the buy
+      // link is built from the NEW package id and the OLD device id. The watch is
+      // OPENED before the switch so the null below asserts the reset, not the
+      // initial state — a live watch surviving the switch would keep polling (and
+      // could write a licence) against the new board's package id.
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
@@ -374,6 +437,11 @@ describe('createDeviceSlice', () => {
     })
 
     it("a board change swaps in the new board's persistent storage, never the old board's path", () => {
+      // The bug this pins: the per-board archive was written on every edit and
+      // never read back, so switching board left the FLAT `persistentStorage`
+      // holding the previous board's values. The compile path reads the flat
+      // view, so the retain.conf that shipped to the new device carried the old
+      // device's file path — the exact outcome the archive exists to prevent.
       const store = makeStore()
 
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
@@ -384,11 +452,16 @@ describe('createDeviceSlice', () => {
 
       expect(store.getState().deviceDefinitions.configuration.persistentStorage?.path).toBe('/data/pi.bin')
 
+      // Back again: the first board's settings are still there, not lost.
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
       expect(store.getState().deviceDefinitions.configuration.persistentStorage?.path).toBe('/data/esp.bin')
     })
 
     it("a board never configured gets NO settings, rather than inheriting the previous board's", () => {
+      // `undefined`, deliberately, not an empty record: absent settings are what
+      // make generateRetainConf emit no retain.conf, which is the right default
+      // for a board nobody has configured. An empty record would be a claim that
+      // storage was considered and switched off.
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
       store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/esp.bin' })
@@ -413,6 +486,8 @@ describe('createDeviceSlice', () => {
     })
 
     it('leaves the license alone when setDeviceBoard is called with the same board', () => {
+      // The device screen re-sets the board on several paths; only an actual
+      // change invalidates the licence — or ends a running purchase watch.
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
@@ -450,6 +525,10 @@ describe('createDeviceSlice', () => {
     })
 
     it('clearDeviceDefinitions clears licensing and the watch — a new project may select another board', () => {
+      // A "Licensed" badge carried across a project close would be an assertion
+      // about hardware that is not even connected — and a purchase watch carried
+      // across it would keep polling for a purchase nobody is making. The watch
+      // is opened first so the null below asserts the reset, not the default.
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.setAwaitingPurchase(true)
@@ -458,6 +537,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setAvailableOptions
+  // -----------------------------------------------------------------------
   describe('setAvailableOptions', () => {
     it('sets available boards', () => {
       const store = makeStore()
@@ -470,6 +552,8 @@ describe('createDeviceSlice', () => {
     })
 
     it('leaves the wiring alone for a board whose package has not been split', () => {
+      // That board still renders the old Modbus screen, which reads
+      // modbus_rtu.rtu_interface directly; migrating would mirror the bug.
       const store = makeStore()
       const legacy = { modbus_rtu: { enabled: true, rtu_interface: 'Serial2' } }
       store.getState().deviceActions.setDeviceDefinitions({
@@ -534,6 +618,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setDeviceDefinitions
+  // -----------------------------------------------------------------------
   describe('setDeviceDefinitions', () => {
     it('merges partial configuration with defaults', () => {
       const store = makeStore()
@@ -543,6 +630,7 @@ describe('createDeviceSlice', () => {
       const cfg = store.getState().deviceDefinitions.configuration
       expect(cfg.deviceBoard).toBe('Mega')
       expect(cfg.communicationPort).toBe('COM3')
+      // defaults preserved
       expect(cfg.runtimeIpAddress).toBe(defaultDeviceConfiguration.runtimeIpAddress)
     })
 
@@ -656,6 +744,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // clearDeviceDefinitions
+  // -----------------------------------------------------------------------
   describe('clearDeviceDefinitions', () => {
     it('resets configuration to defaults', () => {
       const store = makeStore()
@@ -719,6 +810,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // resetDeviceUpdated
+  // -----------------------------------------------------------------------
   describe('resetDeviceUpdated', () => {
     it('sets deviceUpdated.updated to false', () => {
       const store = makeStore()
@@ -729,6 +823,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // selectPinTableRow
+  // -----------------------------------------------------------------------
   describe('selectPinTableRow', () => {
     it('sets the selected row', () => {
       const store = makeStore()
@@ -744,6 +841,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // createNewPin
+  // -----------------------------------------------------------------------
   describe('createNewPin', () => {
     it('creates a pin in empty table', () => {
       const store = makeStore()
@@ -759,6 +859,7 @@ describe('createDeviceSlice', () => {
 
     it('creates a pin with reference pin (no address collision)', () => {
       const store = makeStore()
+      // Seed with a pin and select it
       store.getState().deviceActions.setDeviceDefinitions({
         pinMapping: [makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0', alias: 'pin0' })],
       })
@@ -775,18 +876,21 @@ describe('createDeviceSlice', () => {
 
     it('creates a pin after highest address when address collision exists', () => {
       const store = makeStore()
+      // Seed with two consecutive pins
       store.getState().deviceActions.setDeviceDefinitions({
         pinMapping: [
           makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0' }),
           makePin({ pin: 'D1', pinType: 'digitalInput', address: '%IX0.1' }),
         ],
       })
+      // Select first pin: increment would be %IX0.1 which already exists
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
 
       const pins = activePins(store.getState())
       const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(3)
+      // New pin should be after the highest address (%IX0.1) -> %IX0.2
       expect(pins[2].address).toBe('%IX0.2')
       expect(currentSelectedPinTableRow).toBe(2)
     })
@@ -796,20 +900,26 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setDeviceDefinitions({
         pinMapping: [makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0' })],
       })
+      // Keep selection at -1
       store.getState().deviceActions.createNewPin()
 
       const pins = activePins(store.getState())
       expect(pins).toHaveLength(2)
+      // It should be pushed to end, using the highest existing + 1
       expect(pins[1].address).toBe('%IX0.1')
     })
   })
 
+  // -----------------------------------------------------------------------
+  // removePin
+  // -----------------------------------------------------------------------
   describe('removePin', () => {
     it('does nothing when no pin is selected (row = -1)', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceDefinitions({
         pinMapping: [makePin({ pin: 'D0', address: '%IX0.0' })],
       })
+      // row is -1 by default from setDeviceDefinitions
       store.getState().deviceActions.removePin()
       expect(activePins(store.getState())).toHaveLength(1)
     })
@@ -829,6 +939,7 @@ describe('createDeviceSlice', () => {
       const pins = activePins(store.getState())
       const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(2)
+      // Addresses shifted down
       expect(pins[0].address).toBe('%IX0.0')
       expect(pins[1].address).toBe('%IX0.1')
       expect(currentSelectedPinTableRow).toBe(0)
@@ -855,7 +966,7 @@ describe('createDeviceSlice', () => {
           makePin({ pin: 'D1', pinType: 'digitalInput', address: '%IX0.1' }),
         ],
       })
-      store.getState().deviceActions.selectPinTableRow(1)
+      store.getState().deviceActions.selectPinTableRow(1) // last row
       store.getState().deviceActions.removePin()
 
       expect(activePins(store.getState())).toHaveLength(1)
@@ -871,18 +982,23 @@ describe('createDeviceSlice', () => {
           makePin({ pin: 'D1', pinType: 'digitalInput', address: '%IX0.1' }),
         ],
       })
-      store.getState().deviceActions.selectPinTableRow(0)
+      store.getState().deviceActions.selectPinTableRow(0) // remove D0
       store.getState().deviceActions.removePin()
 
       const pins = activePins(store.getState())
       expect(pins).toHaveLength(2)
+      // analog should be untouched
       const analog = pins.find((p) => p.pinType === 'analogInput')
       expect(analog?.address).toBe('%IW0')
+      // digital was decremented
       const digital = pins.find((p) => p.pinType === 'digitalInput')
       expect(digital?.address).toBe('%IX0.0')
     })
   })
 
+  // -----------------------------------------------------------------------
+  // updatePin
+  // -----------------------------------------------------------------------
   describe('updatePin', () => {
     it('returns error when no pin is selected', () => {
       const store = makeStore()
@@ -955,6 +1071,7 @@ describe('createDeviceSlice', () => {
         expect(result.data?.address).toBe('%IW1')
         expect(result.message).toContain('Pin type changed')
 
+        // Verify sorting and current selection
         const pins = activePins(store.getState())
         const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
         const movedPin = pins.find((p) => p.pin === 'D0')
@@ -972,11 +1089,12 @@ describe('createDeviceSlice', () => {
             makePin({ pin: 'D2', pinType: 'digitalInput', address: '%IX0.2' }),
           ],
         })
-        store.getState().deviceActions.selectPinTableRow(0)
+        store.getState().deviceActions.selectPinTableRow(0) // move D0 to analog
         store.getState().deviceActions.updatePin({ pinType: 'analogInput' })
 
         const pins = activePins(store.getState())
         const digitalPins = pins.filter((p) => p.pinType === 'digitalInput')
+        // After removing D0 (%IX0.0), D1 should be %IX0.0, D2 should be %IX0.1
         expect(digitalPins[0].address).toBe('%IX0.0')
         expect(digitalPins[1].address).toBe('%IX0.1')
       })
@@ -988,6 +1106,7 @@ describe('createDeviceSlice', () => {
         })
         store.getState().deviceActions.selectPinTableRow(0)
         const result = store.getState().deviceActions.updatePin({ pinType: undefined } as Partial<DevicePin>)
+        // pinType is falsy so both if-branches are skipped, hitting the break
         expect(result.ok).toBe(true)
       })
 
@@ -1064,6 +1183,7 @@ describe('createDeviceSlice', () => {
         })
         store.getState().deviceActions.selectPinTableRow(0)
 
+        // Mock validation to allow undefined through
         const spy = vi.spyOn(pinsValidation, 'checkIfPinIsValid').mockReturnValueOnce({
           ok: true,
           title: 'Valid Pin',
@@ -1104,6 +1224,7 @@ describe('createDeviceSlice', () => {
           pinMapping: [makePin({ pin: 'D0', address: '%IX0.0' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
+        // Cast to Partial<DevicePin> to simulate an unknown key
         const result = store.getState().deviceActions.updatePin({ address: '%IX9.9' } as Partial<DevicePin>)
         expect(result.ok).toBe(true)
       })
@@ -1121,6 +1242,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setDeviceBoard
+  // -----------------------------------------------------------------------
   describe('setDeviceBoard', () => {
     it('sets the device board and marks updated', () => {
       const store = makeStore()
@@ -1142,6 +1266,7 @@ describe('createDeviceSlice', () => {
     })
 
     it('preserves selectedPlatformOptions when setDeviceBoard is called with the same board', () => {
+      // No-op board reassignment shouldn't trash user's option picks.
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('Arduino Nano')
       store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
@@ -1153,6 +1278,14 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // Per-target pin scoping — regression for the SLM-RP4 → Mega → MKR
+  // → Mega chain. Each target has its own pinout (a Mega's pin 13
+  // doesn't exist on a MKR), so pins must NEVER leak between boards.
+  // Per-board persistence is the chosen contract: a user's work on
+  // board A survives a switch to board B and reappears when they
+  // come back to A.
+  // -----------------------------------------------------------------------
   describe('per-target pin-mapping scoping', () => {
     it('isolates pin entries across boards: pin 13 defined on Mega does NOT appear on MKR', () => {
       const store = makeStore()
@@ -1180,14 +1313,18 @@ describe('createDeviceSlice', () => {
 
       actions.setDeviceBoard('Arduino MKR WiFi 1010')
       expect(activePins(store.getState())).toHaveLength(0)
+      // Adding a pin on MKR mutates MKR's bucket only.
       actions.createNewPin()
       expect(activePins(store.getState())).toHaveLength(1)
 
+      // Back to Mega — pin 13 with its alias must be intact.
       actions.setDeviceBoard('Arduino Mega')
       const megaPins = activePins(store.getState())
       expect(megaPins).toHaveLength(1)
       expect(megaPins[0].pin).toBe('13')
       expect(megaPins[0].alias).toBe('led-13')
+      // And MKR's bucket still carries its own pin (untouched by the
+      // Mega-side mutations).
       expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']).toHaveLength(1)
     })
 
@@ -1202,6 +1339,10 @@ describe('createDeviceSlice', () => {
       actions.selectPinTableRow(0)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(0)
 
+      // Switching boards must clear the row pointer — the new board's
+      // bucket may be empty or have a different row count, and a
+      // dangling pointer would crash the table's "currently selected
+      // pin" rendering.
       actions.setDeviceBoard('Arduino MKR WiFi 1010')
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
@@ -1210,31 +1351,40 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       const actions = store.getState().deviceActions
 
+      // Seed Mega with one pin so it's identifiable.
       actions.setDeviceBoard('Arduino Mega')
       actions.setDeviceDefinitions({
         pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led-13' })],
       })
 
+      // Switch to MKR and drive a representative mutating action.
       actions.setDeviceBoard('Arduino MKR WiFi 1010')
       actions.createNewPin()
       actions.selectPinTableRow(0)
       actions.updatePin({ pin: 'A0' })
 
+      // Mega's bucket is unchanged by the MKR-side mutation.
       const megaBucket = store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino Mega']
       expect(megaBucket).toHaveLength(1)
       expect(megaBucket[0].pin).toBe('13')
       expect(megaBucket[0].alias).toBe('led-13')
 
+      // MKR's bucket has the new pin under its own key.
       const mkrBucket = store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']
       expect(mkrBucket).toHaveLength(1)
       expect(mkrBucket[0].pin).toBe('A0')
 
+      // Removing the MKR pin doesn't touch Mega.
       actions.removePin()
       expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']).toHaveLength(0)
       expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino Mega']).toHaveLength(1)
     })
 
     it('migrates a legacy flat-array `pinMapping` to the active board’s bucket on load', () => {
+      // Projects saved before per-board scoping wrote a flat array.
+      // The store-side action keys that array under whatever board
+      // the accompanying configuration names — so a legacy project
+      // continues to work without manual migration.
       const store = makeStore()
       store.getState().deviceActions.setDeviceDefinitions({
         configuration: { deviceBoard: 'Arduino Mega' },
@@ -1304,11 +1454,23 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // restoreVendorScreenSlice — revert path for vendor-screen tabs
+  // -----------------------------------------------------------------------
   describe('restoreVendorScreenSlice', () => {
+    // The snapshot-vs-current model: the tab captures `vendorScreenData`
+    // at open / last-save time, and clicking "Don't save" replays the
+    // snapshot over only the keys the tab owns.  Other tabs' keys must
+    // stay untouched so unrelated edits on the device editor don't get
+    // rolled back at the same time.
+
     it('restores values for keys present in the snapshot', () => {
       const store = makeStore()
       store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true, baud: '115200' })
+      // Capture snapshot AFTER the first edit, simulating "tab opened
+      // with these values".
       const snapshot = { modbus_rtu: { enabled: true, baud: '115200' } }
+      // User then edits — flip a value the snapshot will revert.
       store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: false, baud: '57600' })
 
       store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], snapshot)
@@ -1319,6 +1481,8 @@ describe('createDeviceSlice', () => {
     })
 
     it('deletes owned keys that the snapshot does NOT contain', () => {
+      // Snapshot represents the pre-tab-open state; if the user added a
+      // brand-new key during the tab session, "Don't save" must drop it.
       const store = makeStore()
       store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true })
       const snapshot: Record<string, unknown> = {}
@@ -1327,22 +1491,31 @@ describe('createDeviceSlice', () => {
     })
 
     it('leaves keys outside ownedKeys untouched', () => {
+      // The whole point of the ownedKeys list: other vendor-screen tabs
+      // (or the device editor itself) may have written to vendorScreenData
+      // in this same session.  The revert must be tab-scoped.
       const store = makeStore()
       store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true })
       store.getState().deviceActions.setVendorScreenData('io-mapping', { rows: ['from-other-tab'] })
 
       store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], { modbus_rtu: { enabled: false } })
 
+      // modbus_rtu was reverted to snapshot…
       expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toEqual({
         enabled: false,
       })
+      // …but io-mapping (out of scope) is preserved.
       expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.['io-mapping']).toEqual({
         rows: ['from-other-tab'],
       })
     })
 
     it('initializes vendorScreenData when the store has no prior key', () => {
+      // Edge: a freshly loaded device with no vendor-screen edits yet.
+      // The restore path must still produce a valid object so subsequent
+      // edits don't NPE.
       const store = makeStore()
+      // Make sure vendorScreenData starts absent.
       expect(store.getState().deviceDefinitions.configuration.vendorScreenData).toEqual(
         defaultDeviceConfiguration.vendorScreenData,
       )
@@ -1353,6 +1526,13 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // Per-target vendor-screen scoping — VPP screens (backplane modules, IO
+  // mappings, …) are board-specific. A backplane configured for SLM-RP4 must
+  // not bleed into P1AM-100 when the user switches targets. Mirrors the
+  // per-board pin-mapping contract: each board keeps its own bucket, work on
+  // board A survives a switch to B and reappears on returning to A.
+  // -----------------------------------------------------------------------
   describe('per-target vendor-screen scoping', () => {
     const vsd = (state: ReturnType<typeof store.getState>) => state.deviceDefinitions.configuration.vendorScreenData
     const archive = (state: ReturnType<typeof store.getState>) =>
@@ -1374,6 +1554,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setVendorScreenData('module-configuration', { slots: ['mod-a'] })
 
       store.getState().deviceActions.setDeviceBoard('P1AM-100')
+      // New target starts clean — no stale modules carried over.
       expect(vsd(store.getState())).toEqual({})
     })
 
@@ -1388,8 +1569,10 @@ describe('createDeviceSlice', () => {
       expect(vsd(store.getState())).toEqual({})
       actions.setVendorScreenData('module-configuration', { slots: ['p1am-mod'] })
 
+      // Back to SLM-RP4 — its modules must be intact…
       actions.setDeviceBoard('SLM-RP4')
       expect(vsd(store.getState())).toEqual({ 'module-configuration': { slots: ['slm-mod'] } })
+      // …and P1AM-100's bucket still carries its own, untouched.
       expect(archive(store.getState())?.['P1AM-100']).toEqual({ 'module-configuration': { slots: ['p1am-mod'] } })
     })
 
@@ -1403,6 +1586,10 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // Vendor-screen data migration on load (setDeviceDefinitions →
+  // mergeDeviceConfigWithDefaults → migrateVendorScreenData)
+  // -----------------------------------------------------------------------
   describe('vendor-screen data migration on load', () => {
     const cfg = (store: ReturnType<typeof makeStore>) => store.getState().deviceDefinitions.configuration
 
@@ -1439,6 +1626,7 @@ describe('createDeviceSlice', () => {
         },
       })
       expect(cfg(store).vendorScreenData).toEqual({ 'module-configuration': { slots: ['flat'] } })
+      // The active board's bucket is seeded from the flat blob; SLM-RP4 kept.
       expect(cfg(store).vendorScreenDataByBoard?.['P1AM-100']).toEqual({ 'module-configuration': { slots: ['flat'] } })
       expect(cfg(store).vendorScreenDataByBoard?.['SLM-RP4']).toEqual({ 'module-configuration': { slots: ['slm'] } })
     })
@@ -1463,6 +1651,10 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // vppPackagePinsByBoard survives a save -> load round trip
+  // (setVppPackagePin -> setDeviceDefinitions -> mergeDeviceConfigWithDefaults)
+  // -----------------------------------------------------------------------
   describe('vppPackagePinsByBoard round trip', () => {
     it('keeps the recorded pin across a reload of the saved configuration', () => {
       const store = makeStore()
@@ -1474,6 +1666,8 @@ describe('createDeviceSlice', () => {
       })
       const saved = store.getState().deviceDefinitions.configuration
 
+      // Reload: a fresh store fed exactly what setDeviceDefinitions would
+      // receive when the project is reopened from disk.
       const reloaded = makeStore()
       reloaded.getState().deviceActions.setDeviceDefinitions({ configuration: saved })
 
@@ -1489,6 +1683,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setCommunicationPort
+  // -----------------------------------------------------------------------
   describe('setCommunicationPort', () => {
     it('sets the communication port and marks updated', () => {
       const store = makeStore()
@@ -1498,6 +1695,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setRuntimeIpAddress
+  // -----------------------------------------------------------------------
   describe('setRuntimeIpAddress', () => {
     it('sets ipAddress in both configuration and runtimeConnection', () => {
       const store = makeStore()
@@ -1507,6 +1707,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setRuntimeJwtToken
+  // -----------------------------------------------------------------------
   describe('setRuntimeJwtToken', () => {
     it('sets jwt token', () => {
       const store = makeStore()
@@ -1522,6 +1725,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setRuntimeConnectionStatus
+  // -----------------------------------------------------------------------
   describe('setRuntimeConnectionStatus', () => {
     it('sets connection status to connected', () => {
       const store = makeStore()
@@ -1549,6 +1755,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setRuntimeVersion
+  // -----------------------------------------------------------------------
   describe('setRuntimeVersion', () => {
     it('stores the runtime version', () => {
       const store = makeStore()
@@ -1564,6 +1773,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setPlcRuntimeStatus
+  // -----------------------------------------------------------------------
   describe('setPlcRuntimeStatus', () => {
     it('sets PLC status to RUNNING', () => {
       const store = makeStore()
@@ -1579,8 +1791,14 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setPlcSwitchPosition
+  // -----------------------------------------------------------------------
   describe('setPlcSwitchPosition', () => {
     it('defaults to null — unknown, not "no gating"', () => {
+      // The start pre-check must be able to tell "the switch says RUN" from "this
+      // target has no switch / firmware too old to report one". Only 'stop' blocks
+      // a start; null must not, or a board without a switch is un-startable.
       expect(makeStore().getState().runtimeConnection.switchPosition).toBeNull()
     })
 
@@ -1600,6 +1818,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setSelectedDevice
+  // -----------------------------------------------------------------------
   describe('setSelectedDevice', () => {
     it('sets selected device', () => {
       const store = makeStore()
@@ -1638,6 +1859,8 @@ describe('createDeviceSlice', () => {
     })
 
     it('leaves backplaneAccess absent when the picker never set it', () => {
+      // Absence is the "host predates the field" case and must stay
+      // distinguishable from an explicit `false`, which is a refusal.
       const store = makeStore()
       store.getState().deviceActions.setSelectedDevice({
         orchestratorId: 'orch-1',
@@ -1651,6 +1874,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setStoredCredentials
+  // -----------------------------------------------------------------------
   describe('setStoredCredentials', () => {
     it('sets stored credentials', () => {
       const store = makeStore()
@@ -1669,6 +1895,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setTimingStats
+  // -----------------------------------------------------------------------
   describe('setTimingStats', () => {
     it('sets timing stats', () => {
       const store = makeStore()
@@ -1685,6 +1914,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setIncludeTimingStatsInPolling
+  // -----------------------------------------------------------------------
   describe('setIncludeTimingStatsInPolling', () => {
     it('enables timing stats in polling', () => {
       const store = makeStore()
@@ -1700,6 +1932,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setEthercatStatus
+  // -----------------------------------------------------------------------
   describe('setEthercatStatus', () => {
     it('sets ethercat status', () => {
       const store = makeStore()
@@ -1716,6 +1951,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setIncludeEthercatStatsInPolling
+  // -----------------------------------------------------------------------
   describe('setIncludeEthercatStatsInPolling', () => {
     it('enables ethercat stats in polling', () => {
       const store = makeStore()
@@ -1731,6 +1969,9 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // setTemporaryDhcpIp
+  // -----------------------------------------------------------------------
   describe('setTemporaryDhcpIp', () => {
     it('sets temporary DHCP IP', () => {
       const store = makeStore()
@@ -1746,9 +1987,13 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // clearRuntimeConnection
+  // -----------------------------------------------------------------------
   describe('clearRuntimeConnection', () => {
     it('resets all runtime connection fields', () => {
       const store = makeStore()
+      // Set everything
       store.getState().deviceActions.setRuntimeJwtToken('tok')
       store.getState().deviceActions.setRuntimeConnectionStatus('connected')
       store.getState().deviceActions.setPlcRuntimeStatus('RUNNING')
@@ -1789,7 +2034,13 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -------------------------------------------------------------------------
+  // Pin edits drive the central IEC recalculation (DOPE-440)
+  // -------------------------------------------------------------------------
+
   describe('pin edits recompact the other address producers (DOPE-440)', () => {
+    /** A board that hosts BOTH fixed pins and Modbus remote I/O — the only
+     *  configuration where the two producers share an address space. */
     function seedPinAndModbusBoard(store: ReturnType<typeof makeStore>) {
       store.getState().deviceActions.setAvailableOptions({
         availableBoards: new Map<string, BoardInfo>([
@@ -1822,6 +2073,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setDeviceBoard('GPIO Runtime v4')
     }
 
+    /** Three digital-input pins occupying %IX0.0–%IX0.2, plus a two-point
+     *  Modbus FC1 group that allocates immediately after them. */
     function seedPinsAndGroup(store: ReturnType<typeof makeStore>) {
       seedPinAndModbusBoard(store)
       store.getState().deviceActions.setDeviceDefinitions({
@@ -1857,12 +2110,20 @@ describe('createDeviceSlice', () => {
       })
     }
 
+    /** The seeded group's IEC addresses. Throws rather than asserting non-null
+     *  so a broken fixture names itself instead of failing as an unrelated
+     *  expectation. */
     function modbusAddresses(store: ReturnType<typeof makeStore>): string[] {
       const points = store.getState().project.data.remoteDevices?.[0]?.modbusTcpConfig?.ioGroups[0]?.ioPoints
       if (!points) throw new Error('fixture: expected a remote device with one IO group holding points')
       return points.map((point) => point.iecLocation)
     }
 
+    /** Count store writes from here on. The actions are frozen by Immer so
+     *  `recalculateIecAddresses` can't be spied on directly, and a skipped
+     *  recalculation has no other observable — it changes no address. Only the
+     *  negative cases assert on this; where addresses move, they are the
+     *  stronger assertion. */
     function countWrites(store: ReturnType<typeof makeStore>) {
       let writes = 0
       store.subscribe(() => {
@@ -1879,6 +2140,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(1)
       store.getState().deviceActions.removePin()
 
+      // The pin block shrank to %IX0.0–%IX0.1; the group used to stay put at
+      // %IX0.3/.4, leaving %IX0.2 stranded.
       expect(activePins(store.getState()).map((p) => p.address)).toEqual(['%IX0.0', '%IX0.1'])
       expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])
     })
@@ -1887,10 +2150,13 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       seedPinsAndGroup(store)
 
+      // `createNewPin` mints highest+1 = %IX0.3, checking only OTHER PINS for a
+      // collision — so it lands squarely on the group's first point.
       store.getState().deviceActions.selectPinTableRow(2)
       store.getState().deviceActions.createNewPin()
 
       expect(activePins(store.getState()).map((p) => p.address)).toContain('%IX0.3')
+      // Pins are fixed hardware and stay pinned, so the group moves instead.
       expect(modbusAddresses(store)).toEqual(['%IX0.4', '%IX0.5'])
     })
 
@@ -1901,6 +2167,8 @@ describe('createDeviceSlice', () => {
 
       store.getState().deviceActions.updatePin({ pinType: 'digitalOutput' })
 
+      // %IX0.0 moved to the output space and the remaining inputs slid down,
+      // so the group follows into the freed slot.
       expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])
     })
 

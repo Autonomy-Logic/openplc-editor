@@ -6,6 +6,15 @@ import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 import type { ScreenSection } from '../index'
 import { SectionRenderer } from '../section-renderer'
 
+/**
+ * A vendor package is untrusted input, so the renderer dispatches through
+ * allowlists rather than falling back. Two properties matter and are pinned
+ * here: an unrecognised layout or field type draws NOTHING — not a placeholder,
+ * not a text input — and, because it is never drawn, it can never put a value
+ * into `vendorScreenData` and from there into the plugin config the device is
+ * configured with.
+ */
+
 let store: OpenPLCStore
 
 function renderSection(section: Partial<ScreenSection>) {
@@ -85,6 +94,8 @@ describe('vendor screen renderer allowlists', () => {
 
     const stored = vendorScreenData().sec as Record<string, unknown>
     expect(stored).toMatchObject({ baud: 115200 })
+    // The refused field never entered the value map, so it cannot ride into
+    // the generated plugin config alongside the ones that did.
     expect(Object.keys(stored)).not.toContain('hostile')
   })
 

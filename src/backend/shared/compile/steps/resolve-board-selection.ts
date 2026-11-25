@@ -13,9 +13,19 @@ export type ResolvedBoardSelection =
   | { ok: false; error: string }
 
 export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: string): ResolvedBoardSelection {
+  // `BoardInfoResolver.resolve` covers both hals.json and installed
+  // VPP packages — the editor's canonical lookup.  Either source can
+  // raise (unknown board, malformed manifest, etc.); the caller only
+  // needs the boolean ok / error message split.
   try {
     const boardInfo = resolver.resolve(boardTarget)
 
+    // Adapt `BoardBuildInfo` → pipeline's `BoardHalsBuildEntry` shape.
+    // Runtime-v3 / runtime-v4 / simulator targets carry an empty
+    // `platform` (intentionally — they don't go through arduino-cli),
+    // so the cast bypasses the shape's required-platform constraint;
+    // downstream code only dereferences `platform` on the arduino-cli
+    // compile + upload paths, which those runtimes skip.
     const boardEntry: BoardHalsBuildEntry = {
       ...(boardInfo.platform ? { platform: boardInfo.platform } : {}),
       ...(boardInfo.core ? { core: boardInfo.core } : {}),
@@ -25,8 +35,19 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       ...(boardInfo.compilerFlags?.ld_flags ? { ld_flags: boardInfo.compilerFlags.ld_flags } : {}),
       ...(boardInfo.maxDataSize !== undefined ? { max_data_size: boardInfo.maxDataSize } : {}),
       ...(boardInfo.precompiledLibraryDir ? { precompiledLibraryDir: boardInfo.precompiledLibraryDir } : {}),
+      // Upload transport ("ethernet" for the LOGO! 8.2; serial otherwise).
       ...(boardInfo.uploadMethod ? { uploadMethod: boardInfo.uploadMethod } : {}),
+      // Capability resolution inputs.  `resolveTargetCapabilities`
+      // reads `compiler` + `vpp` + `capabilities` on whatever board
+      // shape it's handed — without forwarding all three the
+      // resolver picks the empty preset and `vppIo` collapses to
+      // false, which silently disables `vpp_config.h` emission for
+      // every VPP arduino-cli target (Opta, future P1AM VPP).
       compiler: boardInfo.compiler,
+      // What the board can serve Modbus OVER. `resolveModbusServerProfile` reads
+      // these to decide which transports are on offer, and the pipeline calls it
+      // with exactly the same inputs the screen uses — dropping them here is
+      // what left the emitter compiling `MBTCP` for boards with no carrier.
       ...(boardInfo.vppScreenNames ? { vppScreenNames: boardInfo.vppScreenNames } : {}),
       ...(boardInfo.serialPorts ? { serialPorts: boardInfo.serialPorts } : {}),
       ...(boardInfo.defaultSerial ? { defaultSerial: boardInfo.defaultSerial } : {}),

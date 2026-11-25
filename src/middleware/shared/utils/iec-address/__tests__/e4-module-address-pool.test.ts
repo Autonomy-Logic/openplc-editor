@@ -1,3 +1,12 @@
+/**
+ * Address-pool tests.
+ *
+ * The modular coupler data model carries channel mappings per module. The address pool
+ * must claim module channels under a four-segment ethercat ref so a module channel and a
+ * plain slave channel on the same bus never collide, and the orphaned-alias rules work
+ * on module aliases exactly as they do on plain-slave aliases.
+ */
+
 import { buildAddressPool, type AddressPool, type PoolInputs } from '../address-pool'
 
 type Caps = Parameters<typeof buildAddressPool>[1]
@@ -85,6 +94,7 @@ describe('address pool walks module channel mappings', () => {
     const conflict = pool.conflicts.find((c) => c.address === '%IX0.0')
     expect(conflict).toBeDefined()
     expect(conflict?.sources.length).toBe(2)
+    // The second claimer loses; the first wins. The ref format tells them apart.
     expect(conflict?.sources.map((s) => s.ref).sort()).toEqual(['bus_a:coupler:ch1', 'bus_a:coupler:slot-1:ch1'])
   })
 

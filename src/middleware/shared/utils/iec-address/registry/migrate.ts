@@ -1,3 +1,22 @@
+/**
+ * Migrate a legacy project's scattered producer addresses into the central
+ * registry (see docs/iec-address-registry.md §7).
+ *
+ * The transform reuses the loosely-typed `PoolInputs` shapes the old
+ * address pool already consumed — pins, VPP `io-mapping` entries, Modbus
+ * `ioPoints`, EtherCAT `channelMappings` — so it stays decoupled from the
+ * full project schema.
+ *
+ * Each channel is seeded with `pinned = its current legacy address`, so the
+ * first `recalculate` reproduces exactly today's addresses (nothing moves on
+ * open). The store then:
+ *   1. adopts program variables onto the aliases at these legacy addresses,
+ *   2. calls `unpinAllocatableChannels` to release the seeds on everything
+ *      except real hardware pins, and
+ *   3. recalculates (capability-scoped), after which allocatable producers
+ *      compact and alias-bound variables follow their moved addresses.
+ */
+
 import { runsModbusMaster } from '../../target-capabilities/modbus-master'
 import type { AddressProducerCapabilities } from '../../target-capabilities/types'
 import type { PoolInputs } from '../address-pool'
@@ -14,7 +33,23 @@ import type {
 
 const PIN_MAPPING_KIND = 'pin-mapping'
 
-/** The consumer kinds a target's capabilities keep active in allocation. */
+/**
+ * The consumer kinds a target's capabilities keep active in allocation.
+ *
+ * One place, because two callers apply the rule and they must not drift: the
+ * store's project-wide recalculation, which decides where producers land, and
+ * the compile-time I/O image sizer, which decides how big the runtime's image
+ * has to be. A kind active in one and not the other would size an image that
+ * does not cover the addresses actually allocated.
+ *
+ * A target that omits a kind frees its space, and the still-active producers
+ * compact into it on the next recalculation — that is the deliberate
+ * target-switch behaviour, not an oversight. Note that an EMPTY result is a
+ * meaningful answer ("this target supports no producers") and is NOT the same
+ * as passing no `activeKinds` at all, which means "every kind"; an unresolved
+ * board must therefore be answered with `ALL_ADDRESS_PRODUCERS_ACTIVE` rather
+ * than with `EMPTY_CAPABILITIES`.
+ */
 export function activeKindsFor(caps: AddressProducerCapabilities): Set<string> {
   const kinds = new Set<string>()
   if (caps.pinMapping) kinds.add(PIN_MAPPING_KIND)
@@ -24,12 +59,16 @@ export function activeKindsFor(caps: AddressProducerCapabilities): Set<string> {
   return kinds
 }
 
-/* Consumer-id builders. */
+/* Consumer-id builders. Exported so the store's address write-back keys the
+ * registry the exact same way the migration created it (no drift). */
 export const modbusConsumerId = (deviceName: string, groupId: string): string => `modbus:${deviceName}:${groupId}`
 export const ethercatConsumerId = (deviceName: string, slaveName: string): string =>
   `ethercat:${deviceName}:${slaveName}`
 
-/* Session alias-memory key builders. */
+/* Session alias-memory key builders. The key is the stable *semantic*
+ * identity of a channel — it must be identical at the migration site and at
+ * every alias-edit site so `restoreAliasesFromMemory` matches. Exported so
+ * producers (e.g. the VPP layouts) record aliases under the same key. */
 export const vppMemoryKey = (moduleId: string, slot: number, channelName: string): string =>
   `vpp:${moduleId}:${slot}:${channelName}`
 export const modbusMemoryKey = (deviceName: string, groupId: string, pointId: string): string =>
@@ -78,13 +117,19 @@ function seedChannel(
   return channel
 }
 
-/** Build the registry from legacy producer state. */
+/**
+ * Build the registry from legacy producer state. Consumers are emitted in a
+ * stable order (pins → VPP slots → Modbus groups → EtherCAT slaves) matching
+ * the historical reservation order. Addresses are reproduced exactly.
+ */
 export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
   const consumers: RegistryConsumer[] = []
   let order = 0
 
+  // 1. Pin mapping — one consumer, one channel per pin (fixed hardware).
   const pinChannels: RegistryChannel[] = []
   for (const pin of inputs.pinMapping?.pins ?? []) {
+    // Pins are fixed hardware — the address itself is the stable identity.
     const channel = seedChannel(pin.address, pin.address, pin.alias, `pin:${pin.address}`)
     if (channel) pinChannels.push(channel)
   }
@@ -92,6 +137,7 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
     consumers.push({ id: PIN_MAPPING_KIND, kind: PIN_MAPPING_KIND, order: order++, channels: pinChannels })
   }
 
+  // 2. VPP I/O — one consumer per slot; channels keyed by channel name.
   const bySlot = new Map<number, RegistryChannel[]>()
   for (const entry of inputs.vendorIoMapping?.entries ?? []) {
     const channel = seedChannel(
@@ -115,6 +161,7 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
     })
   }
 
+  // 3. Modbus TCP remote — one consumer per IO group.
   for (const device of inputs.remoteDevices ?? []) {
     const deviceName = device.deviceName || device.name || 'device'
     const groups = device.modbusTcpConfig?.ioGroups ?? []
@@ -143,6 +190,8 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
     }
   }
 
+  // 4. EtherCAT: one consumer per slave, including its modules' channels. A module channel's
+  // registry id is prefixed with the module id; the write-back path strips the prefix.
   for (const device of inputs.remoteDevices ?? []) {
     const deviceName = device.deviceName || device.name || 'device'
     for (const slave of device.ethercatConfig?.devices ?? []) {
@@ -181,6 +230,7 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
     }
   }
 
+  // Reproduce the legacy addresses exactly (all channels are pinned).
   return recalculate({ consumers, assignments: {} }).registry
 }
 

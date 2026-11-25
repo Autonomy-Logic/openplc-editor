@@ -17,10 +17,18 @@ import type {
 import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
 import type { DeviceSetupRecord } from '../../../utils/vpp/device-setup'
 
+// ---------------------------------------------------------------------------
+// Device available options
+// ---------------------------------------------------------------------------
+
 export type DeviceAvailableOptions = {
   availableBoards: Map<string, BoardInfo>
   availableCommunicationPorts: CommunicationPort[]
 }
+
+// ---------------------------------------------------------------------------
+// Pin mapping
+// ---------------------------------------------------------------------------
 
 /**
  * Pin mappings are scoped per target board: each board has its own
@@ -41,6 +49,10 @@ export type DevicePinMapping = {
   pinsByBoard: Record<string, DevicePin[]>
   currentSelectedPinTableRow: number
 }
+
+// ---------------------------------------------------------------------------
+// Runtime connection
+// ---------------------------------------------------------------------------
 
 export type SelectedDevice = {
   orchestratorId: string
@@ -95,9 +107,21 @@ export type RuntimeConnection = {
   includeTimingStatsInPolling: boolean
   ethercatStatus: EtherCATRuntimeStatusResponse | null
   includeEthercatStatsInPolling: boolean
-  /** A runtime version change is in flight on the device. */
+  /**
+   * A runtime version change is in flight on the device.
+   *
+   * The runtime is deliberately stopped and replaced during one, so its
+   * silence is expected rather than a fault. Without this the status poller
+   * counted the swap as five failed polls and announced a lost connection --
+   * in the middle of an update that was working, while the dialog beside it
+   * said the device carries on by itself.
+   */
   runtimeUpdateInProgress: boolean
 }
+
+// ---------------------------------------------------------------------------
+// Persistent serial connection (D72) — baremetal "stay connected"
+// ---------------------------------------------------------------------------
 
 export type DeviceConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -117,11 +141,20 @@ export type DeviceConnection = {
    */
   transport: DeviceLinkTransport | null
   /**
-   * Medium the DEBUG channel uses — the ONE fact the debug poller reads, for both its batch size and its cadence
-   * (see `DEBUG_MEDIUM_PROFILE`).
+   * Medium the DEBUG channel uses — the ONE fact the debug poller reads, for both
+   * its batch size and its cadence (see `DEBUG_MEDIUM_PROFILE`). Published by the
+   * connection manager, which is the only component that knows: the main process on
+   * the editor, the WebRTC lifecycle manager in the browser.
+   *
+   * Can change mid-session on web, when a WebRTC data channel drops to the Edge
+   * relay — the poller follows it, so this is read live rather than latched.
    */
   debugTransport: DebugMedium | null
 }
+
+// ---------------------------------------------------------------------------
+// VPP licensing
+// ---------------------------------------------------------------------------
 
 /**
  * How long the purchase watch stays open after `buy()` opens the external
@@ -131,7 +164,19 @@ export type DeviceConnection = {
  */
 export const PURCHASE_WATCH_WINDOW_MS = 10 * 60_000
 
-/** What the UI knows about the connected device's VPP license. */
+/**
+ * What the UI knows about the connected device's VPP license.
+ *
+ * Separate from `deviceConnection` on purpose: that is about whether the LINK is
+ * up, this is about what the device is entitled to run. They change for unrelated
+ * reasons — a link can drop and come back without the license changing, and a
+ * license can be recovered without the link ever moving — and merging them made
+ * every reader of one depend on the other.
+ *
+ * `report` is null until a licensing call has landed, which is also the state for
+ * every non-licensable board: nothing runs, so nothing is known, and the UI shows
+ * no licensing affordance at all.
+ */
 export type DeviceLicenseInfo = {
   /** In flight, so the UI can show progress and refuse to start a second one. */
   phase: 'idle' | 'checking' | 'done'
@@ -141,9 +186,25 @@ export type DeviceLicenseInfo = {
    * it needs `node:crypto` — and which feeds the copy button and the buy link).
    */
   report: DeviceLicenseReport | null
-  /** Wall-clock deadline (epoch ms) of the purchase watch, or null when no watch is running. */
+  /**
+   * Wall-clock deadline (epoch ms) of the purchase watch, or null when no watch
+   * is running. Non-null from `buy()` opening the purchase page until the poll
+   * that watches for the completed purchase lands a licensed report, the
+   * deadline passes, or the user cancels. Drives the "Waiting for purchase…"
+   * affordance and the poll effect in `useDeviceLicense` — the purchase happens
+   * in an external browser, so polling is the only feedback channel there is.
+   *
+   * An absolute deadline rather than a tick counter on purpose: the poll effect
+   * can be torn down and remounted without renewing the window, a tick skipped
+   * to avoid overlapping an in-flight call costs none of the budget, and the
+   * state stays inspectable ("waiting until T", not an opaque count).
+   */
   awaitingPurchaseUntil: number | null
 }
+
+// ---------------------------------------------------------------------------
+// Device state
+// ---------------------------------------------------------------------------
 
 export type DeviceState = {
   deviceAvailableOptions: DeviceAvailableOptions
@@ -160,6 +221,10 @@ export type DeviceState = {
   deviceLicense: DeviceLicenseInfo
 }
 
+// ---------------------------------------------------------------------------
+// Action parameter types
+// ---------------------------------------------------------------------------
+
 export type PinUpdateResponse = {
   ok: boolean
   title: string
@@ -171,6 +236,10 @@ export type PinUpdateResponse = {
     alias: string
   }
 }
+
+// ---------------------------------------------------------------------------
+// Device actions
+// ---------------------------------------------------------------------------
 
 /** What an embedded configurator persists: its archive is opaque and kept byte-for-byte. */
 export type ConfiguratorRecord = {
@@ -255,11 +324,25 @@ export type DeviceActions = {
   ) => void
   /** Reset the serial link to disconnected/null. */
   clearDeviceConnection: () => void
-  /** Mark a licensing call as in flight. */
+  /**
+   * Mark a licensing call as in flight.
+   *
+   * Deliberately KEEPS the last report rather than clearing it. Blanking it would
+   * make the badge flicker from "Licensed" to nothing and back on every refresh —
+   * and worse, a refresh that fails would leave the UI with less information than
+   * it had before asking. The `phase` is what says "asking"; the report stays as
+   * the last thing actually known.
+   */
   startDeviceLicenseCheck: () => void
   /** Land a finished licensing call: `phase='done'`, store the report. */
   setDeviceLicenseReport: (report: DeviceLicenseReport) => void
-  /** Open (true) or close (false) the purchase-watch window (see `DeviceLicenseInfo.awaitingPurchaseUntil`). */
+  /**
+   * Open (true) or close (false) the purchase-watch window (see
+   * `DeviceLicenseInfo.awaitingPurchaseUntil`). Opening stamps the absolute
+   * deadline `now + PURCHASE_WATCH_WINDOW_MS`; closing nulls it. Otherwise
+   * deliberately dumb: the poll effect in `useDeviceLicense` owns WHEN it ends
+   * (licensed report, deadline, cancel) — the store only records the window.
+   */
   setAwaitingPurchase: (awaiting: boolean) => void
   /** Reset licensing to `idle`/null — on disconnect, board change, project close. */
   clearDeviceLicense: () => void
@@ -284,10 +367,21 @@ export type DeviceActions = {
   restoreVendorScreenSlice: (ownedKeys: string[], snapshot: Record<string, unknown>) => void
 }
 
+// ---------------------------------------------------------------------------
+// Device slice
+// ---------------------------------------------------------------------------
+
 export type DeviceSlice = DeviceState & {
   deviceActions: DeviceActions
 }
 
+/**
+ * Cross-slice root-state view the device slice needs at runtime —
+ * `setAvailableOptions` triggers the alias sync once the workspace
+ * screen finishes board discovery (capabilities depend on the active
+ * board info), and the sync's summary log is routed through the
+ * console slice. Same shape pattern as `ProjectSliceRoot`.
+ */
 import type { ConsoleSlice } from '../console'
 import type { ProjectSlice } from '../project/types'
 

@@ -146,6 +146,8 @@ const SerialPortCombobox = ({
   allowCustom = true,
   emptyMessage = 'No ports available. Type a custom value.',
 }: SerialPortComboboxProps) => {
+  // Map runtime ports to options. The device path is the value that propagates;
+  // the human description (when distinct) is appended to the visible label.
   const selectValues = useMemo(
     () =>
       isLoading
@@ -225,6 +227,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup, otherGroupNames
   const [length, setLength] = useState('1')
   const [errorHandling, setErrorHandling] = useState<'keep-last-value' | 'set-to-zero'>('keep-last-value')
 
+  // FC 5 (Write Single Coil) and FC 6 (Write Single Register) are single-element operations
   const isSingleElementOperation = isSingleElementFunctionCode(functionCode)
   const lengthValidation = validateIOGroupLength(functionCode, length)
 
@@ -234,6 +237,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup, otherGroupNames
       setFunctionCode(editingGroup.functionCode)
       setCycleTime(editingGroup.cycleTime.toString())
       setOffset(editingGroup.offset)
+      // For single-element operations, length is always 1
       setLength(isSingleElementFunctionCode(editingGroup.functionCode) ? '1' : editingGroup.length.toString())
       setErrorHandling(editingGroup.errorHandling)
     } else {
@@ -246,6 +250,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup, otherGroupNames
     }
   }, [editingGroup, isOpen])
 
+  // When function code changes, enforce length=1 for single-element operations
   useEffect(() => {
     if (isSingleElementOperation) {
       setLength('1')
@@ -253,6 +258,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup, otherGroupNames
   }, [functionCode, isSingleElementOperation])
 
   const handleFunctionCodeChange = (next: typeof functionCode) => {
+    // Error handling hidden on a write group must not resurface when it becomes a read group.
     if (!isReadFunctionCode(functionCode) && isReadFunctionCode(next)) setErrorHandling('keep-last-value')
     setFunctionCode(next)
   }
@@ -375,6 +381,9 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup, otherGroupNames
                 )}
               />
             </div>
+            {/* A permanently locked control deserves an always-visible reason,
+                so this is inline text rather than a hover tooltip (which would
+                also mean a Radix portal nested inside the modal's portal). */}
             {(isSingleElementOperation || !lengthValidation.ok) && (
               <p
                 id='io-group-length-hint'
@@ -451,6 +460,9 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
   const isEditingLocked = useIsEditingLocked()
   const firstIOPoint = ioGroup.ioPoints?.[0]
   const groupType = firstIOPoint?.type || '-'
+  // The full span, not just the first point: this is what makes a size change
+  // — and the project-wide address recompaction it triggers — readable without
+  // expanding the group.
   const groupAddress = formatIOGroupAddressRange(ioGroup.ioPoints ?? [])
   const groupOffset = ioGroup.offset
 
@@ -551,6 +563,7 @@ const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
         <TruncatedText text={ioPoint.iecLocation} />
       </td>
       <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>{offset}</td>
+      {/* A single point has no length of its own — keeps the columns aligned. */}
       <td className='px-2 py-1'></td>
       <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>-</td>
       <td className='px-2 py-1'>
@@ -586,6 +599,7 @@ const RemoteDeviceEditor = () => {
     return project.data.remoteDevices?.find((d) => d.name === deviceName)
   }, [project.data.remoteDevices, deviceName])
 
+  // Runtime connection state
   const { connectionStatus, jwtToken } = runtimeConnection
   const isConnectedToRuntime = connectionStatus === 'connected' && jwtToken !== null
 
@@ -599,24 +613,30 @@ const RemoteDeviceEditor = () => {
   )
   const reconnect = remoteDevice?.modbusTcpConfig ? resolveReconnect(remoteDevice.modbusTcpConfig) : false
 
+  // Serial port options state
   const [serialPortOptions, setSerialPortOptions] = useState<SerialPortOption[]>([])
   const [isLoadingSerialPorts, setIsLoadingSerialPorts] = useState(false)
 
+  // Transport type state
   const [transport, setTransport] = useState<'tcp' | 'rtu'>('tcp')
   const showTimeoutHelp = isBaremetal && transport === 'tcp'
 
+  // TCP-specific state
   const [host, setHost] = useState('')
   const [port, setPort] = useState('')
 
+  // RTU-specific state
   const [serialPort, setSerialPort] = useState('')
   const [baudRate, setBaudRate] = useState('9600')
   const [parity, setParity] = useState<'N' | 'E' | 'O'>('N')
   const [stopBits, setStopBits] = useState('1')
   const [dataBits, setDataBits] = useState('8')
 
+  // Common state
   const [timeout, setTimeout] = useState('')
   const [slaveId, setSlaveId] = useState('')
 
+  // UI state
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingGroup, setEditingGroup] = useState<ModbusIOGroup | null>(null)
@@ -626,14 +646,19 @@ const RemoteDeviceEditor = () => {
   useEffect(() => {
     if (remoteDevice?.modbusTcpConfig) {
       const config = remoteDevice.modbusTcpConfig
+      // Transport type (defaults to 'tcp' for backward compatibility)
       setTransport(config.transport || 'tcp')
+      // TCP fields
       setHost(config.host ?? '127.0.0.1')
       setPort((config.port ?? 502).toString())
+      // RTU fields — show the default serial port as a real value when
+      // none is stored (the self-heal effect below persists it).
       setSerialPort(config.serialPort || defaultSerialPort)
       setBaudRate((config.baudRate ?? 9600).toString())
       setParity(config.parity ?? 'N')
       setStopBits((config.stopBits ?? 1).toString())
       setDataBits((config.dataBits ?? 8).toString())
+      // Common fields
       setTimeout(config.timeout.toString())
       setSlaveId((config.slaveId ?? 1).toString())
     } else {
@@ -664,6 +689,7 @@ const RemoteDeviceEditor = () => {
     [remoteDevice?.modbusTcpConfig?.ioGroups],
   )
 
+  // Fetch serial ports from runtime when transport is RTU and connected
   const fetchSerialPorts = useCallback(async () => {
     if (!isConnectedToRuntime) {
       setSerialPortOptions([])
@@ -698,6 +724,7 @@ const RemoteDeviceEditor = () => {
     }
   }, [isConnectedToRuntime, runtime, consoleActions])
 
+  // Fetch serial ports when transport changes to RTU or when runtime connection changes
   useEffect(() => {
     if (transport === 'rtu' && profile.rtuPorts.source === 'runtime') {
       void fetchSerialPorts()
@@ -750,6 +777,7 @@ const RemoteDeviceEditor = () => {
     [deviceName, projectActions, sharedWorkspaceActions],
   )
 
+  // Transport type handler
   const handleTransportChange = useCallback(
     (newTransport: ModbusMasterTransport) => {
       setTransport(newTransport)
@@ -759,6 +787,7 @@ const RemoteDeviceEditor = () => {
     [deviceName, projectActions, sharedWorkspaceActions],
   )
 
+  // RTU field handlers
   const handleSerialPortChange = useCallback(
     (value: string) => {
       setSerialPort(value)
@@ -887,6 +916,7 @@ const RemoteDeviceEditor = () => {
   const handleImportFileSelected = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.target
     const file = input.files?.[0]
+    // Reset so picking the same file again (after fixing it) still fires onChange.
     input.value = ''
     if (!file) return
 
@@ -983,6 +1013,7 @@ const RemoteDeviceEditor = () => {
 
       <EditingLockBoundary className='contents'>
         <div className='mb-6 flex flex-wrap gap-6'>
+          {/* Transport Type Selector */}
           <div className='flex items-center gap-2'>
             <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Transport</Label>
             <Select
@@ -1010,6 +1041,7 @@ const RemoteDeviceEditor = () => {
             </Select>
           </div>
 
+          {/* TCP-specific fields */}
           {transport === 'tcp' && (
             <>
               <div className='flex items-center gap-2'>
@@ -1066,6 +1098,7 @@ const RemoteDeviceEditor = () => {
             </>
           )}
 
+          {/* RTU-specific fields */}
           {transport === 'rtu' && (
             <>
               <div className='flex items-center gap-2' data-testid='remote-device-serial-port-select'>
@@ -1163,6 +1196,7 @@ const RemoteDeviceEditor = () => {
             </>
           )}
 
+          {/* Common fields - Timeout and Slave ID */}
           <div className='flex max-w-[420px] flex-col gap-1'>
             <div className='flex items-center gap-2'>
               <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Timeout (ms)</Label>

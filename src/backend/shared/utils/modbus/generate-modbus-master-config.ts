@@ -96,6 +96,8 @@ const convertIOGroupToIOPoint = (ioGroup: ModbusIOGroup): ModbusMasterIOPoint =>
     iec_location: iecLocation,
     len: ioGroup.length,
     cycle_time_ms: ioGroup.cycleTime,
+    // Groups saved before the field existed have no value; the runtime's
+    // historical behaviour is to keep the last value, so default to it.
     error_handling: ioGroup.errorHandling ?? 'keep-last-value',
   }
 }
@@ -122,10 +124,15 @@ const convertRemoteDeviceToModbusMaster = (
 
   const ioPoints: ModbusMasterIOPoint[] = ioGroups.map(convertIOGroupToIOPoint)
 
+  // Determine transport type (defaults to 'tcp' for backward compatibility)
   const transport = modbusTcpConfig.transport || 'tcp'
 
   if (transport === 'rtu') {
+    // RTU configuration
     if (!modbusTcpConfig.serialPort) {
+      // RTU requires a serial port.  Route the skip through the caller's
+      // log so it lands in the build console — otherwise the device is
+      // dropped silently and the runtime just reports "no config found".
       log?.(`Modbus RTU device "${device.name}" is missing a serial port configuration and will be skipped.`)
       return null
     }
@@ -147,6 +154,7 @@ const convertRemoteDeviceToModbusMaster = (
       },
     }
   } else {
+    // TCP configuration (default)
     return {
       name: device.name,
       protocol: 'MODBUS',

@@ -1,3 +1,15 @@
+/**
+ * Capability presets for the targets shipped with the vanilla editor.
+ * Each preset is intentionally complete (no implicit defaults) so the
+ * matrix is auditable in one place.
+ *
+ * Boards in hals.json should declare their capability block explicitly.
+ * `resolveTargetCapabilities` falls back to deriving one from these
+ * presets via the legacy `compiler` field if the block is missing —
+ * that path exists only for older hals.json files that haven't been
+ * updated yet.
+ */
+
 import { IMAGE_TABLES } from '../io-image/tables'
 import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
 
@@ -25,7 +37,15 @@ export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
   ethercat: true,
 }
 
-/** Conservative baseline for a baremetal OPC-UA server. */
+/**
+ * Conservative baseline for a baremetal OPC-UA server. A VPP declares only the
+ * fields it raises; `resolveTargetCapabilities` fills the rest from here.
+ *
+ * The numbers are the safe end of every axis: `maxSessions: 1` because each
+ * session is 16 KB of protocol-mandated buffers, `arenaBytes: 32 KB` to cover
+ * one session plus channel state plus the node pool, `security: 'none'` with
+ * all-false `hw` to keep mbedTLS out of the link.
+ */
 export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
   arenaBytes: 32 * 1024,
   maxSessions: 1,
@@ -38,6 +58,8 @@ export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
   security: 'none',
   certificates: false,
   subscriptions: false,
+  // 600 000 and PBKDF2 by default, matching what Runtime v4 consumes, so a
+  // target declaring nothing keeps working. Constrained targets opt down.
   kdfIterations: 600_000,
   passwordScheme: 'pbkdf2-sha256',
   hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
@@ -60,10 +82,26 @@ export const BAREMETAL_S7_BUFFERS: readonly string[] = [
   'lint_memory',
 ]
 
-/** Every mapping type the Runtime v4 plugin's parser accepts. */
+/**
+ * Every mapping type the Runtime v4 plugin's parser accepts.
+ *
+ * DERIVED, not restated: the plugin's table and the editor's schema are both
+ * the image table list, so writing the fourteen out again is one more copy to
+ * drift. Bare metal's set cannot be derived the same way -- it is smaller than
+ * the areas the firmware declares, because `openplc.h` has an array the S7
+ * plugin has no buffer code for.
+ */
 export const RUNTIME_S7_BUFFERS: readonly string[] = IMAGE_TABLES.map((table) => table.key)
 
-/** What a target gets when it declares `s7Server` and nothing else. */
+/**
+ * What a target gets when it declares `s7Server` and nothing else. Below Runtime
+ * v4's numbers, because v4 is a Linux process with a thread per client and this
+ * is a microcontroller where each client is a PDU pair in .bss.
+ *
+ * `szl` is on because the clients that need it refuse to talk to a device
+ * without it, at ~228 bytes. `pduSize` 240 is what an S7-300 offers and what
+ * every client copes with.
+ */
 export const DEFAULT_S7_PROFILE: S7TargetProfile = {
   maxClients: 2,
   pduSize: 240,
@@ -74,8 +112,10 @@ export const DEFAULT_S7_PROFILE: S7TargetProfile = {
 }
 
 /**
- * Runtime v4's own numbers, which are the plugin's: 64 areas in the config record and every mapping type its parser
- * accepts.
+ * Runtime v4's own numbers, which are the plugin's: 64 areas in the config
+ * record and every mapping type its parser accepts. Carried as a preset
+ * because the editor sizes the image from what the target serves, and
+ * answering with the microcontroller's eight sized a v4 project short.
  */
 export const RUNTIME_V4_S7_PROFILE: S7TargetProfile = {
   maxClients: 32,
@@ -89,14 +129,23 @@ export const RUNTIME_V4_S7_PROFILE: S7TargetProfile = {
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   pinMapping: false,
   vppIo: false,
+  // Servers and remote IO are no-ops at the bytecode level but reported
+  // available so projects authored for Runtime v4 don't get nagged
+  // when the user simulates them.
   modbusTcpMaster: true,
   modbusRtuMaster: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Simulator runs no Modbus slave at all — the flags are UX, so a
+  // project authored for another target keeps its server config while the
+  // user simulates it. It has no VPP Modbus screen, so it resolves to the
+  // `plc-server` profile, where RTU is not on offer anyway.
   modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
   networkSockets: null,
+  // RTU over the emulated virtual serial port the in-process simulator
+  // exposes — not Modbus TCP.
   debuggerTransports: ['modbus-serial'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: true,
@@ -105,6 +154,10 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   nativeRetainStore: false,
   plcStateControl: false,
   directUsbUpload: true,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
   isLicensable: false,
 }
 
@@ -124,19 +177,32 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  // v3 exposes the SAME run/stop REST API as v4 (`/api/start-plc`,
+  // `/api/stop-plc`, JWT-authenticated) — only the debug channel differs
+  // (v3: Modbus TCP, v4: WebSocket). The main process already routes the
+  // command over REST for both, so the only thing that ever stopped v3
+  // was this flag.
   nativeRetainStore: false,
   plcStateControl: true,
   directUsbUpload: false,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
   isLicensable: false,
 }
 
 export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   pinMapping: false,
+  // "Plain" Runtime v4 has no VPP backplane. VPP boards (SLM-RP4 etc.)
+  // override this to `true` in their manifests.
   vppIo: false,
   modbusTcpMaster: true,
   modbusRtuMaster: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Runtime v4 Modbus slave plugin is a TCP listener; there is no serial
+  // path in it.
   modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
@@ -150,6 +216,10 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   nativeRetainStore: true,
   plcStateControl: true,
   directUsbUpload: false,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
   isLicensable: false,
 }
 
@@ -159,11 +229,22 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   modbusTcpMaster: false,
   modbusRtuMaster: true,
   ethercat: false,
+  // The baremetal firmware serves both, gated by the VPP Modbus screen's
+  // per-transport toggles. These read `false` until DOPE-442 because the
+  // config lived in a vendor screen the Servers UX could not see; now that
+  // one screen renders both stores, hiding the target's real capability is
+  // what would be wrong.
+  //
+  // A board still only gets the screen when its VPP declares a Modbus screen,
+  // so a package that has not been migrated is unaffected.
   modbusTcpServer: true,
   modbusRtuServer: true,
   opcuaServer: false,
   s7Server: false,
   networkSockets: null,
+  // Arduino targets speak RTU over USB always; some also speak TCP
+  // via an ethernet shield. Both flagged available — the actual
+  // user-facing protocol selector picks between them at debug time.
   debuggerTransports: ['modbus-serial', 'modbus-tcp'],
   pythonFunctionBlocks: false,
   arduinoApiCompletions: true,
@@ -172,5 +253,9 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   nativeRetainStore: false,
   plcStateControl: true,
   directUsbUpload: true,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
   isLicensable: false,
 }

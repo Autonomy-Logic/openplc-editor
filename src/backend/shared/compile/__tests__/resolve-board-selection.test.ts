@@ -8,6 +8,12 @@ import {
 } from '../../hardware/board-info-resolver'
 import { resolveBoardSelection } from '../steps/resolve-board-selection'
 
+// ----- Lightweight test wiring -----------------------------------
+//
+// `BoardInfoResolver` is byte-identical between editor and web; we
+// instantiate it directly with simple in-memory hals + package fakes
+// so the test stays platform-agnostic (no node:fs, no IPC).
+
 const noopPackageManager: PackageManagerPort = {
   listInstalled: () => [],
   getInstalledPackageManifest: () => null,
@@ -55,6 +61,9 @@ describe('resolveBoardSelection', () => {
   })
 
   it('classifies the legacy OpenPLC Runtime v3 (compiler=openplc-compiler + name match)', () => {
+    // The v3 daemon and the v4 vPLC share the `openplc-compiler` field
+    // on disk for historical reasons; the name-string check is what
+    // disambiguates them.
     const resolver = makeResolver({ 'OpenPLC Runtime v3': halsEntry({ compiler: 'openplc-compiler' }) })
     const result = resolveBoardSelection(resolver, 'OpenPLC Runtime v3')
     expect(result.ok).toBe(true)
@@ -91,12 +100,16 @@ describe('resolveBoardSelection', () => {
   })
 
   it('adapts BoardBuildInfo into BoardHalsBuildEntry — required fields only when present', () => {
+    // A board with no compilerFlags and no `define` must yield a
+    // boardEntry with the same minimal shape; downstream consumers
+    // dereference these conditionally.
     const resolver = makeResolver({ 'Arduino Mega 2560': halsEntry({ define: 'MEGA_2560' }) })
     const result = resolveBoardSelection(resolver, 'Arduino Mega 2560')
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.boardEntry.platform).toBe('arduino:avr:mega')
       expect(result.boardEntry.define).toBe('MEGA_2560')
+      // Absent compilerFlags must not leak through as empty arrays.
       expect(result.boardEntry.c_flags).toBeUndefined()
       expect(result.boardEntry.cxx_flags).toBeUndefined()
       expect(result.boardEntry.ld_flags).toBeUndefined()
@@ -124,6 +137,8 @@ describe('resolveBoardSelection', () => {
   })
 
   it('resolves VPP-installed boards through the same shape', () => {
+    // The whole point of the resolver: hals + VPP both look the same
+    // to the pipeline, so the caller doesn't branch.
     const pkg: InstalledPackage = {
       packageId: 'com.openplc.arduino',
       version: '0.1.0',
@@ -214,6 +229,7 @@ describe('resolveBoardSelection', () => {
     if (result.ok) {
       expect(result.boardEntry.platform).toBe('FACTS:samd:P1AM-200')
       expect(result.boardEntry.core).toBe('FACTS:samd')
+      // resolvePackageRelativePath fake joins as `${pkg.path}/${rel}`.
       expect(result.boardEntry.precompiledLibraryDir).toBe('/fake/packages/p1am/hal/arduino/lib')
     }
   })

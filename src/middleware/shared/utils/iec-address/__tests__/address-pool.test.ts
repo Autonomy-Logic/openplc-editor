@@ -21,6 +21,8 @@ describe('buildAddressPool', () => {
   })
 
   it('only counts producers whose capability is true', () => {
+    // Runtime v4 (pinMapping=false) ignores pin entries even when the
+    // project data contains them.
     const inputs: PoolInputs = {
       pinMapping: { pins: [{ address: '%QX0.0', alias: 'door' }, { address: '%QX0.1' }] },
     }
@@ -36,6 +38,7 @@ describe('buildAddressPool', () => {
     expect(pool.byAddress.size).toBe(2)
     expect(pool.byAddress.get('%QX0.0')?.source.kind).toBe('pin-mapping')
     expect(pool.byAddress.get('%QX0.0')?.alias).toBe('door')
+    // Empty name should not become an alias.
     expect(pool.byAddress.get('%IX0.3')?.alias).toBeUndefined()
   })
 
@@ -207,10 +210,15 @@ describe('nextFreeAddress', () => {
   it('wraps across byte boundaries for bit addressing', () => {
     const allFirstByte = new Set<string>()
     for (let i = 0; i < 8; i++) allFirstByte.add(`%QX0.${i}`)
+    // First byte fully covered by `allFirstByte`; pool's claims at
+    // %QX0.* are now redundant. Next free is the start of the second byte.
     expect(nextFreeAddress(pool, '%QX', true, undefined, allFirstByte)).toBe('%QX1.0')
   })
 
   it('reclaims a gap left by a sparse claim set (byPrefix walk)', () => {
+    // Claims at %IW0, %IW1, %IW3 (skipping 2) and %IW10 (big gap).
+    // The gap-find should return %IW2, not extend past the highest
+    // claim.
     const sparse = buildAddressPool(
       {
         vendorIoMapping: {
@@ -265,11 +273,15 @@ describe('isAddressClaimed / listClaims', () => {
       vppOnlyCaps,
     )
     const claims = listClaims(pool)
+    // Within each prefix the order is by index. Order across prefixes
+    // is insertion order (first time a claim with that prefix was
+    // seen). The inputs introduce %IW first, then %QW.
     expect(claims.map((c) => c.address)).toEqual(['%IW1', '%IW5', '%QW3'])
   })
 })
 
 describe('target scoping releases claims when capabilities change', () => {
+  // Same project data — different active targets produce different pools.
   const inputs: PoolInputs = {
     pinMapping: { pins: [{ address: '%QX0.0', alias: 'pin' }] },
     vendorIoMapping: {
@@ -310,6 +322,7 @@ describe('target scoping releases claims when capabilities change', () => {
 
   it('Simulator: modbus-remote + ethercat enabled (no-ops), no pins', () => {
     const pool = buildAddressPool(inputs, simCaps)
+    // pinMapping is false on Simulator — pin claim is dropped.
     expect(Array.from(pool.byAddress.keys()).sort()).toEqual(['%MW5'])
   })
 })

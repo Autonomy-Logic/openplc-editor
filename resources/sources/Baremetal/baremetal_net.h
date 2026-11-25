@@ -33,6 +33,11 @@ without a Modbus server impossible.
 #include <Client.h>
 #include <stdint.h>
 
+// The generated `defines.h` carries the board identity (BOARD_LOGO8, ...) and
+// the interface kind (MBTCP_ETHERNET / MBTCP_WIFI) the adapter selection keys
+// on. It has no include guard, so the project routes it through exactly one
+// path -- `modbus_config.h` -- and every gated TU picks it up from there. This
+// is a dependency on the build configuration, not on Modbus.
 #include "modbus_config.h"
 
 /** How an outbound Connection reaches the stack: through the library client
@@ -42,12 +47,22 @@ without a Modbus server impossible.
 #define BM_NET_CONNECT_LWIP   1
 #define BM_NET_CONNECT_MBED   2
 
+// ---------------------------------------------------------------------------
+// Adapter selection: the only board-conditional block in the network layer.
+// Most specific target first, interface-kind defines last, hard stop when
+// nothing matches.
+// ---------------------------------------------------------------------------
 #if defined(BOARD_LOGO8)
+    // Energia lwIP <Ethernet.h>, deliberately without <SPI.h>: there is no SPI
+    // Ethernet shield on this variant and the core's <SPI.h> hard-errors.
     #include <Ethernet.h>
     typedef EthernetServer bm_server_impl_t;
     typedef EthernetClient bm_client_impl_t;
 
 #elif defined(BOARD_ESP32)
+    // Covers both interfaces on purpose: on the ESP32 the RMII Ethernet MAC and
+    // the Wi-Fi station share one lwIP netif, so `WiFiServer` is the listening
+    // socket for either. There is no `EthernetServer` in this core.
     #include <WiFi.h>
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
@@ -136,11 +151,16 @@ private:
     typedef bm_net::NinaClient bm_client_impl_t;
 
 #elif defined(BOARD_PICOW) && defined(MBTCP_WIFI)
+    // Route-qualified: BOARD_PICOW names the CYW43 WiFi, and a Pico W with an
+    // SPI Ethernet module must fall through to the MBETH_SPI branch below
+    // rather than be handed a WiFiServer for a chip it is not talking to.
     #include <WiFi.h>
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
 
 #elif defined(BOARD_PORTENTA) && defined(MBTCP_WIFI)
+    // Same rule for the WiFi-shape boards. On mbed, WiFiS3 and the esp32 core
+    // alike this name resolves to that core's own WiFiServer.
     #include <WiFi.h>
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
@@ -154,6 +174,8 @@ private:
     #endif
 
 #elif defined(MBETH_MBED_LWIP)
+    // mbed lwIP MAC (Portenta, Giga, Portenta Machine Control). No <SPI.h>:
+    // there is no module on the bus.
     #include <Ethernet.h>
     typedef EthernetServer bm_server_impl_t;
     typedef EthernetClient bm_client_impl_t;
@@ -163,6 +185,10 @@ private:
     #endif
 
 #elif defined(MBETH_SPI)
+    // Generic SPI Ethernet module. Reached only by targets that genuinely use
+    // one, because every chip with its own MAC is named above. Which driver
+    // comes from the project's Network screen via MBTCP_ETH_ENC28J60; the class
+    // names are identical either way, so only the include differs.
     #include <SPI.h>
     #if defined(MBTCP_ETH_ENC28J60)
         #include <EthernetENC.h>
@@ -191,6 +217,11 @@ private:
     #define BM_NET_CLOSE_WAITS 0
 #endif
 
+// Slot budget. A slot is an Arduino `Client` handle, not a protocol buffer, so
+// this is sized for TCP churn rather than sessions. OPC-UA asks for
+// maxSessions + 5 so a live connection overlapping a not-yet-reaped one cannot
+// fill the table; S7 asks for maxClients + 1 so a connection arriving at the
+// ceiling can be refused politely rather than dropped at the TCP layer.
 #if OPCUA_ENABLED
 #  define BM_NET_OPCUA_SLOTS (OPCUA_MAX_SESSIONS + 5)
 #else
@@ -218,7 +249,12 @@ private:
 
 namespace bm_net {
 
-/** One listening socket. */
+/** One listening socket.
+ *
+ *  A class rather than a `listen(port)` free function because every Arduino
+ *  server object is constructed with its port and is not reliably copyable or
+ *  assignable across cores. Accepted clients go into the shared pool, so
+ *  `release()` and `can_send()` are free functions. */
 class Listener
 {
 public:
@@ -232,7 +268,11 @@ public:
      *  comment. Idempotent; returns false only if the port could not be opened. */
     bool begin();
 
-    /** Next newly-connected client on this listener, or nullptr. */
+    /** Next newly-connected client on this listener, or nullptr.
+     *
+     *  The returned pointer is to shared-pool storage, so it stays valid until
+     *  `release()`. Deliberately not a `Client` by value: the concrete
+     *  `accept()` on every Arduino server returns a temporary. */
     Client* accept();
 
     /** Close this listener. Does not touch clients -- they are the pool's. */
@@ -242,13 +282,19 @@ private:
     bm_server_impl_t impl_;
     bool             started_;
     uint8_t          reserve_;
-    uint8_t          id_;
+    uint8_t          id_;      // which slots in the shared pool are ours
 };
 
 /** Hand a client slot back. Closes the connection if still open. */
 void release(Client* client);
 
-/** Can `need` bytes be queued on `client` right now without blocking? */
+/** Can `need` bytes be queued on `client` right now without blocking?
+ *
+ *  Arduino's abstract `Client` has no such query -- `availableForWrite()` is
+ *  declared on the concrete classes, not the base -- so the seam asks on the
+ *  caller's behalf. It matters because `write()` blocks: Energia's spins on
+ *  `delay(1)` until lwIP's send buffer drains, which inside a scan cycle is
+ *  unbounded. */
 bool can_send(const Client* client, size_t need);
 
 /** Service the stack. A no-op on cores whose driver is interrupt-driven; the
@@ -336,7 +382,7 @@ private:
 
 #endif
 
-}
+} // namespace bm_net
 
-#endif
-#endif
+#endif // BM_NET_ENABLED
+#endif // BAREMETAL_NET_H

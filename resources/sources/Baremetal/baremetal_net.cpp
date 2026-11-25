@@ -190,18 +190,26 @@ bool room_for(bm_client_impl_t& client, size_t need)
 
 namespace {
 
-/** Client storage, shared by every listener. */
+/** Client storage, shared by every listener.
+ *
+ *  Concrete objects, not `Client*`, and owned here because every Arduino
+ *  server's `accept()` returns a client by value, so a pointer handed upward has
+ *  to point at storage that outlives the call. `in_use` rather than
+ *  `connected()` because a slot stays ours between the peer closing and the
+ *  server noticing. */
 struct Slot
 {
     bm_client_impl_t client;
     bool             in_use;
-    uint8_t          owner;
+    uint8_t          owner;   // which Listener took it
 };
 
 Slot g_slots[BM_NET_MAX_CLIENTS];
 bool g_pool_ready = false;
 
-/** Listener ids are handed out in construction order. */
+/** Listener ids are handed out in construction order. Kept here rather than on
+ *  the Listener because the admission test has to ask about the other
+ *  listeners. */
 #define BM_NET_MAX_LISTENERS 4
 uint8_t g_next_listener_id = 0;
 uint8_t g_reserves[BM_NET_MAX_LISTENERS] = { 0, 0, 0, 0 };
@@ -251,7 +259,7 @@ void ensure_pool()
     g_pool_ready = true;
 }
 
-}
+} // namespace
 
 Listener::Listener(uint16_t port, uint8_t reserve)
     : impl_(port), started_(false), reserve_(reserve), id_(g_next_listener_id)
@@ -268,6 +276,10 @@ bool Listener::begin()
 
     ensure_pool();
 
+    // No Ethernet.begin() / WiFi.begin() here: the interface is already up,
+    // configured by Modbus TCP from the project's network screen before the PLC
+    // started scanning. Re-initialising it would reset the link out from under a
+    // live Modbus session and, on a static-IP build, put two claims on one address.
     impl_.begin();
     started_ = true;
     return true;
@@ -278,13 +290,24 @@ Client* Listener::accept()
     if (!started_)
         return nullptr;
 
+    // accept(), not available(). available() hands back any established
+    // connection, round-robin, whether or not it is new, so a server keeping
+    // per-connection state cannot tell an arrival from a peer it already holds.
+    // accept() hands each connection over exactly once, which is what Arduino
+    // Ethernet >= 2.0 and the ESP32 core both settled on.
     bm_client_impl_t incoming = impl_.accept();
     if (!incoming)
         return nullptr;
 
+    // Below our own floor we are always served. Above it we may take a slot only
+    // if that still leaves every other listener able to reach its floor;
+    // otherwise a protocol in a reconnect burst empties the pool under a quieter one.
     const uint8_t mine = held_by(id_);
     if (mine >= reserve_ && free_slots() <= owed_to_others(id_))
     {
+        // Nothing left. Drop it now rather than leaving it half-accepted: a
+        // client refused at the TCP layer retries immediately, and a connection
+        // we neither serve nor close sits in the backlog.
         OPCUA_LOG("[net] accept REFUSED (listener %u holds %u/%u, %u free, %u owed)",
                   (unsigned)id_, (unsigned)mine, (unsigned)reserve_,
                   (unsigned)free_slots(), (unsigned)owed_to_others(id_));
@@ -324,6 +347,7 @@ bool can_send(const Client* client, size_t need)
         if (g_slots[i].in_use &&
             static_cast<const Client*>(&g_slots[i].client) == client)
         {
+            // The concrete type is the whole reason this lives here.
 #if defined(BM_NET_NINA)
             return need <= 0xFFFFu;
 #else
@@ -343,6 +367,9 @@ void release(Client* client)
     {
         if (g_slots[i].in_use && static_cast<Client*>(&g_slots[i].client) == client)
         {
+            // Unconditional. A handle whose slot was recycled under us is
+            // detected inside EthernetClient, where stop() is a no-op rather
+            // than a teardown of whoever owns the slot now.
             g_slots[i].client.stop();
             g_slots[i].in_use = false;
             return;
@@ -354,6 +381,9 @@ void release(Client* client)
 
 void poll()
 {
+    // Every adapter selected in baremetal_net.h drives its stack from an
+    // interrupt, so there is nothing cooperative to service here today. The hook
+    // is kept so callers never have to learn which stack they are on.
 }
 
 #if BM_NET_MAX_CLIENTS > 0
@@ -410,7 +440,7 @@ ConnStatus Connection::poll()
 }
 #endif
 
-}
+} // namespace bm_net
 
 #if BM_NET_MASTER_SLOTS > 0 && BM_NET_CONNECT == BM_NET_CONNECT_LWIP
 
@@ -769,4 +799,4 @@ void Connection::close()
 
 #endif
 
-#endif
+#endif // BM_NET_ENABLED

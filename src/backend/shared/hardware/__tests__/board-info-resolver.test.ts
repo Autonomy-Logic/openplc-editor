@@ -12,7 +12,9 @@ import {
 const SOURCES_DIR = '/fake/resources/sources'
 const PKG_PATH = '/fake/user-data/packages/com.openplc.arduino'
 
-// Editor-style adapters used by these tests.
+// Editor-style adapters used by these tests.  Real editor passes the
+// same shape (filesystem-backed path joins); web will pass its own
+// browser-friendly equivalents when VPP-on-web lands.
 const halsSourcePath = (rel: string): string => join(SOURCES_DIR, 'hal', rel)
 const packageRelative = (pkgPath: string, relPath: string): string => {
   const root = resolve(pkgPath)
@@ -137,6 +139,9 @@ describe('BoardInfoResolver', () => {
     })
 
     it('emits partial compilerFlags when only c_flags is set (cxx/ld omitted)', () => {
+      // Each flag array is independently optional in `#collectFlags`;
+      // a board may declare only one without forcing the others. The
+      // resolver must not synthesise empty arrays.
       const r = makeResolver({ 'Some Board': makeHalsEntry({ c_flags: ['-MMD'] }) }, makePackageManager([], {}))
       const info = r.resolve('Some Board')
       expect(info.compilerFlags).toEqual({ c_flags: ['-MMD'] })
@@ -158,8 +163,13 @@ describe('BoardInfoResolver', () => {
     })
 
     it('omits core / platform / halSourceFile when those hals fields are absent', () => {
+      // The schema marks all three as optional; the resolver must not
+      // attach `undefined` keys to the result (downstream callers do
+      // truthy checks).
       const r = makeResolver(
         {
+          // Type-system shortcut: a HalsBoardEntry minimally requires
+          // `compiler`, the other fields are optional.
           Minimal: { compiler: 'arduino-cli' } as HalsBoardEntry,
         },
         makePackageManager([], {}),
@@ -171,6 +181,9 @@ describe('BoardInfoResolver', () => {
     })
 
     it('propagates entry.debug (DebugSpec) onto BoardBuildInfo for hals entries', () => {
+      // The renderer pulls `.debug` to decide whether the toolbar's
+      // debug button should be enabled (and which transport to wire).
+      // No `debug` on the entry must produce no `.debug` on the info.
       const debugSpec = {
         channels: [
           {
@@ -347,6 +360,17 @@ describe('BoardInfoResolver', () => {
       ])
     })
 
+    // ---------------------------------------------------------------------
+    // Licensing fields (hal.licenseStore / hal.licenseKeyId)
+    //
+    // `hal.licenseStore` resolves to BUILD INPUTS and nothing else. There is no
+    // capability mirroring it: every licensable VPP targets hardware that
+    // persists a licence, so a second derived boolean would be true wherever
+    // `isLicensable` is. These pin that the paths resolve and that the
+    // capability block is passed through untouched.
+    // ---------------------------------------------------------------------
+
+    /** A licensed-VPP device, with whatever licensing fields the test is about. */
     function licensedDevice(hal: Record<string, unknown>) {
       return {
         id: 'esp32-generic',
@@ -370,8 +394,13 @@ describe('BoardInfoResolver', () => {
         licenseKeyId: 'espressif-licensed-2026',
       })
 
+      // Asserted through the same platform-supplied resolver the production code
+      // is handed, which is the actual contract — hard-coding a joined path bakes
+      // in POSIX assumptions the resolver does not make.
       expect(info.licenseStoreFiles).toEqual([packageRelative(PKG_PATH, 'hal/arduino/license_store_esp32.cpp')])
       expect(info.licenseKeyId).toBe('espressif-licensed-2026')
+      // The capability block is whatever the manifest declared — nothing derived
+      // into it, so it cannot disagree with `licenseStoreFiles`.
       expect(info.capabilities).toEqual({ isLicensable: true })
     })
 
@@ -386,6 +415,8 @@ describe('BoardInfoResolver', () => {
     })
 
     it('resolves no store files for a licensable VPP that ships no backend', () => {
+      // A PACKAGING fault, not a device state: the compiler warns, and the board
+      // links the weak default and reports its storage as missing.
       const info = resolveLicensed({})
 
       expect(info.licenseStoreFiles).toBeUndefined()
@@ -393,6 +424,8 @@ describe('BoardInfoResolver', () => {
     })
 
     it('treats a blank licenseStore as absent rather than resolving it to the package root', () => {
+      // `''` would resolve to PKG_PATH itself and read as "storage present",
+      // advertising a backend that is not there.
       const info = resolveLicensed({ licenseStore: '   ' })
 
       expect(info.licenseStoreFiles).toBeUndefined()
@@ -432,6 +465,9 @@ describe('BoardInfoResolver', () => {
     })
 
     it('propagates device.debug (DebugSpec) onto BoardBuildInfo for VPP devices', () => {
+      // Same renderer-side consumer as the hals branch above (Debug
+      // button enable state); the VPP path goes through `#fromVppDevice`,
+      // so we need an independent regression here.
       const debugSpec = {
         channels: [
           {

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
+/*
+modbus_crc.cpp - Modbus RTU CRC-16 for the OpenPLC Modbus slave
+*/
 
 #include "modbus_crc.h"
+// mb_frame / mb_frame_len come from the shared frame TU. Until T3 of the
+// modularization they are declared in ModbusSlave.h; afterwards in modbus_frame.h.
 #include "ModbusSlave.h"
 
 /* Table of CRC values for high-order byte */

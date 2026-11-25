@@ -29,7 +29,18 @@ import type {
   S7CommSystemArea,
 } from '../../../../middleware/shared/ports/types'
 
-/** Which set of variables an action works on. */
+// ---------------------------------------------------------------------------
+// DTOs
+// ---------------------------------------------------------------------------
+
+/**
+ * Which set of variables an action works on.
+ *
+ * A Global Variable List's members are variables in the same sense a POU's locals and the
+ * resource globals are: same fields, same validation, same table in the UI. They are a third
+ * scope on the existing actions rather than a parallel set of list-specific ones, so the
+ * declaration editor and the table view cannot drift apart.
+ */
 export type VariableScope = 'global' | 'local' | 'global-variable-list'
 
 export type VariableDTO = {
@@ -70,6 +81,10 @@ export type RemoteDeviceDTO = {
   data: PLCRemoteDevice
 }
 
+// ---------------------------------------------------------------------------
+// Project State
+// ---------------------------------------------------------------------------
+
 export type ProjectState = {
   meta: ProjectMeta
   data: PLCProjectData
@@ -81,6 +96,10 @@ export type ProjectResponse = {
   message?: string
   data?: unknown
 }
+
+// ---------------------------------------------------------------------------
+// Project Actions
+// ---------------------------------------------------------------------------
 
 export type ProjectActions = {
   // Project state
@@ -110,9 +129,25 @@ export type ProjectActions = {
   deletePou: (name: string) => void
   updatePouDocumentation: (name: string, documentation: string) => void
   updatePouReturnType: (name: string, returnType: string) => void
-  /** Store a POU's declaration text. */
+  /**
+   * Store a POU's declaration text.
+   *
+   * `unparsed` records whether that text is known NOT to parse — the loader's
+   * verdict, which decides whether the POU opens in the code view so the user
+   * can repair it. Every other caller writes a text that came out of a
+   * successful parse or patch, so the default clears the mark rather than
+   * leaving a stale one behind.
+   */
   setPouVariablesText: (name: string, text: string, unparsed?: boolean) => void
-  /** Patch a POU's declaration text to match its variables, and carry the result into an open code buffer. */
+  /**
+   * Patch a POU's declaration text to match its variables, and carry the result
+   * into an open code buffer.
+   *
+   * The same step every variable mutation in this slice runs, exposed for the
+   * cascades that live outside it — a data type rename reaches POU variables
+   * through `propagateDatatypeRename`, and the text has to follow or the old
+   * type name comes back on the next toggle to code view.
+   */
   regeneratePouVariablesText: (name: string) => void
   clearPouVariablesText: (name: string) => void
   updatePouName: (oldName: string, newName: string) => void
@@ -387,11 +422,17 @@ export type ProjectActions = {
   updateEthercatConfig: (deviceName: string, ethercatConfig: EthercatConfig) => ProjectResponse
 }
 
+// ---------------------------------------------------------------------------
+// Slice
+// ---------------------------------------------------------------------------
+
 export type ProjectSlice = {
   project: ProjectState
   /** Relative file paths queued for deletion on next full project save. */
   pendingDeletions: string[]
-  /** Raw `datatypes/*.dt` files that failed to parse on load. */
+  /** Raw `datatypes/*.dt` files that failed to parse on load.  Echoed
+   *  back verbatim by the save flow until they parse — an unreadable
+   *  file must never be silently dropped from disk. */
   unparsedDataTypeFiles: RawProjectFile[]
   /** True while the project still carries its data types inline in
    *  `project.json` with no `datatypes/*.dt` on disk. A single-file save of one
@@ -409,6 +450,18 @@ export type ProjectSlice = {
   projectActions: ProjectActions
 }
 
+/**
+ * Cross-slice root-state view the project slice needs at runtime —
+ * `setDeviceDefinitions` / `setVendorScreenData` lives in the device
+ * slice, `addLog` lives in the console slice, both consumed by the
+ * alias-sync flow. Keeps the slice creator's `getState()` typed
+ * properly instead of relying on `as unknown as { ... }` casts.
+ *
+ * Slice types are imported via dynamic `type-only` style — declared
+ * up here in `types.ts` rather than `slice.ts` so the project slice
+ * has a single source of truth for cross-slice shape without
+ * circular module deps.
+ */
 import type { ConsoleSlice } from '../console'
 import type { DeviceSlice } from '../device'
 import type { EditorSlice } from '../editor/types'

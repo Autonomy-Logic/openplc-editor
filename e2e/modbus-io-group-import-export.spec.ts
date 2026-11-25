@@ -1,3 +1,12 @@
+/**
+ * Import and export of a Modbus remote device's IO groups (Remote Devices > IO Tag Mapping).
+ *
+ * Exports to CSV and JSON, rejects bad files without touching the device, appends and replaces
+ * groups through the preview, gives imported groups their IEC addresses, keeps the form's name
+ * limit, and builds the project with the imported groups in the Modbus master configuration.
+ *
+ * Needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
+ */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -123,6 +132,7 @@ function writeFixture(): void {
     ]),
   )
   writeFileSync(join(history, 'libraries.json'), '[]')
+  // A fresh profile has no Arduino control files, and without them the board list never loads.
   const runtime = join(USER_DATA, 'User', 'Runtime')
   mkdirSync(runtime, { recursive: true })
   writeFileSync(join(runtime, 'arduino-core-control.json'), '[]')
@@ -134,26 +144,30 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
     args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${USER_DATA}`],
     env: { ...process.env, NODE_ENV: 'production' },
   })
+  // The app opens a splash window first; pick the real one by URL.
   const deadline = Date.now() + 60000
   while (Date.now() < deadline) {
     for (const w of app.windows()) {
       try {
         if (w.url().includes('index.html')) {
           await w.waitForLoadState('domcontentloaded')
+          // Below ~1024px wide the app shows its "not supported on mobile" screen.
           await app.evaluate(({ BrowserWindow }) => {
             const win = BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().includes('index.html'))
             win?.setSize(1500, 950)
           })
           return { app, page: w }
         }
-      } catch {}
+      } catch {
+        /* window is closing; skip it */
+      }
     }
     await new Promise((r) => setTimeout(r, 500))
   }
   throw new Error('main window never appeared')
 }
 
-/** Sends the save accelerator to the main window. */
+/** Ctrl+S is a native menu accelerator, which Playwright's keyboard never reaches. */
 const save = (app: ElectronApplication) =>
   app.evaluate(({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
@@ -205,6 +219,7 @@ test.beforeAll(async () => {
   test.setTimeout(180000)
   writeFixture()
   ;({ app, page } = await launch())
+  // Exports go through a browser download; save them without the native dialog.
   await app.evaluate(({ session }, dir) => {
     session.defaultSession.on('will-download', (_event, item) => item.setSavePath(`${dir}/${item.getFilename()}`))
   }, DOWNLOADS)
@@ -315,7 +330,9 @@ async function expectTooltipOn(cell: ReturnType<Page['getByTestId']>, full: stri
   await page.mouse.move(box.x - 20, box.y + box.height / 2)
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 })
   await expect(page.getByTestId('truncated-text-tooltip').first()).toContainText(full)
+  // Radix repeats the content in a hidden role="tooltip" node for screen readers.
   await expect(page.getByRole('tooltip')).toHaveText(full)
+  // Slide away below the cell; Radix keeps the tooltip while the pointer may still be heading to it.
   await page.mouse.move(box.x + box.width / 2, box.y + box.height * 6, { steps: 10 })
   await expect(page.getByRole('tooltip')).toHaveCount(0)
 }
@@ -360,6 +377,7 @@ test('replacing with an edited export swaps the device groups for the file', asy
   const before = storedGroups()
   const exported: { format: string; version: number; ioGroups: Array<{ name: string; cycleTime: number }> } =
     JSON.parse(await exportAs(page, 'json'))
+  // Drop COILS, rename TEMPS and change its cycle time, keep the rest as exported.
   const edited = {
     ...exported,
     ioGroups: exported.ioGroups
@@ -385,6 +403,7 @@ test('replacing with an edited export swaps the device groups for the file', asy
     '%IW5',
   ])
   expect(long.length).toBe(1)
+  // Every group was recreated, the ones whose name did not change included.
   const beforeIds = new Set(before.map((g) => g.id))
   expect(after.filter((g) => beforeIds.has(g.id))).toEqual([])
   expect(existing.id).not.toBe('existing')
@@ -419,6 +438,7 @@ test('the project builds with the imported groups in the Modbus master configura
 
   const build = join(FIXTURE, 'build')
   await expect.poll(() => findFile(build, 'program.st') !== undefined, { timeout: 240000 }).toBe(true)
+  // Read the file only once it is complete JSON.
   const readMaster = (): MasterDevice[] | null => {
     const path = findFile(build, 'modbus_master.json')
     if (!path) return null

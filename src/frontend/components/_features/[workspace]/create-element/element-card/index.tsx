@@ -68,8 +68,8 @@ const RemoteDeviceProtocolSources = [
   { value: 'profinet', label: 'PROFINET', disabled: true },
 ] as const
 
-// eslint-disable-next-line no-empty
 {
+  /** TODO: Need to be implemented - Sequential Functional Chart and Functional Block Diagram */
 }
 
 const getBlockedLanguageStyle = (isBlocked: boolean) =>
@@ -105,6 +105,15 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     formState: { errors: datatypeErrors },
   } = useForm<CreateDataTypeFormProps>()
 
+  // Pre-filled `GVL` because that is what CODESYS's Add Object offers, and a project
+  // converted from one arrives with a list of exactly that name.
+  //
+  // The string is also a sentinel elsewhere: `utils/opcua/resolve-indices.ts` treats
+  // `pouName === 'GVL'` as "the resource's global scope". The two do not meet — the
+  // OPC-UA variable tree is built from `configurations.resource.globalVariables`, which
+  // a list's members are not part of, and a list reaches the compiler as a struct
+  // instance rather than as a scope. Considered and left alone; renaming the sentinel
+  // would break saved OPC-UA node indices for no gain.
   const {
     register: globalVariableListRegister,
     handleSubmit: handleSubmitGlobalVariableList,
@@ -144,9 +153,16 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const isSimulator = isSimulatorTarget(currentBoardInfo)
   const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard, currentBoardInfo)
 
+  // Since 4.3.0 a baremetal board's Modbus is an ordinary `PLCServer`, so the
+  // "+" flow asks for a name and a protocol on every target alike. What the
+  // profile still decides is whether this target serves Modbus at all.
   const modbusProfile = resolveModbusServerProfile(currentBoardInfo)
   const targetServesModbus = modbusProfile.transports.length > 0
 
+  // Offering a protocol the target cannot serve is the same defect as hiding
+  // one it can: an Arduino declares `opcuaServer: false, s7Server: false`, and
+  // a server created there would sit in the tree producing nothing. The list
+  // stays whole so the user can see the option and why it is out.
   const targetCaps = resolveTargetCapabilities(currentBoardInfo)
   const serverProtocolOptions = ServerProtocolSources.map((protocol) => {
     if (protocol.disabled) return protocol
@@ -190,6 +206,10 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const handleCreateGlobalVariableList: SubmitHandler<CreateGlobalVariableListFormProps> = (data) => {
     const created = createGlobalVariableList(data.name)
     if (!created.ok) {
+      // Carry the reason through. A list occupies two symbols in one namespace —
+      // its own name and `<name>_TYPE` — so the refusal is often about a POU or a
+      // data type, and the generic "already exists" would send the user looking
+      // for a list that isn't there.
       globalVariableListSetError('name', { type: 'already-exists', message: created.message })
       toast({
         title: 'Invalid global variable list',
@@ -213,8 +233,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateDatatype: SubmitHandler<CreateDataTypeFormProps> = (data) => {
+    // Name and derivation only: `datatypeActions.create` builds the datatype itself
+    // through `createDatatypeObject`, so any seed passed here would be discarded.
     const created = createDatatype({ name: data.name, derivation: data.derivation })
     if (!created.ok) {
+      // The refusal is often about a POU or a global variable list, not another data
+      // type, so the reason has to reach the user — the form used to close on failure
+      // with nothing created and nothing said.
       datatypeSetError('name', { type: 'already-exists', message: created.message })
       toast({
         title: 'Invalid data type',
@@ -332,6 +357,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                       {datatypeErrors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                          {/* The store's reason when it gave one — it names the POU or list
+                              actually in the way, which the generic wording cannot. */}
                           * {datatypeErrors.name.message ?? 'data type name already exists'}
                         </span>
                       )}
@@ -449,6 +476,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                       {globalVariableListErrors.name?.type === 'already-exists' ? (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                          {/* The store's reason when it gave one — it names the POU or data type
+                              actually in the way, which the generic wording cannot. */}
                           *{' '}
                           {globalVariableListErrors.name.message ??
                             'a global variable list with this name already exists'}
