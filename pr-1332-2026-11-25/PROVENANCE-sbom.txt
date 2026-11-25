@@ -1,0 +1,3 @@
+commit: cc4b3bf874628deae0cdf71bc1ac20ec18ee342a
+ref: main
+run: https://github.com/Autonomy-Logic/openplc-editor/actions/runs/45723211080
