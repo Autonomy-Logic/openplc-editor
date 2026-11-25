@@ -134,6 +134,7 @@ async function buildDefines(
   await runCompilePipeline(
     {
       projectData,
+      hmi: null,
       boardTarget: 'Board',
       boardRuntime: 'arduino-cli',
       boardEntry,

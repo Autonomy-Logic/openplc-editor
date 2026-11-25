@@ -233,6 +233,7 @@ async function build(target: Target, options: BuildOptions = {}) {
   const result = await runCompilePipeline(
     {
       projectData,
+      hmi: null,
       ...TARGETS[target],
       ...(options.boardEntry ? { boardEntry: options.boardEntry } : {}),
       devicePinMapping: [] as DevicePin[],
