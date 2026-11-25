@@ -25,7 +25,7 @@ import { isYowaspClang, runClangJob } from '../../src/backend/shared/wasm-toolch
 import { compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
 import { BoundedWasmObjectCache } from '../../src/backend/shared/wasm-toolchain/wasm-object-cache'
 import type { WasmClangRunner } from '../../src/middleware/shared/ports/wasm-toolchain-mechanisms'
-import type { WasmCompileJobTiming, WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-toolchain-types'
+import type { WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-toolchain-types'
 
 const ROOT = join(__dirname, '..', '..')
 const HMI = join(ROOT, 'resources', 'sources', 'hmi')
@@ -59,13 +59,19 @@ function runtimeHeaders(): Record<string, string> {
   return out
 }
 
-async function runner(): Promise<WasmClangRunner> {
+/** The WebAssembly clang in this process; adds the source of each compile job it runs to `compiled`. */
+async function runner(compiled: string[]): Promise<WasmClangRunner> {
   const clang: unknown = await import('@yowasp/clang')
   if (!isYowaspClang(clang)) throw new Error('@yowasp/clang is not the expected module')
   return {
     concurrency: Math.max(1, Math.min(4, cpus().length - 1)),
     prepare: () => Promise.resolve(),
-    run: (job) => runClangJob(clang, job.argv, job.tree),
+    run: (job) => {
+      const at = job.argv.indexOf('-c')
+      if (at >= 0 && at + 1 < job.argv.length) compiled.push(job.argv[at + 1])
+      return runClangJob(clang, job.argv, job.tree)
+    },
+    release: () => Promise.resolve(),
   }
 }
 
@@ -264,7 +270,8 @@ function renderHashes(bh: Bh): string[] {
 }
 
 async function main(): Promise<void> {
-  const clang = await runner()
+  const compiledSources: string[] = []
+  const clang = await runner(compiledSources)
   const cache = new BoundedWasmObjectCache(512 * 1024 * 1024)
   const compile = (request: WasmCompileRequest) => compileToWasm(request, { runner: clang, cache })
   const project = sampleProject()
@@ -290,8 +297,7 @@ async function main(): Promise<void> {
     ['INSTANCE0.UNUSED', 0, 6],
   ].map(([path, arrayIdx, elemIdx]) => ({ path, arrayIdx, elemIdx, type: 'BOOL', size: 1 }))
   const headers = runtimeHeaders()
-  let request: WasmCompileRequest | null = null
-  let jobs: WasmCompileJobTiming[] = []
+  const captured: { request: WasmCompileRequest | null } = { request: null }
 
   const all = readAll(HMI)
   const previewSources = Object.fromEntries(
@@ -302,19 +308,21 @@ async function main(): Promise<void> {
     ),
   )
   const preview = await buildHmiPreview(
-    { ...project, preview: true },
+    project,
     {
       runtimeHeaders: Object.fromEntries(
         Object.entries(headers).map(([path, text]) => [path.slice('strucpp_runtime/include/'.length), text]),
       ),
       hmiSources: previewSources,
       readFont: (file) => Promise.resolve(new Uint8Array(readFileSync(join(HMI, 'fonts', file)))),
+      projectLibraries: project.projectLibraries,
     },
     compile,
   )
   if (!preview.ok) console.log(preview.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
   check(preview.ok, "the screens' preview builds first, with the same compiled objects")
 
+  compiledSources.length = 0
   const start = performance.now()
   const artefact = await composeHmiArtefact({
     sources: project,
@@ -326,15 +334,14 @@ async function main(): Promise<void> {
     hmiSources: readAll(HMI),
     runtimeHeaders: headers,
     compile: async (r) => {
-      request = r
-      const result = await compile(r)
-      jobs = result.stats.jobs ?? []
-      return result
+      captured.request = r
+      return compile(r)
     },
   })
-  const library = jobs.filter((j) => j.source.startsWith('hmilib/'))
+  const libraryUnits = captured.request?.units.map((u) => u.source) ?? []
   check(
-    library.length > 0 && library.every((j) => j.cached),
+    libraryUnits.some((source) => source.startsWith('hmilib/')) &&
+      !compiledSources.some((source) => source.startsWith('hmilib/')),
     "hmi.wasm links the widget library objects the preview compiled, compiling none of the library's units",
   )
   if (!artefact.ok) throw new Error(artefact.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
@@ -411,12 +418,15 @@ async function main(): Promise<void> {
       !ascii.includes('Enter PIN') && !ascii.includes('Wrong PIN'),
       "the panel's PIN entry is not linked into hmi.wasm (the browser host never calls it)",
     )
-    const compiledRequest: WasmCompileRequest | null = request
+    const compiledRequest = captured.request
     check(
       compiledRequest !== null &&
         Object.entries(compiledRequest.files).every(
           ([path, f]) =>
-            path.endsWith('hmi_fonts.c') || !/97531864|hmi_panel_pin\s*\[\]\s*=|hmi_relock_minutes\s*=/.test(f),
+            path.endsWith('hmi_fonts.c') ||
+            !/97531864|hmi_panel_pin\s*\[\]\s*=|hmi_relock_minutes\s*=/.test(
+              typeof f === 'string' ? f : new TextDecoder().decode(f),
+            ),
         ),
       'the browser module is compiled without the PIN or the relock time',
     )
@@ -495,7 +505,7 @@ async function main(): Promise<void> {
       replay.fn('hmi_bh_frame')((i + 1) * 100)
       wasmHashes.push(...renderHashes(replay))
     })
-    const compiled: WasmCompileRequest | null = request
+    const compiled = captured.request
     if (!compiled) throw new Error('no compile request')
     const src = join(work, 'src')
     for (const [path, content] of Object.entries(compiled.files)) {

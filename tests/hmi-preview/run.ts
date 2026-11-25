@@ -20,7 +20,11 @@ import { buildHmiPreview, type HmiPreviewResources } from '../../src/backend/sha
 import { createHmiPreviewPort } from '../../src/backend/shared/hmi/preview/hmi-preview-port'
 import { serveHmiPreview } from '../../src/backend/shared/hmi/preview/preview-worker'
 import { HmiPreviewInstance } from '../../src/backend/shared/hmi/preview/preview-instance'
-import { buildHmiWidgetCatalog, WIDGET_PREVIEW_SCREEN } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
+import {
+  buildHmiWidgetCatalog,
+  WIDGET_PREVIEW_ELEMENT,
+  WIDGET_PREVIEW_SCREEN,
+} from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
 import { installedWidgetArchives } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/widget-libraries'
 import { compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
@@ -31,7 +35,11 @@ import type {
   HmiPreviewWorkerScope,
 } from '../../src/middleware/shared/ports/hmi-preview-mechanisms'
 import type { WasmClangRunner, WasmObjectStore } from '../../src/middleware/shared/ports/wasm-toolchain-mechanisms'
-import type { HmiPreviewBuild, HmiWidgetCatalog } from '../../src/middleware/shared/ports/hmi-preview-types'
+import {
+  type HmiPreviewBuild,
+  type HmiWidgetCatalog,
+  WIDGET_PREVIEW_MARGIN,
+} from '../../src/middleware/shared/ports/hmi-preview-types'
 import type { WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-toolchain-types'
 import { liveValue } from '../../src/middleware/shared/utils/hmi/designer/designer-canvas'
 import { withTheirPipes } from '../../src/middleware/shared/utils/hmi/designer/designer-diagram'
@@ -51,10 +59,6 @@ import {
   liveSetter,
 } from '../../src/middleware/shared/utils/hmi/designer/designer-live-module'
 import { type DesignerModel, parseDesignerBlock } from '../../src/middleware/shared/utils/hmi/designer/designer-model'
-import {
-  formatHmiPreviewTimings,
-  type HmiPreviewRunTimings,
-} from '../../src/middleware/shared/utils/hmi/preview-timings'
 
 const ROOT = join(__dirname, '..', '..')
 const HMI = join(ROOT, 'resources', 'sources', 'hmi')
@@ -111,21 +115,49 @@ const runner = (): Promise<WasmClangRunner & { end(): Promise<void> }> => Promis
 
 const elapsed = (start: number): number => Math.round(performance.now() - start)
 
+/** How long a built module took to start in this process and to draw its first frame, in ms. */
+interface HmiPreviewRunTimings {
+  startMs: number
+  firstFrameMs: number
+}
+
+/** A runner that passes every job to `runner` and adds the source of each compile job to `sources`. */
+function recordingRunner(runner: WasmClangRunner, sources: string[]): WasmClangRunner {
+  return {
+    get concurrency() {
+      return runner.concurrency
+    },
+    prepare: () => runner.prepare(),
+    run: (job) => {
+      const at = job.argv.indexOf('-c')
+      if (at >= 0 && at + 1 < job.argv.length) sources.push(job.argv[at + 1])
+      return runner.run(job)
+    },
+    setHeld: (held) => runner.setHeld?.(held),
+    retry: () => runner.retry?.(),
+    release: () => runner.release(),
+  }
+}
+
 /** Starts a built module and draws its first frame, timing both. */
 async function startAndDraw(wasm: Uint8Array): Promise<HmiPreviewRunTimings> {
   let start = performance.now()
   const instance = await HmiPreviewInstance.create(wasm, WIDTH, HEIGHT)
-  const startMs = performance.now() - start
+  const startMs = elapsed(start)
   start = performance.now()
   instance.frame(0)
   instance.render(WIDTH, HEIGHT, 1)
-  return { startMs, firstFrameMs: performance.now() - start }
+  return { startMs, firstFrameMs: elapsed(start) }
 }
 
-/** Prints where a build spent its time, with the start and first frame of its module. */
+/** Prints the units a build compiled and reused, with the start and first frame of its module. */
 async function breakdown(what: string, build: HmiPreviewBuild): Promise<void> {
-  if (!build.ok || !build.timings) return
-  console.log(`  ${what}: ${formatHmiPreviewTimings(build.timings, build.stats, await startAndDraw(build.wasm))}`)
+  if (!build.ok) return
+  const run = await startAndDraw(build.wasm)
+  const { units, cached } = build.stats
+  console.log(
+    `  ${what}: ${units - cached} of ${units} units compiled, start ${run.startMs} ms, first frame ${run.firstFrameMs} ms`,
+  )
 }
 
 type Listener = (event: MessageEvent<unknown>) => void
@@ -623,16 +655,19 @@ async function main(): Promise<void> {
     instance.show(widget.pages[WIDGET_PREVIEW_SCREEN])
     instance.frame(0)
     const drawn = instance.render(320, 240, 1)
-    const natural = widget.elementIds.find((e) => e.element === 'Natural')
-    const stretched = widget.elementIds.find((e) => e.element === 'Stretched')
-    const box = (id: number | undefined) => instance.bounds().find((b) => b.id === id)
-    const a = box(natural?.id)
-    const b = box(stretched?.id)
-    check(drawn !== null && a !== undefined && b !== undefined, 'the widget block is drawn twice')
+    const block = widget.elementIds.find((e) => e.element === WIDGET_PREVIEW_ELEMENT)
+    const box = instance.bounds().find((b) => b.id === block?.id)
+    const blocks = widget.elementIds.filter((e) => e.screen === WIDGET_PREVIEW_SCREEN && e.element !== 'HMI__Row')
+    check(drawn !== null && box !== undefined && blocks.length === 1, 'the widget block is drawn once')
     check(
-      a !== undefined && b !== undefined && b.width > a.width && b.height > a.height,
-      'the stretched copy is larger than the natural one',
+      box !== undefined &&
+        box.x === WIDGET_PREVIEW_MARGIN &&
+        box.y === WIDGET_PREVIEW_MARGIN &&
+        box.width > 0 &&
+        box.height > 0,
+      'the widget block sits at its preferred size inside the margin',
     )
+    console.log(`  widget block box: ${box ? `${box.x},${box.y} ${box.width}x${box.height}` : 'none'}`)
   }
 
   await liveElementChecks(files, compile)
@@ -641,7 +676,9 @@ async function main(): Promise<void> {
     {
       readHmiSources: () => Promise.resolve({ root: `${HMI}/`, files: readAll(HMI, `${HMI}/`) }),
       readStrucppRuntimeHeaders: () => Promise.resolve(files.runtimeHeaders),
+      readShippedFile: () => Promise.resolve(null),
       compileToWasm: compile,
+      holdToolchain: () => Promise.resolve(),
       startWorker: () => inProcessWorker(true),
       loadLibraries: () => Promise.resolve(installedWidgetArchives()),
       onLibrariesChanged: () => () => undefined,
@@ -671,7 +708,9 @@ async function main(): Promise<void> {
     {
       readHmiSources: () => Promise.resolve({ root: '', files: {} }),
       readStrucppRuntimeHeaders: () => Promise.resolve({}),
+      readShippedFile: () => Promise.resolve(null),
       compileToWasm: compile,
+      holdToolchain: () => Promise.resolve(),
       startWorker: () => inProcessWorker(false),
       loadLibraries: () => Promise.resolve(installedWidgetArchives()),
       onLibrariesChanged: () => () => undefined,
@@ -715,13 +754,13 @@ async function main(): Promise<void> {
       Object.entries(files.runtimeHeaders).map(([name, text]) => [`strucpp_runtime/include/${name}`, text]),
     ),
   })
-  const installed = createWasmCompileService(clang, {
+  const compiledNow: string[] = []
+  const installed = createWasmCompileService(recordingRunner(clang, compiledNow), {
     shipped: { read: (name) => Promise.resolve(shipped[name] ?? null) },
   })
   await installed.prepare()
   start = performance.now()
   const firstEver = await buildHmiPreview(sampleProject(), files, (request) => installed.compile(request))
-  const compiledNow = firstEver.ok ? (firstEver.stats?.jobs ?? []).filter((j) => !j.cached).map((j) => j.source) : []
   console.log(`first build ever with the shipped objects: ${elapsed(start)} ms, compiled ${compiledNow.join(', ')}`)
   check(
     firstEver.ok && compiledNow.length > 0 && compiledNow.every((source) => source.startsWith('groups/')),
