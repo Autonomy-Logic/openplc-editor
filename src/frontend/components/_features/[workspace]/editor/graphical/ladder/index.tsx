@@ -377,7 +377,7 @@ export default function LadderEditor() {
   return (
     <div
       data-testid='ld-pou-canvas'
-      className='h-full w-full overflow-auto'
+      className='h-full w-full overflow-auto outline-none'
       ref={scrollableRef}
       style={{ scrollbarGutter: 'stable' }}
       tabIndex={-1}
