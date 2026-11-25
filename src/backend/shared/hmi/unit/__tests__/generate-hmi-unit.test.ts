@@ -201,25 +201,31 @@ describe('HMI unit generator', () => {
     expect(messages(result)).toEqual([])
     const overview = result.sources['Overview.st']
     const build = /METHOD PROTECTED OVERRIDE Build : BOOL(.*?)END_METHOD/s.exec(overview)?.[1] ?? ''
-    expect(build).toContain('Body.GrowAuto := TRUE;')
-    expect(build).toContain('Col.GrowAuto := TRUE;')
-    expect(build).not.toContain('Level.GrowAuto')
-    expect(build.indexOf('Col.GrowAuto')).toBeLessThan(build.indexOf('Attach('))
+    expect(build).toContain('Body.AutoSize := TRUE;')
+    expect(build).toContain('Col.AutoSize := TRUE;')
+    expect(build).not.toContain('Level.AutoSize')
+    expect(build.indexOf('Col.AutoSize')).toBeLessThan(build.indexOf('Attach('))
     const gallery = generateHmiUnit({ ...sampleProject(), gallery: true, resolve: undefined })
     const source = Object.values(gallery.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_GALLERY_SCREEN}`))
-    expect(source).not.toContain('HMI__Column.GrowAuto')
+    expect(source).not.toContain('HMI__Column.AutoSize')
   })
 
-  it('previews a widget block on an extra screen, at natural size and stretched, with a test value', () => {
+  it('previews a widget block once, at its preferred size, on an extra screen, with a test value', () => {
     const project = sampleProject()
     const result = generateHmiUnit({ ...project, screens: [], widgetPreview: 'badge', resolve: undefined })
     expect(messages(result)).toEqual([])
     const source =
       result.sources[`${WIDGET_PREVIEW_SCREEN}.st`] ??
       Object.values(result.sources).find((t) => t.includes(WIDGET_PREVIEW_SCREEN))
-    expect(source).toContain("Natural : Badge := (Parent := 'HMI__Row', GrowAuto := FALSE);")
-    expect(source).toContain("Stretched : Badge := (Parent := 'HMI__Column', GrowAuto := TRUE);")
-    expect(source).toContain('Natural.Value := TRUE;')
+    expect(source).toContain(
+      "HMI__Widget : Badge := (Parent := 'HMI__Row', Floating := TRUE, MinWidth := 24, MinHeight := 24);",
+    )
+    expect(source).toContain('HMI__Widget.Place(12, 12, HMI__Widget.MeasureWidth(), HMI__Widget.MeasureHeight());')
+    expect(source?.match(/: Badge :=/g)).toHaveLength(1)
+    expect(source).toContain('HMI__Widget.Value := TRUE;')
+    expect(result.elementIds).toContainEqual(
+      expect.objectContaining({ screen: WIDGET_PREVIEW_SCREEN, element: 'HMI__Widget' }),
+    )
     expect(result.preview.units.screens[WIDGET_PREVIEW_SCREEN]).toBeDefined()
     expect(generateHmiUnit(project).sources).not.toHaveProperty([`${WIDGET_PREVIEW_SCREEN}.st`])
   })
@@ -236,7 +242,7 @@ describe('HMI unit generator', () => {
     expect(shown.some((w) => /^Hmi(Stack|Diagram|Pipe)$/.test(w))).toBe(false)
     expect(new Set(result.elementIds.map((e) => e.screen))).toEqual(new Set([HMI_GALLERY_SCREEN]))
     const source = Object.values(result.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_GALLERY_SCREEN}`))
-    expect(source).toContain("W_HmiLamp : HmiLamp := (Parent := 'HMI__R_HmiLamp', GrowAuto := FALSE);")
+    expect(source).toContain("W_HmiLamp : HmiLamp := (Parent := 'HMI__R_HmiLamp', AutoSize := FALSE);")
     expect(source).toContain('W_HmiLamp.Value := TRUE;')
     expect(source).toContain('W_HmiGauge.Value := 60.0;')
     expect(source).toContain('W_HmiSelector.Value := 1;')
@@ -460,7 +466,7 @@ describe('HMI unit generator', () => {
     const line = overview.split('\n').find((l) => l.includes('METHOD PROTECTED OVERRIDE Build'))
     expect(line?.trimStart().startsWith('END_VAR')).toBe(true)
     expect(line).toContain(
-      'UseTheme(5); Body.GrowAuto := TRUE; Col.GrowAuto := TRUE; Attach(ADR(Body), 0); Attach(ADR(Col), ADR(Body)); Attach(ADR(Level), ADR(Col)); ' +
+      'UseTheme(5); Body.AutoSize := TRUE; Col.AutoSize := TRUE; Attach(ADR(Body), 0); Attach(ADR(Col), ADR(Body)); Attach(ADR(Level), ADR(Col)); ' +
         'Attach(ADR(Run), ADR(Col)); Attach(ADR(Speed), ADR(Body));',
     )
     expect(line).toContain('IF Run.Changed THEN instance0.Main.Running := Run.NewValue; END_IF;')

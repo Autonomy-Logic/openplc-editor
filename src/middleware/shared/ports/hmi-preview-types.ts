@@ -66,6 +66,13 @@ export interface HmiUnitSources {
 /** The project's HMI as a device build compiles it; the libraries come from the program build. */
 export type HmiBuildSources = HmiUnitSources
 
+/** Screen a widget preview adds after the project's screens; project names may not use the HMI__ prefix. */
+export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
+/** Element the widget preview screen shows the widget block as, at its preferred size. */
+export const WIDGET_PREVIEW_ELEMENT = 'HMI__Widget'
+/** Where the widget preview places the block, from the screen's top-left corner, in logical units. */
+export const WIDGET_PREVIEW_MARGIN = 12
+
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {
   /** Names of the libraries the project uses (`projectLibraryNames`); a preview compiles against these only. */
@@ -199,11 +206,21 @@ export interface HmiPreviewSurface {
 }
 
 /** A frame the Worker ran: the page it showed, its HMI_STATUS_* flags, changed pixels (null: none) and bounds. */
+/** A rectangle in logical units. */
+export interface HmiPreviewRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface HmiPreviewFrame {
   page: number
   status: number
   pixels: HmiPreviewPixels | null
   bounds: HmiPreviewBounds[]
+  /** Extent of everything the frame drew but the screen's background, clips applied; null when it drew nothing. */
+  drawn?: HmiPreviewRect | null
 }
 
 /** Messages a preview session sends its Worker; each gets one reply with the same id. */
@@ -337,6 +354,8 @@ export interface HmiThumbnail {
   width: number
   height: number
   rgba: Uint8ClampedArray
+  /** The widget's natural size in logical units, without the padding around it. */
+  natural: { width: number; height: number }
 }
 
 /** The palette's thumbnails; on errors, the thumbnails of the library widgets only, or none. */

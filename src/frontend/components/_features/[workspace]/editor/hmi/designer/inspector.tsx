@@ -23,13 +23,14 @@ import {
   momentaryOf,
   writesMain,
 } from '@root/middleware/shared/utils/hmi/designer/designer-binding'
-import { propertyEnabled } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
+import { propertyText } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import { seriesCount, stString } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import {
   type DesignerElement,
   type DesignerModel,
   stringLiteralValue,
 } from '@root/middleware/shared/utils/hmi/designer/designer-model'
+import { propertyIgnored, shownSpan, SPAN } from '@root/middleware/shared/utils/hmi/designer/designer-span'
 import { lastOf } from '@root/middleware/shared/utils/hmi/last-of'
 import { useEffect, useState } from 'react'
 
@@ -227,13 +228,21 @@ export function PropertiesCard(props: {
     )
   const mainProperty = info?.main ? info.properties.find((p) => same(p.name, info.main?.name ?? '')) : undefined
   const row = (p: HmiWidgetProperty) => {
-    const enabled = propertyEnabled(element, catalog, p.name)
+    const ignored = propertyIgnored(props.model, catalog, element, p.name)
+    const enabled = ignored === null
+    const declared = propertyText(element, catalog, p.name)
+    const shown = same(p.name, SPAN) ? shownSpan(props.model, catalog, element) : null
+    const scaled = shown !== null && declared !== undefined && String(shown) !== declared.trim()
     return (
-      <Field key={p.name} label={p.name} hint={`${p.type}${p.defaultValue ? ` = ${p.defaultValue}` : ''}`}>
+      <Field
+        key={p.name}
+        label={p.name}
+        hint={`${p.type}${p.defaultValue ? ` = ${p.defaultValue}` : ''}${scaled ? `, shown at ${shown}%` : ''}`}
+      >
         <fieldset
           disabled={!enabled}
           data-testid={`hmi-prop-row-${p.name}`}
-          title={enabled || !p.enabledBy ? undefined : `Takes effect when ${p.enabledBy} is on`}
+          title={ignored ?? undefined}
           className={cn('min-w-0', !enabled && 'opacity-50')}
         >
           <PropertyEditor

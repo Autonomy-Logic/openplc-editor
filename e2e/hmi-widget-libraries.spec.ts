@@ -31,7 +31,7 @@ END_PROGRAM
 const PANEL = `FUNCTION_BLOCK Panel EXTENDS HmiScreen
   VAR
     Col : HmiHorizontalStack := (Gap := 12, Padding := 16);
-    Dial : HmiDial := (Parent := 'Col', PrefHeight := 80, GrowAuto := FALSE);
+    Dial : HmiDial := (Parent := 'Col', PrefHeight := 80, AutoSize := FALSE);
   END_VAR
   Dial.Value := instance0.Main.Level > 10;
 END_FUNCTION_BLOCK

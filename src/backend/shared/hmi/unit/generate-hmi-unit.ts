@@ -32,16 +32,20 @@ import {
   hmiThemeId,
   screenGrant,
 } from '@root/middleware/shared/utils/hmi/settings'
+import { hmiFixedDrawCalls } from '@root/middleware/shared/utils/hmi/widget-draw-checks'
 import { HMI_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
 import type { CompileOptions, StlibArchive } from 'strucpp'
 
-import type {
-  HmiDiagnostic,
-  HmiPlcVariable,
-  HmiPreviewFactory,
-  HmiPreviewSetter,
-  HmiSourceFile,
-  HmiUnitSources,
+import {
+  type HmiDiagnostic,
+  type HmiPlcVariable,
+  type HmiPreviewFactory,
+  type HmiPreviewSetter,
+  type HmiSourceFile,
+  type HmiUnitSources,
+  WIDGET_PREVIEW_ELEMENT,
+  WIDGET_PREVIEW_MARGIN,
+  WIDGET_PREVIEW_SCREEN,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { loadStrucpp } from '../../library/strucpp-runtime'
 import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
@@ -1325,6 +1329,8 @@ export function compileHmiWidgets(
           file: w.name,
           message: `${w.name} must be a FUNCTION_BLOCK that extends HmiElement or another widget`,
         })
+  for (const w of widgets)
+    for (const f of hmiFixedDrawCalls(w.source)) errors.push({ file: w.name, message: f.message, line: f.line })
   return { archives, catalog, errors }
 }
 
@@ -1338,8 +1344,7 @@ export function buildHmiWidgetCatalog(
   return { ...compiled, errors: [...loaded.errors, ...compiled.errors] }
 }
 
-/** Name of the screen a widget preview adds; the HMI__ prefix is refused for project names. */
-export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
+export { WIDGET_PREVIEW_ELEMENT, WIDGET_PREVIEW_SCREEN }
 
 const PREVIEW_INTEGER_TYPES = new Set(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT'])
 const PREVIEW_REAL_TYPES = new Set(['REAL', 'LREAL'])
@@ -1361,22 +1366,24 @@ function previewTestValue(info: HmiWidgetInfo): string | undefined {
   return PREVIEW_INTEGER_TYPES.has(type) ? String(Math.round(value)) : undefined
 }
 
-/** The screen a widget preview adds: the block at natural size beside a spacer, then stretched over the rest. */
+/** Smallest box a widget preview gives a block whose natural size is 0, in logical units. */
+const WIDGET_PREVIEW_MIN = 24
+
+/** The screen a widget preview adds: the block once, floating at its preferred size, whatever the screen's size. */
 function widgetPreviewSource(info: HmiWidgetInfo): string {
   const value = previewTestValue(info)
-  const assign =
-    info.main && value !== undefined
-      ? [`  Natural.${info.main.name} := ${value};`, `  Stretched.${info.main.name} := ${value};`]
-      : []
+  const assign = info.main && value !== undefined ? [`  ${WIDGET_PREVIEW_ELEMENT}.${info.main.name} := ${value};`] : []
+  const w = WIDGET_PREVIEW_ELEMENT
   return [
     `FUNCTION_BLOCK ${WIDGET_PREVIEW_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiHorizontalStack := (Gap := 16, Padding := 16);',
-    "    HMI__Row : HmiVerticalStack := (Parent := 'HMI__Column', GrowAuto := FALSE);",
-    `    Natural : ${info.name} := (Parent := 'HMI__Row', GrowAuto := FALSE);`,
-    "    HMI__Spacer : HmiVerticalStack := (Parent := 'HMI__Row');",
-    `    Stretched : ${info.name} := (Parent := 'HMI__Column', GrowAuto := TRUE);`,
+    '    HMI__Row : HmiVerticalStack := (AutoSize := FALSE, Gap := 0);',
+    `    ${w} : ${info.name} := (Parent := 'HMI__Row', Floating := TRUE, MinWidth := ${WIDGET_PREVIEW_MIN}, MinHeight := ${WIDGET_PREVIEW_MIN});`,
     '  END_VAR',
+    '  METHOD PROTECTED OVERRIDE Layout : BOOL',
+    `    ${w}.Place(${WIDGET_PREVIEW_MARGIN}, ${WIDGET_PREVIEW_MARGIN}, ${w}.MeasureWidth(), ${w}.MeasureHeight());`,
+    '    Layout := TRUE;',
+    '  END_METHOD',
     ...assign,
     'END_FUNCTION_BLOCK',
     '',
@@ -1405,8 +1412,8 @@ function galleryWidgets(catalog: HmiWidgetCatalog, projectWidgets: readonly HmiS
 /** The palette gallery's screen: each widget alone in a row, at natural size, with its test value. */
 function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
   const declarations = widgets.flatMap((info) => [
-    `    HMI__R_${info.name} : HmiVerticalStack := (Parent := 'HMI__Column', GrowAuto := FALSE);`,
-    `    ${GALLERY_ELEMENT}${info.name} : ${info.name} := (Parent := 'HMI__R_${info.name}', GrowAuto := FALSE);`,
+    `    HMI__R_${info.name} : HmiVerticalStack := (Parent := 'HMI__Column', AutoSize := FALSE);`,
+    `    ${GALLERY_ELEMENT}${info.name} : ${info.name} := (Parent := 'HMI__R_${info.name}', AutoSize := FALSE);`,
   ])
   const values = widgets.flatMap((info) => {
     const value = previewTestValue(info)
@@ -1415,7 +1422,7 @@ function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
   return [
     `FUNCTION_BLOCK ${HMI_GALLERY_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiHorizontalStack := (Gap := 12, Padding := 8, GrowAuto := FALSE);',
+    '    HMI__Column : HmiHorizontalStack := (Gap := 12, Padding := 8, AutoSize := FALSE);',
     ...declarations,
     '  END_VAR',
     ...values,
@@ -1430,7 +1437,7 @@ export const HMI_THEME_PREVIEW_SCREEN = 'HMI__ThemePreview'
 /** The theme preview's screen: controls and values on surface cards, then the fixed colors, in `theme`. */
 function themePreviewSource(theme: string): string {
   const card = (name: string) =>
-    `    ${name} : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 12, Padding := 12, Fill := COLOR.Surface, GrowAuto := FALSE);`
+    `    ${name} : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 12, Padding := 12, Fill := COLOR.Surface, AutoSize := FALSE);`
   const fixed = ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Gray'].map(
     (c) =>
       `    HMI__${c} : HmiRect := (Parent := 'HMI__Fixed', Fill := COLOR.${c}, PrefWidth := 36, PrefHeight := 20);`,
@@ -1450,7 +1457,7 @@ function themePreviewSource(theme: string): string {
     `    HMI__Level : HmiGauge := (Parent := 'HMI__Values', Caption := 'Level', Value := 62.0);`,
     `    HMI__Tank : HmiTank := (Parent := 'HMI__Values', Caption := 'Tank', Value := 45.0, Unit := '%');`,
     `    HMI__Flow : HmiValue := (Parent := 'HMI__Values', Caption := 'Flow', Value := 42.5, Unit := 'm3/h');`,
-    `    HMI__Fixed : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 8, GrowAuto := FALSE);`,
+    `    HMI__Fixed : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 8, AutoSize := FALSE);`,
     ...fixed,
     '  END_VAR',
     'END_FUNCTION_BLOCK',

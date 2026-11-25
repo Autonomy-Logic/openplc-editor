@@ -136,11 +136,11 @@ describe('widget catalogue', () => {
   it("starts containers, shapes, the gauge and the trend growing, from the type's own default", () => {
     for (const name of ['HmiVerticalStack', 'HmiHorizontalStack', 'HmiDiagram', 'HmiRect', 'HmiGauge', 'HmiTrend']) {
       const info = widget(catalog.widgets, name)
-      expect(info.typeDefaults).toEqual([{ name: 'GrowAuto', value: 'TRUE' }])
-      expect(info.properties.find((p) => p.name === 'GrowAuto')?.defaultValue).toBe('TRUE')
+      expect(info.typeDefaults).toEqual([{ name: 'AutoSize', value: 'TRUE' }])
+      expect(info.properties.find((p) => p.name === 'AutoSize')?.defaultValue).toBe('TRUE')
     }
     for (const name of ['HmiButton', 'HmiValue', 'HmiLamp', 'HmiTank'])
-      expect(widget(catalog.widgets, name).properties.find((p) => p.name === 'GrowAuto')?.defaultValue).toBe('FALSE')
+      expect(widget(catalog.widgets, name).properties.find((p) => p.name === 'AutoSize')?.defaultValue).toBe('FALSE')
   })
 
   it('gives every widget the inherited properties first, with kind, group and default', () => {
@@ -153,8 +153,8 @@ describe('widget catalogue', () => {
       'MaxWidth',
       'MinHeight',
       'MaxHeight',
-      'GrowAuto',
-      'GrowScale',
+      'AutoSize',
+      'Span',
       'Floating',
       'X',
       'Y',
@@ -173,12 +173,12 @@ describe('widget catalogue', () => {
       declaredBy: 'HmiElement',
       maxLength: 64,
     })
-    expect(prop('GrowAuto')).toMatchObject({ kind: 'bool', group: 'layout', defaultValue: 'FALSE' })
-    expect(prop('GrowScale')).toMatchObject({
+    expect(prop('AutoSize')).toMatchObject({ kind: 'bool', group: 'layout', defaultValue: 'FALSE' })
+    expect(prop('Span')).toMatchObject({
       kind: 'number',
       group: 'layout',
-      defaultValue: '1',
-      enabledBy: 'GrowAuto',
+      defaultValue: '100',
+      enabledBy: 'AutoSize',
     })
     expect(label.typeDefaults).toBeUndefined()
     expect(label.properties.some((p) => p.previewValue !== undefined)).toBe(false)

@@ -56,7 +56,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -64,13 +64,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -186,7 +186,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -194,13 +194,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -286,7 +286,7 @@
       "palette": "Containers",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -347,7 +347,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -355,13 +355,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -447,7 +447,7 @@
       "palette": "Containers",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -508,7 +508,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -516,13 +516,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -636,7 +636,7 @@
       "palette": "Containers",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -697,7 +697,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -705,13 +705,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -805,7 +805,7 @@
       "palette": "Shapes",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -866,7 +866,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -874,13 +874,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -966,7 +966,7 @@
       "palette": "Shapes",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -1027,7 +1027,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -1035,13 +1035,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -1151,7 +1151,7 @@
       "palette": "Shapes",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -1212,7 +1212,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -1220,13 +1220,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -1311,7 +1311,7 @@
       "palette": "Shapes",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -1372,7 +1372,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -1380,13 +1380,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -1558,7 +1558,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -1566,13 +1566,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -1734,7 +1734,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -1742,13 +1742,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -1909,7 +1909,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -1917,13 +1917,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -2047,7 +2047,7 @@
       },
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -2108,7 +2108,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -2116,13 +2116,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -2300,7 +2300,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -2308,13 +2308,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -2587,7 +2587,7 @@
       },
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ]
@@ -2648,7 +2648,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -2656,13 +2656,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -2831,7 +2831,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -2839,13 +2839,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -3062,7 +3062,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -3070,13 +3070,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -3280,7 +3280,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -3288,13 +3288,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -3531,7 +3531,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -3539,13 +3539,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -3707,7 +3707,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -3715,13 +3715,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -3882,7 +3882,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -3890,13 +3890,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -4065,7 +4065,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -4073,13 +4073,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -4249,7 +4249,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -4257,13 +4257,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -4430,7 +4430,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -4438,13 +4438,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -4597,7 +4597,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -4605,13 +4605,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -4784,7 +4784,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -4792,13 +4792,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -4971,7 +4971,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -4979,13 +4979,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -5203,7 +5203,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -5211,13 +5211,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -5407,7 +5407,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -5415,13 +5415,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -5595,7 +5595,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -5603,13 +5603,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -5791,7 +5791,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -5799,13 +5799,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -5969,7 +5969,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -5977,13 +5977,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -6150,7 +6150,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -6158,13 +6158,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -6331,7 +6331,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -6339,13 +6339,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -6513,7 +6513,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -6521,13 +6521,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -6732,7 +6732,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -6740,13 +6740,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -6953,7 +6953,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -6961,13 +6961,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -7132,7 +7132,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -7140,13 +7140,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -7348,7 +7348,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -7356,13 +7356,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -7554,7 +7554,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -7562,13 +7562,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -7744,7 +7744,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -7752,13 +7752,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -7943,7 +7943,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -7951,13 +7951,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -8151,7 +8151,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -8159,13 +8159,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -8333,7 +8333,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -8341,13 +8341,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -8513,7 +8513,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -8521,13 +8521,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -8693,7 +8693,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -8701,13 +8701,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -8879,7 +8879,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -8887,13 +8887,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -9055,7 +9055,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -9063,13 +9063,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -9247,7 +9247,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -9255,13 +9255,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -9455,7 +9455,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -9463,13 +9463,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -9681,7 +9681,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -9689,13 +9689,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -9845,7 +9845,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -9853,13 +9853,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -9958,7 +9958,7 @@
       "palette": "Alarms",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ],
@@ -10032,7 +10032,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -10040,13 +10040,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -10116,7 +10116,7 @@
       "palette": "Alarms",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ],
@@ -10185,7 +10185,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -10193,13 +10193,13 @@
           "defaultValue": "TRUE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -10508,7 +10508,7 @@
       "palette": "Data",
       "typeDefaults": [
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "value": "TRUE"
         }
       ],
@@ -10611,7 +10611,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -10619,13 +10619,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",
@@ -11110,7 +11110,7 @@
           "declaredBy": "HmiElement"
         },
         {
-          "name": "GrowAuto",
+          "name": "AutoSize",
           "type": "BOOL",
           "kind": "bool",
           "group": "layout",
@@ -11118,13 +11118,13 @@
           "defaultValue": "FALSE"
         },
         {
-          "name": "GrowScale",
+          "name": "Span",
           "type": "DINT",
           "kind": "number",
           "group": "layout",
           "declaredBy": "HmiElement",
-          "defaultValue": "1",
-          "enabledBy": "GrowAuto"
+          "defaultValue": "100",
+          "enabledBy": "AutoSize"
         },
         {
           "name": "Floating",

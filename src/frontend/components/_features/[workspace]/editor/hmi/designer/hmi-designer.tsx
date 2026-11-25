@@ -11,13 +11,16 @@ import { hmiDesignerEntry } from '@root/frontend/store/slices/hmi-designer'
 import { cn } from '@root/frontend/utils/cn'
 import { hmiPlcDeclarations } from '@root/frontend/utils/PLC/hmi-plc-declarations'
 import { toast } from '@root/frontend/utils/toast'
-import type {
-  HmiCatalogResult,
-  HmiDiagnostic,
-  HmiLibraryArchive,
-  HmiPreviewRequest,
-  HmiThumbnail,
-  HmiWidgetCatalog,
+import {
+  type HmiCatalogResult,
+  type HmiDiagnostic,
+  type HmiLibraryArchive,
+  type HmiPreviewRequest,
+  type HmiThumbnail,
+  type HmiWidgetCatalog,
+  WIDGET_PREVIEW_ELEMENT,
+  WIDGET_PREVIEW_MARGIN,
+  WIDGET_PREVIEW_SCREEN,
 } from '@root/middleware/shared/ports/hmi-preview-types'
 import { useHmiPreview, usePlatform } from '@root/middleware/shared/providers'
 import { hmiTextLiteral } from '@root/middleware/shared/utils/hmi/block-checks'
@@ -29,7 +32,6 @@ import {
   insertionParent,
   isContainerType,
   placementRefusal,
-  resizeProperties,
 } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import {
   copyElements,
@@ -61,6 +63,13 @@ import {
   stString,
 } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import { type DesignerModel, parseDesignerBlock } from '@root/middleware/shared/utils/hmi/designer/designer-model'
+import {
+  moveSized,
+  placementProperties,
+  resizeProperties,
+  type StackView,
+} from '@root/middleware/shared/utils/hmi/designer/designer-span'
+import { widgetOverflow } from '@root/middleware/shared/utils/hmi/designer/widget-overflow'
 import { HMI_DEVICE_PRESETS, hmiDevicePreset } from '@root/middleware/shared/utils/hmi/device-presets'
 import { lastOf } from '@root/middleware/shared/utils/hmi/last-of'
 import { hmiLibraryBlocks, hmiPlcVariables } from '@root/middleware/shared/utils/hmi/plc-variables'
@@ -214,10 +223,16 @@ function thumbnailUrl(thumbnail: HmiThumbnail): string {
   return canvas.toDataURL()
 }
 
-/** The palette's thumbnails as image URLs by upper-case widget name, redrawn a moment after the widget blocks change. */
-function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> {
+/** Palette thumbnails as image URLs, and natural sizes in logical units, by upper-case widget name. */
+interface PaletteThumbnails {
+  urls: ReadonlyMap<string, string>
+  naturals: ReadonlyMap<string, { width: number; height: number }>
+}
+
+/** The palette's thumbnails, redrawn a moment after the widget blocks change. */
+function useThumbnails(request: HmiPreviewRequest): PaletteThumbnails {
   const port = useHmiPreview()
-  const [thumbnails, setThumbnails] = useState<ReadonlyMap<string, string>>(new Map())
+  const [thumbnails, setThumbnails] = useState<PaletteThumbnails>({ urls: new Map(), naturals: new Map() })
   const { widgets, settings, projectNames, libraries } = request
   useEffect(() => {
     if (!port) return
@@ -225,7 +240,10 @@ function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> 
     const timer = setTimeout(() => {
       void port.thumbnails({ widgets, settings, projectNames, libraries }, THUMBNAIL_SCALE).then((result) => {
         if (live && result.thumbnails.length > 0)
-          setThumbnails(new Map(result.thumbnails.map((t) => [t.widget.toUpperCase(), thumbnailUrl(t)])))
+          setThumbnails({
+            urls: new Map(result.thumbnails.map((t) => [t.widget.toUpperCase(), thumbnailUrl(t)])),
+            naturals: new Map(result.thumbnails.map((t) => [t.widget.toUpperCase(), t.natural])),
+          })
       })
     }, THUMBNAIL_DELAY_MS)
     return () => {
@@ -459,6 +477,13 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     },
   }
 
+  const stackView = (shown: DesignerModel): StackView => ({
+    model: shown,
+    catalog,
+    boxes: elements,
+    screen: { width: device.width, height: device.height },
+  })
+
   const setLiveAndCommit = (element: string, entries: Array<[string, string]>, commit: boolean) => {
     if (!model) return
     const live = entries.map(([property, value]) => preview.setLive(name, element, property, value)).every(Boolean)
@@ -474,14 +499,14 @@ export function HmiScreenDesigner({ name }: { name: string }) {
             ['X', String(at.x)],
             ['Y', String(at.y)],
           ]
-        : []
+        : placementProperties(stackView(model), target.parent, type, thumbnails.naturals.get(type.toUpperCase()))
       const result = addElement(source, model, { type, parent: target.parent, before: target.before, props })
       if (apply(result) && result.ok && result.name) select([result.name])
     },
     move: (element, target) => {
       const type = model?.elements.find((e) => same(e.name, element))?.type
       if (!model || type === undefined || refused([type], target.parent)) return
-      apply(moveElement(source, model, element, target.parent, target.before))
+      apply(moveSized(stackView(model), source, element, target.parent, target.before, isWidget))
     },
     bindMain: (element, variable) => {
       const target = model?.elements.find((e) => same(e.name, element))
@@ -532,7 +557,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     },
     resize: (element, size, commit) => {
       if (!model) return
-      setLiveAndCommit(element, resizeProperties(model, catalog, element, size), commit)
+      setLiveAndCommit(element, resizeProperties(stackView(model), element, size), commit)
     },
     place: (element, at, commit) =>
       setLiveAndCommit(
@@ -683,7 +708,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
                 <WidgetPalette
                   catalog={catalog}
                   projectWidgets={new Set(request.widgets.map((w) => w.name.toUpperCase()))}
-                  thumbnails={thumbnails}
+                  thumbnails={thumbnails.urls}
                   filter={filter}
                   capabilities={targetCapabilities}
                   onAdd={addFromPalette}
@@ -808,20 +833,54 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   )
 }
 
+/** Box a widget preview starts from, before the first build gives the block's preferred size. */
+const WIDGET_START = { width: 96, height: 96 }
+/** Room the widget preview has in its panel, in CSS pixels. */
+const WIDGET_PANEL = { width: 332, height: 320 }
+const WIDGET_MAX_ZOOM = 8
+
 export function HmiWidgetEditor({ name }: { name: string }) {
   const { request, ready } = useProjectRequest()
   const widgetRequest = useMemo(() => ({ ...request, widgetPreview: name }), [request, name])
-  const device = useMemo(() => ({ id: 'widget', label: 'Widget', width: 320, height: 240, density: 2 }), [])
+  const [box, setBox] = useState(WIDGET_START)
+  const zoom = Math.min(
+    WIDGET_MAX_ZOOM,
+    WIDGET_PANEL.width / (box.width + 2 * WIDGET_PREVIEW_MARGIN),
+    WIDGET_PANEL.height / (box.height + 2 * WIDGET_PREVIEW_MARGIN),
+  )
+  const device = useMemo(
+    () => ({
+      id: 'widget',
+      label: 'Widget',
+      width: box.width + 2 * WIDGET_PREVIEW_MARGIN,
+      height: box.height + 2 * WIDGET_PREVIEW_MARGIN,
+      density: Math.max(1, Math.ceil(zoom)),
+    }),
+    [box.width, box.height, zoom],
+  )
   const canvas = useRef<HTMLCanvasElement>(null)
   const preview = usePreviewSession({
     request: ready ? widgetRequest : null,
-    screen: '',
+    screen: WIDGET_PREVIEW_SCREEN,
     device,
     design: false,
     framePeriodMs: request.settings.framePeriodMs,
     canvas,
   })
   const progress = previewProgress(preview)
+  const widgetId = preview.built?.elementIds.find(
+    (e) => same(e.screen, WIDGET_PREVIEW_SCREEN) && same(e.element, WIDGET_PREVIEW_ELEMENT),
+  )?.id
+  const shown = widgetId === undefined ? undefined : preview.bounds.find((b) => b.id === widgetId)
+  useEffect(() => {
+    if (shown && shown.width > 0 && shown.height > 0 && (shown.width !== box.width || shown.height !== box.height))
+      setBox({ width: shown.width, height: shown.height })
+  }, [shown, box.width, box.height])
+  const overflow = shown ? widgetOverflow(preview.drawn, shown) : null
+  const toPreview = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    return { x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom }
+  }
   return (
     <div className='flex h-full w-full flex-col gap-2 overflow-hidden' data-testid='hmi-widget-editor'>
       <div className='flex h-8 shrink-0 items-center justify-between gap-2'>
@@ -846,32 +905,54 @@ export function HmiWidgetEditor({ name }: { name: string }) {
         </div>
         <div
           className={cn(
-            'relative flex w-[380px] shrink-0 items-start justify-center overflow-auto p-6',
+            'relative flex w-[380px] shrink-0 flex-col items-center gap-3 overflow-auto p-6',
             CANVAS_AREA_CLASS,
           )}
           data-testid='hmi-canvas-area'
           data-preview={preview.status}
         >
           <CanvasBackdrop id={`hmi-widget-bg-${name}`} />
-          <div className='box shrink-0 rounded-lg'>
-            <div className='relative shrink-0' style={{ width: device.width, height: device.height }}>
+          <div className='box relative shrink-0 rounded-lg'>
+            <div className='relative shrink-0' style={{ width: device.width * zoom, height: device.height * zoom }}>
               <canvas
                 ref={canvas}
                 data-testid='hmi-widget-canvas'
                 className='rounded-lg'
-                style={{ width: device.width, height: device.height }}
+                style={{ width: device.width * zoom, height: device.height * zoom }}
                 onPointerDown={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect()
-                  preview.pointer('down', e.clientX - r.left, e.clientY - r.top)
+                  const p = toPreview(e)
+                  preview.pointer('down', p.x, p.y)
                 }}
                 onPointerUp={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect()
-                  preview.pointer('up', e.clientX - r.left, e.clientY - r.top)
+                  const p = toPreview(e)
+                  preview.pointer('up', p.x, p.y)
                 }}
               />
+              {shown && (
+                <div
+                  className='border-brand/70 pointer-events-none absolute border border-dashed'
+                  data-testid='hmi-widget-box'
+                  title={`${shown.width} × ${shown.height}`}
+                  style={{
+                    left: shown.x * zoom,
+                    top: shown.y * zoom,
+                    width: shown.width * zoom,
+                    height: shown.height * zoom,
+                  }}
+                />
+              )}
               {progress && <PreviewLoading step={progress.step} dimmed={progress.dimmed} />}
             </div>
           </div>
+          {overflow && (
+            <p
+              className='relative rounded-md bg-amber-50 px-3 py-1 font-caption text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+              data-testid='hmi-widget-overflow'
+            >
+              {name} draws outside its box ({overflow}). Draw from Left, Top, Width and Height: in a screen, drawing
+              outside the box covers other elements.
+            </p>
+          )}
         </div>
       </div>
     </div>

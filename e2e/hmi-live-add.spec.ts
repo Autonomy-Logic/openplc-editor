@@ -34,11 +34,11 @@ const G = hmiFixture('hmi-live-edit')
 const LAYOUT = `FUNCTION_BLOCK Layout EXTENDS HmiScreen
   VAR
     Col : HmiHorizontalStack := (Gap := 8, Padding := 8);
-    Top : HmiVerticalStack := (Parent := 'Col', Gap := 12, GrowAuto := FALSE);
+    Top : HmiVerticalStack := (Parent := 'Col', Gap := 12, AutoSize := FALSE);
     A : HmiLabel := (Text := 'Alpha', Parent := 'Top');
     B : HmiLabel := (Text := 'Bravo', Parent := 'Top');
     C : HmiLabel := (Text := 'Charlie', Parent := 'Top');
-    Bottom : HmiVerticalStack := (Parent := 'Col', Gap := 12, GrowAuto := FALSE);
+    Bottom : HmiVerticalStack := (Parent := 'Col', Gap := 12, AutoSize := FALSE);
     D : HmiLabel := (Text := 'Delta', Parent := 'Bottom');
     Plant : HmiDiagram := (Parent := 'Col', DesignW := 400, DesignH := 120);
     Tank : HmiTank := (Parent := 'Plant', X := 20, Y := 10, Caption := 'T1');

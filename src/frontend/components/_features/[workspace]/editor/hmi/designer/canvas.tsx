@@ -339,6 +339,7 @@ export function DesignerCanvas(props: {
     const types = e.dataTransfer.types
     if (!types.includes(WIDGET_MIME) && !types.includes(VARIABLE_MIME)) return
     e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
     const p = toLu(e.clientX, e.clientY)
     if (types.includes(WIDGET_MIME)) setDrop(dropTarget(model, catalog, elements, p.x, p.y, null, band))
     else setHover(elementAt(elements, p.x, p.y))

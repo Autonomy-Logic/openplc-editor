@@ -39,8 +39,8 @@ END_PROGRAM
 const PANEL = `FUNCTION_BLOCK Panel EXTENDS HmiScreen
   VAR
     Col : HmiHorizontalStack := (Gap := 12, Padding := 16);
-    Marker : HmiRect := (Parent := 'Col', PrefWidth := 60, PrefHeight := 40, GrowAuto := FALSE);
-    List : HmiAlarmList := (Parent := 'Col', PrefHeight := 200, GrowAuto := FALSE);
+    Marker : HmiRect := (Parent := 'Col', PrefWidth := 60, PrefHeight := 40, AutoSize := FALSE);
+    List : HmiAlarmList := (Parent := 'Col', PrefHeight := 200, AutoSize := FALSE);
     Ask : HmiDialog := (Parent := 'Col', Open := TRUE, Title := 'Start pump?', Buttons := 'No;Yes');
   END_VAR
   IF Ask.Answered THEN

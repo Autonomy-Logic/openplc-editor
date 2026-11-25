@@ -59,7 +59,7 @@ export function cropThumbnails(
       const from = (y * size.width + x0) * 4
       rgba.set(image.subarray(from, from + width * 4), (y - y0) * width * 4)
     }
-    thumbnails.push({ widget, width, height: y1 - y0, rgba })
+    thumbnails.push({ widget, width, height: y1 - y0, rgba, natural: { width: b.width, height: b.height } })
   }
   return thumbnails
 }

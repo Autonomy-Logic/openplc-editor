@@ -29,8 +29,8 @@ const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
     Col : HmiHorizontalStack := (Gap := 12, Padding := 16);
     Speed : HmiSlider := (Parent := 'Col', Caption := 'Speed', Value := 20.0);
     Next : HmiButton := (Parent := 'Col', Text := 'Next');
-    Box : HmiVerticalStack := (Parent := 'Col', PrefHeight := 120, GrowAuto := FALSE);
-    Area : HmiDiagram := (Parent := 'Box', GrowAuto := TRUE);
+    Box : HmiVerticalStack := (Parent := 'Col', PrefHeight := 120, AutoSize := FALSE);
+    Area : HmiDiagram := (Parent := 'Box', AutoSize := TRUE);
     Tank1 : HmiTank := (Parent := 'Area', X := 20, Y := 10);
   END_VAR
 END_FUNCTION_BLOCK

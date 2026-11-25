@@ -26,7 +26,7 @@ const F = hmiFixture('hmi-controls')
 const PANEL = `FUNCTION_BLOCK Panel EXTENDS HmiScreen
   VAR
     Col : HmiHorizontalStack := (Gap := 12, Padding := 16);
-    Row : HmiVerticalStack := (Parent := 'Col', Gap := 16, GrowAuto := FALSE);
+    Row : HmiVerticalStack := (Parent := 'Col', Gap := 16, AutoSize := FALSE);
     Pick : HmiDropDown := (Parent := 'Row', Caption := 'Recipe', Options := 'Soup;Broth;Sauce;Cream', Value := 3);
     Marker : HmiRect := (Parent := 'Row', PrefWidth := 60, PrefHeight := 40);
     Under : HmiCheckBox := (Parent := 'Col', Caption := 'Under the list');

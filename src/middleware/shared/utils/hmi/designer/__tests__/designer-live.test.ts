@@ -18,7 +18,7 @@ const BASE = [
   property('Parent', 'elementRef', 'HmiElement'),
   property('X', 'number', 'HmiElement'),
   property('Y', 'number', 'HmiElement'),
-  property('GrowAuto', 'bool', 'HmiElement'),
+  property('AutoSize', 'bool', 'HmiElement'),
 ]
 const widget = (name: string, base: string, own: HmiWidgetProperty[] = [], defaults = false): HmiWidgetInfo => ({
   name,
@@ -27,7 +27,7 @@ const widget = (name: string, base: string, own: HmiWidgetProperty[] = [], defau
   properties: [...BASE, ...own],
   outputs: [],
   events: [],
-  ...(defaults ? { typeDefaults: [{ name: 'GrowAuto', value: 'TRUE' }] } : {}),
+  ...(defaults ? { typeDefaults: [{ name: 'AutoSize', value: 'TRUE' }] } : {}),
 })
 const WIDGETS = [
   widget('HmiVerticalStack', 'HmiStack', [], true),
@@ -41,7 +41,7 @@ const WIDGETS = [
   widget('HmiPipe', 'HmiElement', [property('Source', 'elementRef', 'HmiPipe')]),
 ]
 const catalog: HmiWidgetCatalog = { widgets: new Map(WIDGETS.map((w) => [w.name.toUpperCase(), w])), colors: [] }
-const SETTER = { X: 0, Y: 1, GROWAUTO: 2, TEXT: 0, FILL: 3 }
+const SETTER = { X: 0, Y: 1, AUTOSIZE: 2, TEXT: 0, FILL: 3 }
 const factory: HmiPreviewFactory = {
   types: Object.fromEntries(
     WIDGETS.map((w, type) => [
@@ -155,7 +155,7 @@ describe('planLiveSync: new elements', () => {
         parentKind: 'stack',
         before: 0,
         drawBefore: 0,
-        numbers: [{ setter: SETTER.GROWAUTO, value: 1 }],
+        numbers: [{ setter: SETTER.AUTOSIZE, value: 1 }],
         texts: [],
       },
       {
@@ -171,14 +171,14 @@ describe('planLiveSync: new elements', () => {
   })
 
   it('puts a pasted container before the screen container that follows it', () => {
-    expect(plan(insert('Footer', '    Copy : HmiVerticalStack := (GrowAuto := FALSE);'))?.elements).toEqual([
+    expect(plan(insert('Footer', '    Copy : HmiVerticalStack := (AutoSize := FALSE);'))?.elements).toEqual([
       {
         type: VSTACK,
         parent: { id: 0 },
         parentKind: 'stack',
         before: 6,
         drawBefore: 6,
-        numbers: [{ setter: SETTER.GROWAUTO, value: 0 }],
+        numbers: [{ setter: SETTER.AUTOSIZE, value: 0 }],
         texts: [],
       },
     ])

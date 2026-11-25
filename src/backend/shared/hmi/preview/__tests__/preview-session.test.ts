@@ -104,12 +104,13 @@ describe('preview session', () => {
     session.close()
   })
 
-  it('runs a module in its Worker: frames, input and live edits', async () => {
+  it('runs a module in its Worker: frames with what they drew, input and live edits', async () => {
     const session = createHmiPreviewSession(() => testWorker())
     await session.load(fakeHost(), start)
     const frame = await session.frame(0, surface)
     expect(frame).toMatchObject({ page: 2, status: 0, pixels: { y0: 0, rows: 8 } })
     expect(frame.bounds).toHaveLength(2)
+    expect(frame.drawn).toEqual({ x: 1, y: 2, width: 2, height: 3 })
     expect((await session.frame(50, surface)).pixels).toBeNull()
     await session.pointer('down', 1, 2)
     await session.key(8)
