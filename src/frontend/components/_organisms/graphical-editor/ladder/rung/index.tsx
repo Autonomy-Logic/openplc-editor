@@ -33,7 +33,7 @@ const BODY_TOP = 4
 const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
 /** The shortcut label of `key` with the platform's command modifier. */
 export const modShortcut = (key: string): string => (IS_MAC ? `⌘${key}` : `Ctrl + ${key}`)
-export const DELETE_SHORTCUT = IS_MAC ? '⌫' : 'Del'
+export const DELETE_SHORTCUT = IS_MAC ? '⌘⌫' : 'Ctrl + Del'
 
 /** Whether rung `rungId` is open in the active LD editor; rungs are open until collapsed. */
 export function useIsRungOpen(rungId: string): boolean {

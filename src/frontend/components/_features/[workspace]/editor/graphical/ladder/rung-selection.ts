@@ -39,3 +39,12 @@ export function moveRungs<T extends { id: string }>(
   const insertAt = down ? overAt + 1 : overAt
   return [...rest.slice(0, insertAt), ...block, ...rest.slice(insertAt)]
 }
+
+/** Whether a key press deletes the selected rung: Ctrl or ⌘ with Delete or Backspace; the keys alone delete elements. */
+export const isRungDeleteKey = (event: { key: string; metaKey: boolean; ctrlKey: boolean }): boolean =>
+  (event.metaKey || event.ctrlKey) && (event.key === 'Delete' || event.key === 'Backspace')
+
+/** Whether a key press on `target` types into a field: an input, a text area or editable content. */
+export const isTextEntry = (target: EventTarget): boolean =>
+  target instanceof HTMLElement &&
+  (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable)

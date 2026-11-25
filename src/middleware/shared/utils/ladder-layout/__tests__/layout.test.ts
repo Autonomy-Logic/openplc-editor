@@ -430,6 +430,12 @@ describe('blocks use the compact geometry (BDD-20, AC06)', () => {
     expect(rect.bottom).toBeLessThanOrEqual(block.position.y + S.blkHead + EPS)
   })
 
+  it('centres the type on the block width', () => {
+    const type = label(layout, 'T1', 'blockType')
+    expect(type.anchor).toBe('middle')
+    expect(type.x).toBeCloseTo(block.position.x + block.width / 2, 6)
+  })
+
   it('writes the instance "Timer1" above the box at 12 px, weight 400', () => {
     const instance = label(layout, 'T1', 'instance')
     expect({ text: instance.text, sizePx: instance.sizePx, weight: instance.weight }).toEqual({

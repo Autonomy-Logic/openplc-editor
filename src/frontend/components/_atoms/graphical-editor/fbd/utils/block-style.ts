@@ -12,6 +12,8 @@ export const FBD_BLOCK_TYPE_STYLE: CSSProperties = {
   fontFamily: LADDER_TYPOGRAPHY.family,
   fontSize: LADDER_TYPOGRAPHY.nameSizePx,
   fontWeight: LADDER_TYPOGRAPHY.semiboldWeight,
+  textAlign: 'center',
+  justifyContent: 'center',
 }
 
 /** Style of a pin name, as an LD block draws it; the colour comes from the theme palette. */

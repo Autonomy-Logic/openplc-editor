@@ -54,7 +54,7 @@ import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
 import { useGraphicalPlacement } from '../placement/placement-context'
-import { moveRungs, nextRungSelection, type RungSelectOptions } from './rung-selection'
+import { isRungDeleteKey, isTextEntry, moveRungs, nextRungSelection, type RungSelectOptions } from './rung-selection'
 
 const EMPTY_DIVERGENCES: string[] = []
 
@@ -345,9 +345,16 @@ export default function LadderEditor() {
     setEditingCommentRungId(editing ? rungId : null)
   }, [])
 
-  /** The rung shortcuts: they act on the selected rung while the canvas itself has the focus. */
+  /**
+   * The rung shortcuts: they act on the selected rungs while the canvas itself has the focus; the rung delete key also
+   * while an element of the rung has it, and never reaches the element's own delete.
+   */
   const handleRungShortcut = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget || selectedRungIds.length === 0) return
+    if (selectedRungIds.length === 0) return
+    if (event.target !== event.currentTarget) {
+      if (!isRungDeleteKey(event) || isTextEntry(event.target)) return
+      event.stopPropagation()
+    }
     const selected = rungs.filter((candidate) => selectedRungIds.includes(candidate.id))
     const rung = selected.length === 1 ? selected[0] : undefined
     const mod = event.metaKey || event.ctrlKey
@@ -361,7 +368,7 @@ export default function LadderEditor() {
     else if (mod && key === 'd')
       selected.forEach((each) => ladderFlowActions.duplicateRung({ editorName: pouName, rungId: each.id }))
     else if (rung === undefined) return
-    else if ((event.key === 'Delete' || event.key === 'Backspace') && !mod) openModal('confirm-delete-element', rung)
+    else if (isRungDeleteKey(event)) openModal('confirm-delete-element', rung)
     else if (mod && key === '/') setEditingCommentRungId(rung.id)
     else return
     event.preventDefault()

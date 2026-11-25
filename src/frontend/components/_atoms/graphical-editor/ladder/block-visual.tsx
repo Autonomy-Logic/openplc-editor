@@ -57,16 +57,16 @@ function instanceLabelOf(labels: readonly LabelBox[], width: number, text: strin
   )
 }
 
-/** Where a block's type goes when the layout has no label for it: in the header band. */
-function typeLabelOf(labels: readonly LabelBox[], text: string): LabelBox {
+/** Where a block's type goes when the layout has no label for it: centred in the header band of a box `width` wide. */
+function typeLabelOf(labels: readonly LabelBox[], text: string, width: number): LabelBox {
   return (
     labelOfRole(labels, 'blockType') ?? {
       text,
-      x: LADDER_STYLE.blkPad,
+      x: width / 2,
       y: LADDER_STYLE.blkHead / 2 + LADDER_TYPOGRAPHY.nameSizePx * 0.36,
       sizePx: LADDER_TYPOGRAPHY.nameSizePx,
       weight: 600,
-      anchor: 'start',
+      anchor: 'middle',
       role: 'blockType',
     }
   )
@@ -92,7 +92,7 @@ export function LadderBlockVisual({
   typeSlot,
   instanceSlot,
 }: LadderBlockVisualProps) {
-  const typeLabel = typeLabelOf(labels, typeName)
+  const typeLabel = typeLabelOf(labels, typeName, width)
   const instanceLabel = instanceLabelOf(labels, width, instanceName)
   const pins = labels.filter((label) => label.role === 'pinFormal')
 
