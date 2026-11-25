@@ -18,6 +18,8 @@ type CreatePLCElementType =
   | 'global-variable-list'
   | 'server'
   | 'remote-device'
+  | 'hmi-screen'
+  | 'hmi-widget'
 
 const CreatePLCElement = () => {
   const {
@@ -38,7 +40,17 @@ const CreatePLCElement = () => {
   const targetCaps = useTargetCapabilities()
   const masterProfile = useModbusMasterProfile()
   const CreatePLCElementTypes: CreatePLCElementType[] = (
-    ['function', 'function-block', 'program', 'data-type', 'global-variable-list', 'server', 'remote-device'] as const
+    [
+      'function',
+      'function-block',
+      'program',
+      'data-type',
+      'global-variable-list',
+      'server',
+      'remote-device',
+      'hmi-screen',
+      'hmi-widget',
+    ] as const
   ).filter((target) => {
     switch (target) {
       case 'program':
@@ -47,6 +59,10 @@ const CreatePLCElement = () => {
         return projectCaps.hasServers
       case 'remote-device':
         return projectCaps.hasRemoteDevices && (canHostModbusMaster(masterProfile) || targetCaps.ethercat)
+      case 'hmi-screen':
+        return projectCaps.hasHmi
+      case 'hmi-widget':
+        return projectCaps.hasHmiWidgets
       default:
         // function / function-block / data-type / global-variable-list — always available.
         return true

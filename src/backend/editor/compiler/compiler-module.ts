@@ -12,6 +12,10 @@ import { LibraryManagerModule } from '@root/backend/editor/library-manager/libra
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
+import {
+  SIMULATOR_MODULE,
+  SIMULATOR_SUPPORT_DIR,
+} from '@root/backend/shared/compile/steps/build-simulator-wasm-request'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { shouldWipeBuildFolder } from '@root/backend/shared/compile/steps/plan-build-tree-sync'
@@ -182,11 +186,13 @@ import JSZip from 'jszip'
 
 import type { VppScreenConfigInputs } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
+import { parseHmiBuildSources } from '../../../middleware/shared/utils/hmi/build-sources-schema'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { readPackageFile } from '../package-manager/read-package-file'
+import { getDesktopWasmCompileService } from '../wasm-toolchain/desktop-wasm-toolchain'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
 import type { CompileProgressChannel, HalsFile } from './types'
@@ -330,8 +336,12 @@ class CompilerModule {
   /** How a build that fails on a missing core tells the user to repair it. */
   readonly dependencyHintSurface: DependencyHintSurface
 
-  constructor(options: { dependencyHintSurface?: DependencyHintSurface } = {}) {
+  /** Whether board firmware with HMI screens gets the test-only display-list readout; only the CLI sets it. */
+  readonly hmiTestReadout: boolean
+
+  constructor(options: { dependencyHintSurface?: DependencyHintSurface; hmiTestReadout?: boolean } = {}) {
     this.dependencyHintSurface = options.dependencyHintSurface ?? 'desktop'
+    this.hmiTestReadout = options.hmiTestReadout ?? false
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
 
@@ -468,30 +478,18 @@ class CompilerModule {
     return join(this.binaryDirectoryPath, 'arduino-cli')
   }
 
+  /**
+   * Folder of the STruC++ runtime headers (`src/runtime/include/`). Dev (`npm run dev`, or the built app started from
+   * the repository): the root install under the working directory, as the sources are, which
+   * `scripts/download-binaries.ts` fills. Packaged: `process.resourcesPath/strucpp/runtime/include`, copied there by
+   * electron-builder's `extraResources`; strucpp is not a dependency of `release/app/package.json`, so the asar does
+   * not hold it. arduino-cli only sees the copy under `build/[target]/` that `copyStrucppRuntimeHeaders` writes.
+   */
   #constructStrucppRuntimeDir(): string {
-    // strucpp's runtime headers (`src/runtime/include/`) live in two
-    // places depending on whether we're running dev or a packaged app:
-    //
-    //   - **Dev** (`npm run dev`): read from the root install at
-    //     `node_modules/strucpp/src/runtime/include` — that's what
-    //     `scripts/download-binaries.ts` populates via `npm install
-    //     <tarball> --no-save`.
-    //
-    //   - **Packaged**: read from `process.resourcesPath/strucpp/
-    //     runtime/include` — copied there by electron-builder's
-    //     `extraResources` config.  We *cannot* read from the asar's
-    //     own node_modules because electron-builder packs the asar
-    //     based on `release/app/package.json`'s dependency tree and
-    //     strucpp isn't a declared dep (the version is pinned in
-    //     `binary-versions.json` instead), so the package gets pruned
-    //     out of the asar entirely.
-    //
-    // arduino-cli still only ever sees the destination copy under
-    // `build/[target]/` after `copyStrucppRuntimeHeaders` runs.
     if (electronApp.isPackaged) {
       return join(process.resourcesPath, 'strucpp', 'runtime', 'include')
     }
-    return join(electronApp.getAppPath(), 'node_modules', 'strucpp', 'src', 'runtime', 'include')
+    return join(process.cwd(), 'node_modules', 'strucpp', 'src', 'runtime', 'include')
   }
 
   /**
@@ -783,6 +781,20 @@ class CompilerModule {
       // Same defensive posture as the arduino/ block above.
     }
 
+    if (boardRuntime === 'simulator') {
+      const readTree = async (dir: string, prefix: string): Promise<void> => {
+        const entries = await readdir(dir, { withFileTypes: true })
+        await Promise.all(
+          entries.map(async (e) => {
+            const key = `${prefix}/${e.name}`
+            if (e.isDirectory()) await readTree(join(dir, e.name), key)
+            else if (e.isFile()) files[key] = await readFile(join(dir, e.name), 'utf-8')
+          }),
+        )
+      }
+      await readTree(join(this.sourceDirectoryPath, SIMULATOR_SUPPORT_DIR), SIMULATOR_SUPPORT_DIR)
+    }
+
     return files
   }
 
@@ -902,7 +914,7 @@ class CompilerModule {
       // (`message, level, compileError?`) — no adapter needed.
       // Throw afterwards so the outer catch posts only the
       // high-level marker line without re-dumping every error blob.
-      emitCompileErrorEvents(result.errors, handleOutputData)
+      emitCompileErrorEvents(result.errors, handleOutputData, 'STruC++ compilation failed:')
       throw new Error('STruC++ compilation failed')
     }
 
@@ -1906,6 +1918,7 @@ class CompilerModule {
       cleanBuild,
       communicationPort,
       vendorScreenData,
+      hmiArg,
     ] = args as [
       string,
       string,
@@ -1917,7 +1930,17 @@ class CompilerModule {
       boolean | undefined,
       string | null | undefined,
       Record<string, unknown> | undefined,
+      unknown,
     ]
+    const parsedHmi = parseHmiBuildSources(hmiArg)
+    if (!parsedHmi.ok) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `The project's HMI could not be read: ${parsedHmi.error}\nStopping compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
 
     // VPP integrity gate (DOPE-539). FIRST, before the manifest is read for
     // anything else: from here on this method trusts the package directory for
@@ -2262,6 +2285,7 @@ class CompilerModule {
       },
       {
         normalizedProjectPath,
+        hmiSourcesPath: join(this.sourceDirectoryPath, 'hmi'),
         compilationPath,
         sourceTargetFolderPath,
         boardTarget,
@@ -2289,6 +2313,7 @@ class CompilerModule {
         // have changed since the last compile (a package installed or
         // removed mid-session).
         getVppRuntimeFloor: (board: string) => new PackageManagerModule().getRuntimeFloorForBoard(board),
+        wasmCompileService: getDesktopWasmCompileService(),
         pollTimeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
         pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
         startTimeoutMs: POST_BUILD_START_TIMEOUT_MS,
@@ -2567,6 +2592,8 @@ class CompilerModule {
         // host app, not about the compile.
         editorVersion: APP_VERSION,
         dependencyHintSurface: this.dependencyHintSurface,
+        hmi: parsedHmi.hmi,
+        hmiTestReadout: this.hmiTestReadout,
       },
       platformPort,
       (event) => {
@@ -2580,6 +2607,11 @@ class CompilerModule {
 
     // --- Editor-specific epilogue: simulator firmware path + closePort ---
     if (isSimulator) {
+      const modulePath = join(compilationPath, SIMULATOR_MODULE)
+      if (result.success && result.binary) {
+        await mkdir(compilationPath, { recursive: true })
+        await writeFile(modulePath, result.binary)
+      }
       if (compileOnly) {
         // Gated on the verdict: this line used to be unconditional, so a
         // simulator compile-only build whose strucpp step failed printed the
@@ -2591,20 +2623,12 @@ class CompilerModule {
         _mainProcessPort.close()
         return
       }
-      if (result.success) {
-        // Resolve the per-FQBN sub-directory arduino-cli wrote the
-        // .hex into.  Matches the layout the renderer's simulator
-        // loader expects.  `boardEntry.platform` is populated by the
-        // BoardInfoResolver above (hals.json OR VPP manifest), so
-        // this works uniformly for both catalogs.
-        const platform = typeof boardEntry?.platform === 'string' ? boardEntry.platform : ''
-        const fqbnSubDir = platform.replaceAll(':', '.')
-        const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', fqbnSubDir, 'Baremetal.ino.hex')
+      if (result.success && result.binary) {
         _mainProcessPort.postMessage({
           logLevel: 'info',
           message: 'Compilation successful. Loading firmware into simulator...',
         })
-        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true, success: true })
+        _mainProcessPort.postMessage({ simulatorFirmwarePath: modulePath, closePort: true, success: true })
         _mainProcessPort.close()
         return
       }

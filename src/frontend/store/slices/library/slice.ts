@@ -1,7 +1,10 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { bundledLibraryNames } from '../../../../middleware/shared/utils/hmi/widget-libraries'
+import { libraryPouRequirements } from '../../../../middleware/shared/utils/library/pou-requirements'
 import { librariesOwningTypes } from '../../../utils/library-usage'
+import { stlibsToSystemLibraries } from '../../../utils/stlib-to-system-library'
 import type { SharedRootState } from '../shared/types'
 import type { LibraryProjectRef, LibrarySlice } from './types'
 
@@ -42,6 +45,7 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
     enabledLibraries: [],
     bundledLibraryNames: [],
     missingLibraries: [],
+    pouRequirements: [],
     libraryActions: {
       setSystemLibraries: (libraries) => {
         // Strip malformed POU entries at the source — keep only
@@ -167,6 +171,20 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
             state.bundledLibraryNames = names
           }),
         )
+      },
+      setPouRequirements: (requirements) => {
+        setState(
+          produce((state: LibrarySlice) => {
+            state.pouRequirements = requirements
+          }),
+        )
+      },
+      applyInstalledLibraries: (archives, installed) => {
+        const actions = getState().libraryActions
+        const requirements = libraryPouRequirements(archives)
+        actions.setSystemLibraries(stlibsToSystemLibraries(archives, requirements))
+        actions.setPouRequirements(requirements)
+        actions.setBundledLibraryNames(bundledLibraryNames(installed))
       },
     },
   }

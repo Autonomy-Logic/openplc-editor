@@ -114,6 +114,16 @@ const SKELETON = {
   'src/modbus_master_config.h': STUB,
 }
 
+/** The support units the Simulator's WebAssembly build requires next to the skeleton. */
+const SIMULATOR_SUPPORT = {
+  'wasm-sim/sim_main.cpp': '// shim',
+  'wasm-sim/sim_python.cpp': '// python blocks',
+  'wasm-sim/core/api/Common.cpp': '// common',
+  'wasm-sim/core/api/Print.cpp': '// print',
+  'wasm-sim/core/api/Stream.cpp': '// stream',
+  'wasm-sim/core/api/String.cpp': '// string',
+}
+
 const NETWORK_ON = { network: { enabled: true } } as VppModbusState
 
 const group = (iecLocation: string, over: Partial<ModbusIOGroup> = {}): ModbusIOGroup => ({
@@ -185,6 +195,12 @@ function makePort() {
     computeMd5: jest.fn().mockResolvedValue('a'.repeat(32)),
     transpileToSt: jest.fn().mockResolvedValue({ ok: true, programSt: 'PROGRAM main\nEND_PROGRAM' }),
     compileArduino: jest.fn().mockResolvedValue({ ok: true, binary: new Uint8Array([1, 2, 3]) }),
+    compileToWasm: jest.fn().mockResolvedValue({
+      ok: true,
+      wasm: new Uint8Array([0, 97, 115, 109]),
+      stats: { units: 1, cached: 0 },
+      diagnostics: [],
+    }),
     uploadRuntimeV4: jest.fn().mockResolvedValue({ ok: true }),
     uploadArduinoBoard: jest.fn().mockResolvedValue({ ok: true }),
     uploadRuntimeV3: jest.fn().mockResolvedValue({ ok: true }),
@@ -223,7 +239,7 @@ async function build(target: Target, options: BuildOptions = {}) {
       compileOnly: true,
       libraryArchives: [],
       missingLibraries: [],
-      firmwareSkeleton: SKELETON,
+      firmwareSkeleton: target === 'simulator' ? { ...SKELETON, ...SIMULATOR_SUPPORT } : SKELETON,
       strucppRuntimeHeaders: {},
       avrLibStdCppInclude: '',
       arduinoCliParallel: false,
@@ -233,7 +249,7 @@ async function build(target: Target, options: BuildOptions = {}) {
     (event) => events.push(event),
   )
 
-  const compileCall = port.compileArduino.mock.calls[0]
+  const compileCall = port.compileArduino.mock.calls[0] ?? port.compileToWasm.mock.calls[0]
   const files = compileCall ? (compileCall[0].files as Record<string, string>) : undefined
   const materializeCall = materializeRuntimeV4Bundle.mock.calls[0] as [{ bundle: Record<string, string> }] | undefined
   return { result, events, port, files, bundle: materializeCall?.[0].bundle, materializeRuntimeV4Bundle }

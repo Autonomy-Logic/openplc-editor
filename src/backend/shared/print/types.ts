@@ -28,7 +28,7 @@ export type {
 
 export type RgbHex = string
 
-export type PrintFontKey = 'sans' | 'sansBold' | 'mono' | 'monoBold'
+export type PrintFontKey = 'sans' | 'sansBold' | 'mono' | 'monoBold' | 'ldMono' | 'ldMonoSemibold'
 
 export type DrawOp =
   | { kind: 'line'; x1: number; y1: number; x2: number; y2: number; color: RgbHex; widthPt: number }
@@ -82,6 +82,8 @@ export type ContentBlock = {
   widthPt: number
   heightPt: number
   ops: DrawOp[]
+  /** Space left below the block before the next one; the page flow's default gap when absent. */
+  gapAfterPt?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -93,4 +95,6 @@ export type EmbeddedFontSet = {
   sansBold: Uint8Array
   mono: Uint8Array
   monoBold: Uint8Array
+  ldMono: Uint8Array
+  ldMonoSemibold: Uint8Array
 }

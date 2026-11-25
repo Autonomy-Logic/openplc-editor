@@ -7,7 +7,9 @@ import type {
   PLCVariable,
   ProjectMeta,
 } from '../../../../middleware/shared/ports/types'
+import type { HmiElementKind, HmiReferenceLocation } from '../../../../middleware/shared/utils/hmi/references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
+import type { ReferenceImpactAnalysis } from '../../../utils/variable-references/types'
 import type { AISlice } from '../ai'
 import type { ConsoleSlice } from '../console'
 import type { DeviceSlice } from '../device'
@@ -15,16 +17,19 @@ import type { EditorSlice } from '../editor'
 import type { FBDFlowSlice } from '../fbd'
 import type { FileSlice } from '../file'
 import type { HistorySlice } from '../history'
+import type { HmiDesignerSlice } from '../hmi-designer'
 import type { LadderFlowSlice } from '../ladder'
 import type { LibrarySlice } from '../library'
 import type { ModalSlice } from '../modal'
 import type { ProjectSlice } from '../project'
+import type { RuntimeProvisioningSlice } from '../runtime-provisioning'
 import type { SearchSlice } from '../search'
 import type { TabsSlice } from '../tabs'
 import type { VersionControlSlice } from '../version-control'
 import type { WorkspaceSlice } from '../workspace'
 
 export type SharedRootState = AISlice &
+  HmiDesignerSlice &
   ProjectSlice &
   FileSlice &
   EditorSlice &
@@ -39,6 +44,7 @@ export type SharedRootState = AISlice &
   LadderFlowSlice &
   HistorySlice &
   VersionControlSlice &
+  RuntimeProvisioningSlice &
   SharedSlice
 
 export type SharedResponse = {
@@ -127,6 +133,37 @@ export type DatatypeActions = {
   duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
+/** A rename of a referenced screen or widget block waiting on the reference-impact modal. `resolve(true)` renames
+ *  the references too, `resolve(false)` leaves them as they are, `resolve(null)` abandons the rename. */
+export type PendingHmiRename = {
+  kind: HmiElementKind
+  oldName: string
+  newName: string
+  impact: ReferenceImpactAnalysis<HmiReferenceLocation>
+  resolve: (renameReferences: boolean | null) => void
+}
+
+/** Screens and widget blocks (`hmi/`). */
+export type HmiActions = {
+  /** Creates it from its template and opens its tab; the first one also creates HMI Settings. */
+  create: (kind: HmiElementKind, name: string) => SharedResponse
+  deleteRequest: (kind: HmiElementKind, name: string) => void
+  delete: (kind: HmiElementKind, name: string) => SharedResponse
+  /**
+   * Async: when other files or HMI Settings refer to it, the impact modal asks whether to rename them too. A second
+   * rename while one awaits the modal is refused.
+   */
+  rename: (kind: HmiElementKind, oldName: string, newName: string) => Promise<SharedResponse>
+  /**
+   * Answers the pending rename's impact modal: `true` renames the references, `false` keeps them, `null` cancels the
+   * rename.
+   */
+  respondToPendingRename: (renameReferences: boolean | null) => void
+  duplicate: (kind: HmiElementKind, sourceName: string, newName: string) => SharedResponse
+  /** Opens the HMI Settings tab. */
+  openSettings: () => void
+}
+
 export type ServerActions = {
   create: (args: { name: string; protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' }) => SharedResponse
   deleteRequest: (name: string) => void
@@ -174,8 +211,7 @@ export type OpenProjectResponseData = {
   /** Warnings from parsing (e.g. dropped files that failed validation).
    *  Recoverable: the project opens normally and these surface in the Console. */
   warnings?: string[]
-  /** Non-empty opens the project EMPTY and read-only: partial content would look legitimate, and the first save
-   *  would overwrite the user's real diagram. */
+  /** Non-empty opens the project empty and read-only. */
   fatalErrors?: string[]
   /** `datatypes/*.dt` files that failed to parse on load, preserved
    *  raw so the save flow echoes them back verbatim. */
@@ -201,11 +237,14 @@ export type SharedWorkspaceActions = {
   /** `{ pendingConfirmation: true }` means the modal was opened, so the caller can defer post-close work
    *  (e.g. host navigation) until it resolves. */
   closeProject: () => { pendingConfirmation: boolean }
-  /** The same rule `closeProject` applies, exposed for a caller that REPLACES the project rather than
-   *  closing it, so both stay in step. */
+  /** The rule `closeProject` applies, for a caller that replaces the project instead of closing it. */
   hasUnsavedChanges: () => boolean
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
+  /**
+   * Loads an opened project. Every LD POU opens in the current layout and stays in it, issues only reported; a POU
+   * converted to that layout is marked updated, so the next save writes it back.
+   */
   handleOpenProjectResponse: (data: OpenProjectResponseData) => void
   /** Shared tail of both platforms' retrieve adapters: load the project, and mark it as having no location
    *  the user chose. */
@@ -216,10 +255,12 @@ export type SharedSlice = {
   undoRedo: Record<string, PouHistory>
   pendingDatatypeRename: PendingDatatypeRename | null
   pendingDatatypeDelete: PendingDatatypeDelete | null
+  pendingHmiRename: PendingHmiRename | null
   pouActions: PouActions
   datatypeActions: DatatypeActions
   globalVariableListActions: GlobalVariableListActions
   serverActions: ServerActions
+  hmiActions: HmiActions
   remoteDeviceActions: RemoteDeviceActions
   ethercatDeviceActions: EtherCATDeviceActions
   snapshotActions: SnapshotActions

@@ -239,3 +239,51 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     expect(data).toHaveProperty('label', '192.168.2.4')
   })
 })
+
+describe('useRuntimePolling — runtime commercial licence', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
+    mockRuntime.getEthercatRuntimeStatus = undefined
+    connectRuntime()
+  })
+
+  it('leaves the licence the editor verified alone while polling', async () => {
+    store.getState().deviceActions.setRuntimeLicense('commercial')
+    mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
+    renderPolling()
+    await flushAll()
+    expect(store.getState().runtimeConnection.license).toBe('commercial')
+  })
+})
+
+describe('useRuntimePolling — HMI roles', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
+    mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
+    mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: { masters: [] } })
+    connectRuntime({ includeEthercat: true })
+  })
+
+  it.each(['operator', 'viewer'] as const)('%s: polls the status but never the logs or EtherCAT', async (role) => {
+    store.getState().deviceActions.setRuntimeAccountRole(role)
+
+    renderPolling()
+    await flushAll()
+
+    expect(spies.setPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
+    expect(mockRuntime.getLogs).not.toHaveBeenCalled()
+    expect(mockRuntime.getEthercatRuntimeStatus).not.toHaveBeenCalled()
+    expect(spies.openModal).not.toHaveBeenCalled()
+  })
+
+  it('engineer: polls the logs', async () => {
+    store.getState().deviceActions.setRuntimeAccountRole('engineer')
+
+    renderPolling()
+    await flushAll()
+
+    expect(mockRuntime.getLogs).toHaveBeenCalledTimes(1)
+  })
+})

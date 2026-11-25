@@ -17,6 +17,7 @@
  * defensive purposes against user-supplied JSON).
  */
 
+import { resolveHmiPanel } from './hmi-panel'
 import {
   ALL_ADDRESS_PRODUCERS_ACTIVE,
   ARDUINO_CLI_CAPABILITIES,
@@ -74,6 +75,8 @@ const EMPTY_CAPABILITIES: TargetCapabilities = {
   opcuaServer: false,
   s7Server: false,
   networkSockets: null,
+  hmi: null,
+  hmiDataWidgets: false,
   debuggerTransports: [],
   pythonFunctionBlocks: false,
   arduinoApiCompletions: false,
@@ -190,6 +193,8 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
   if (boardInfo.vpp) {
     merged.modbusRtuMaster = base.modbusRtuMaster
   }
+
+  merged.hmi = resolveHmiPanel(declared?.hmi === undefined ? base.hmi : declared.hmi)
 
   return merged
 }

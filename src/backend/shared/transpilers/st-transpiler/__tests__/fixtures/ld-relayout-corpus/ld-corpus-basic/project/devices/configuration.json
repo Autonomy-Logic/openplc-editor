@@ -1,0 +1,28 @@
+{
+  "deviceBoard": "OpenPLC Simulator",
+  "communicationPort": "",
+  "runtimeIpAddress": "",
+  "vendorScreenData": {},
+  "vendorScreenDataByBoard": {
+    "OpenPLC Simulator": {}
+  },
+  "selectedPlatformOptions": {},
+  "vppPackagePinsByBoard": {},
+  "persistentStorage": {
+    "enabled": false,
+    "path": "",
+    "flushSeconds": 5
+  },
+  "persistentStorageByBoard": {
+    "OpenPLC Simulator": {
+      "enabled": false,
+      "path": "",
+      "flushSeconds": 5
+    }
+  },
+  "targetDevice": {
+    "orchestratorId": "",
+    "deviceId": "",
+    "deviceName": ""
+  }
+}

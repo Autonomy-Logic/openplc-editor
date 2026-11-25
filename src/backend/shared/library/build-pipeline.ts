@@ -31,6 +31,7 @@
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { checkPathId } from '@root/backend/shared/utils/path-safety'
 import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
+import { hmiFixedDrawCalls } from '@root/middleware/shared/utils/hmi/widget-draw-checks'
 
 import { compileStlib, type CompileStlibError, type CompileStlibSource } from './compile-stlib'
 
@@ -287,16 +288,12 @@ export interface LibraryBuildResult {
  *     `manifest.functions[]` / `functionBlocks[]` / `types[]` entry
  *     so authors don't have to duplicate help text in `library.json`.
  *
- *   - `dependencyArchives` — full strucpp archives of every library
- *     the project enables, loaded from disk by the Electron bridge.
+ *   - `dependencyArchives` — full strucpp archives of the libraries
+ *     the project uses (bundled and listed), loaded by the platform.
  *     Passed to `compileStlib` so cross-library symbol resolution
  *     works (a library that uses an OSCAT FB needs OSCAT's archive
- *     visible during compile).  Opaque shape — strucpp owns it.
- *
- *   - `dependencyRefs` — `{name, version}` tuples mirroring the
- *     project's `libraries` field.  Written verbatim onto the
- *     archive's `dependencies` array so consumers can resolve
- *     transitive deps without re-reading every archive on disk.
+ *     visible during compile).  Opaque shape — strucpp owns it, and
+ *     records in the archive's `dependencies` those the code uses.
  */
 /**
  * One native (C/C++, Python) library source, exactly as the author wrote it.
@@ -324,14 +321,36 @@ export interface LibraryNativeSource {
 
 export interface LibraryBuildAux {
   pouDocs?: Record<string, string>
+  /** HMI widget blocks of the library project, each a whole `FUNCTION_BLOCK` source named after its block. */
+  widgetSources?: ReadonlyArray<{ name: string; source: string }>
   dependencyArchives?: unknown[]
-  dependencyRefs?: Array<{ name: string; version: string }>
   /** Verbatim C/C++ and Python sources from the library's project,
    *  passed through to `compileStlib` next to the ST. Their lowered
    *  bridge ST is filtered out of the strucpp input in exchange —
    *  see `LibraryNativeSource`. */
   nativeSources?: LibraryNativeSource[]
   declaredGlobals?: string[]
+}
+
+/** A header `library.json` declares: a bare name, or a name with the API version the library's code calls. */
+type DeclaredHeader = string | { name: string; version?: string }
+
+const isDeclaredHeader = (value: unknown): value is DeclaredHeader =>
+  typeof value === 'string' ||
+  (typeof value === 'object' &&
+    value !== null &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    (!('version' in value) || typeof value.version === 'string'))
+
+/**
+ * The headers the library's own `{external}` code includes, as `library.json` declares them (`headers`), in
+ * `compileStlib`'s form; undefined when it declares none.
+ */
+function declaredHeaders(manifest: LibraryBuildManifest): Array<{ name: string; version?: string }> | undefined {
+  const { headers } = manifest.extra
+  if (!Array.isArray(headers) || headers.length === 0) return undefined
+  return headers.filter(isDeclaredHeader).map((h) => (typeof h === 'string' ? { name: h } : h))
 }
 
 /**
@@ -410,7 +429,8 @@ export function libraryBuildFromTranspiledSt(
   // recovers each block's interface from its ST header and emits no chunk.
   const hasRealSources = sources.some((s) => s.fileName !== GLOBALS_SPLIT_FILENAME)
   const nativeSources = aux?.nativeSources ?? []
-  if (!hasRealSources && nativeSources.length === 0) {
+  const widgetSources = (aux?.widgetSources ?? []).map((w) => ({ fileName: `${w.name}.st`, source: w.source }))
+  if (!hasRealSources && nativeSources.length === 0 && widgetSources.length === 0) {
     return {
       success: false,
       errors: [
@@ -422,15 +442,20 @@ export function libraryBuildFromTranspiledSt(
     }
   }
 
+  const drawErrors = (aux?.widgetSources ?? []).flatMap((w) =>
+    hmiFixedDrawCalls(w.source).map((f) => ({ message: f.message, line: f.line, file: `${w.name}.st` })),
+  )
+  if (drawErrors.length > 0) return { success: false, errors: drawErrors }
+
+  const headers = declaredHeaders(manifest)
   // Native sources ride in the same input array; strucpp routes on the file
   // extension.  Appended after the ST so `sourceFiles` ordering stays stable.
-  const compileRes = compileStlib([...sources, ...nativeSources.map((n) => ({ ...n }))], {
+  const compileRes = compileStlib([...sources, ...widgetSources, ...nativeSources.map((n) => ({ ...n }))], {
     name: manifest.name,
     version: manifest.version,
     namespace: manifest.namespace,
-    ...(aux?.dependencyArchives && aux.dependencyArchives.length > 0
-      ? { dependencies: aux.dependencyArchives as never }
-      : {}),
+    ...(headers ? { headers } : {}),
+    ...(aux?.dependencyArchives && aux.dependencyArchives.length > 0 ? { dependencies: aux.dependencyArchives } : {}),
   })
 
   // Post-process the resulting archive with metadata strucpp's
@@ -513,6 +538,7 @@ function undeclaredExports(
   const declaredFunctionBlocks = new Set([
     ...knownPous.filter((pou) => pou.kind === 'FUNCTION_BLOCK').map((pou) => pou.name.toLowerCase()),
     ...(aux?.nativeSources ?? []).map((n) => nativeStem(n.fileName).toLowerCase()),
+    ...(aux?.widgetSources ?? []).map((w) => w.name.toLowerCase()),
   ])
   const declaredGlobals = new Set((aux?.declaredGlobals ?? []).map((name) => name.toLowerCase()))
 
@@ -550,7 +576,6 @@ function undeclaredExports(
  *   - `manifest.functions[i].documentation` / functionBlocks /
  *     types from the editor's POU "Description" fields, matched
  *     case-insensitively by name.
- *   - `dependencies` from the project's enabled-libraries list.
  */
 function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: LibraryBuildAux | undefined): void {
   const arch = archive as {
@@ -561,7 +586,6 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
       functionBlocks?: Array<{ name: string; documentation?: string }>
       types?: Array<{ name: string; documentation?: string }>
     }
-    dependencies?: Array<{ name: string; version: string }>
   }
   if (!arch.manifest) return
 
@@ -594,10 +618,6 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
       const doc = lookup(entry.name)
       if (doc) entry.documentation = doc
     }
-  }
-
-  if (aux?.dependencyRefs && aux.dependencyRefs.length > 0) {
-    arch.dependencies = aux.dependencyRefs.map((ref) => ({ name: ref.name, version: ref.version }))
   }
 }
 

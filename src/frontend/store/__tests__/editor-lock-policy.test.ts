@@ -13,6 +13,7 @@ const EXPECTED: Record<EditorModel['type'], EditorLockPolicy> = {
   'diff-viewer': 'read-only',
   'plc-persistent-storage': 'host-locked',
   'plc-user-management': 'host-locked',
+  'plc-hmi-settings': 'host-locked',
   'plc-textual': 'self-locked',
   'plc-graphical': 'self-locked',
   'plc-datatype': 'self-locked',
@@ -27,6 +28,7 @@ const EXPECTED: Record<EditorModel['type'], EditorLockPolicy> = {
   'plc-library-manifest': 'self-locked',
   'plc-ethercat-device': 'self-locked',
   'plc-ethercat-module': 'self-locked',
+  'plc-hmi': 'self-locked',
 }
 
 const isEditorType = (value: string): value is EditorModel['type'] => value in EXPECTED
@@ -41,7 +43,7 @@ describe('editorLockPolicy', () => {
   })
 
   it('should classify every editor type', () => {
-    expect(Object.keys(EXPECTED)).toHaveLength(19)
+    expect(Object.keys(EXPECTED)).toHaveLength(21)
   })
 
   it('should never answer outside the three policies', () => {

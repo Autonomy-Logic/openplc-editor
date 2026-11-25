@@ -2,6 +2,7 @@ import { zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-sc
 import type { SystemLibrary, UserLibrary } from '../../../../middleware/shared/ports/library-types'
 import type { PLCBody } from '../../../../middleware/shared/ports/open-plc-types'
 import type { PLCDataType, PLCPou, PLCStructureVariable, PLCVariable } from '../../../../middleware/shared/ports/types'
+import { pouLabelSource } from '../../../../middleware/shared/utils/ladder-layout'
 import type { OpenPLCStore } from '../../../store'
 import type { RungLadderState } from '../../../store/slices/ladder/types'
 import {
@@ -898,12 +899,15 @@ function buildAndPlaceRung(
   const globals = state.project.data.configurations.resource.globalVariables
   const planned = planInstanceVariables(pou, globals, spec.elements, state.libraries, state.project.data.pous)
 
-  const dryRun = buildRungFromSpec({
-    rungId,
-    spec,
-    variables: [...collectPouVariables(pou, globals), ...planned],
-    resolveBlock: (blockType) => resolveBlockVariant(blockType, state.libraries, state.project.data.pous),
-  })
+  const dryRun = buildRungFromSpec(
+    {
+      rungId,
+      spec,
+      variables: [...collectPouVariables(pou, globals), ...planned],
+      resolveBlock: (blockType) => resolveBlockVariant(blockType, state.libraries, state.project.data.pous),
+    },
+    pouLabelSource(state.project.data, pou.name),
+  )
   if (!dryRun.ok) return { success: false, message: dryRun.errors.join('; ') }
   const dryRunError = flowValidationError(pou.name, place(dryRun.rung))
   if (dryRunError) return { success: false, message: dryRunError }
@@ -917,12 +921,15 @@ function buildAndPlaceRung(
   /* istanbul ignore next -- defensive: the POU was just found above; nothing in between removes it */
   if (!freshPou) return { success: false, message: `POU "${pou.name}" not found.` }
 
-  const built = buildRungFromSpec({
-    rungId,
-    spec,
-    variables: collectPouVariables(freshPou, freshState.project.data.configurations.resource.globalVariables),
-    resolveBlock: (blockType) => resolveBlockVariant(blockType, freshState.libraries, freshState.project.data.pous),
-  })
+  const built = buildRungFromSpec(
+    {
+      rungId,
+      spec,
+      variables: collectPouVariables(freshPou, freshState.project.data.configurations.resource.globalVariables),
+      resolveBlock: (blockType) => resolveBlockVariant(blockType, freshState.libraries, freshState.project.data.pous),
+    },
+    pouLabelSource(freshState.project.data, pou.name),
+  )
   /* istanbul ignore next -- defensive: the dry run above already built this spec */
   if (!built.ok) return { success: false, message: built.errors.join('; ') }
 

@@ -54,16 +54,19 @@ const configuration: webpack.Configuration = {
 
   target: ['web', 'electron-renderer'],
 
-  entry: [
-    `webpack-dev-server/client?http://localhost:${port}/dist`,
-    'webpack/hot/only-dev-server',
-    join(srcPath, 'main.tsx'),
-  ],
+  entry: {
+    'renderer.dev': [
+      `webpack-dev-server/client?http://localhost:${port}/dist`,
+      'webpack/hot/only-dev-server',
+      join(srcPath, 'main.tsx'),
+    ],
+    'hmi-preview-worker': join(srcPath, 'middleware/adapters/editor/hmi-preview.worker.ts'),
+  },
 
   output: {
     path: webpackPaths.distRendererPath,
     publicPath: '/',
-    filename: 'renderer.dev.js',
+    filename: '[name].js',
     library: {
       type: 'umd',
     },
@@ -193,6 +196,7 @@ const configuration: webpack.Configuration = {
     new HtmlWebpackPlugin({
       filename: 'index.html',
       template: join(srcPath, 'index.ejs'),
+      chunks: ['renderer.dev'],
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,

@@ -8,7 +8,15 @@ export const PLACEMENT_TARGET_ATTRIBUTE = 'data-placement-target'
 
 export type PlacementLanguage = 'ld' | 'fbd' | 'sfc'
 
-export type LadderPlacementElement = 'contact' | 'coil' | 'block'
+export type LadderPlacementElement =
+  | 'contact'
+  | 'contact-negated'
+  | 'contact-rising'
+  | 'contact-falling'
+  | 'coil'
+  | 'coil-set'
+  | 'coil-reset'
+  | 'block'
 
 export type FbdPlacementElement =
   | 'block'
@@ -29,9 +37,41 @@ export type PlacementElementDescriptor = {
 /** Radial menu order (clockwise from the top). */
 export const LADDER_PLACEMENT_ELEMENTS: readonly PlacementElementDescriptor[] = [
   { id: 'contact', shortcutDigit: 1 },
+  { id: 'contact-negated', shortcutDigit: 4 },
+  { id: 'contact-rising', shortcutDigit: 5 },
+  { id: 'contact-falling', shortcutDigit: 6 },
   { id: 'coil', shortcutDigit: 2 },
+  { id: 'coil-set', shortcutDigit: 7 },
+  { id: 'coil-reset', shortcutDigit: 8 },
   { id: 'block', shortcutDigit: 3 },
 ]
+
+/** The node a ladder placement element becomes: its type and, for a modified contact or coil, its variant. */
+export function ladderPlacementNode(id: LadderPlacementElement): {
+  type: 'contact' | 'coil' | 'block'
+  variant?: 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
+} {
+  switch (id) {
+    case 'contact':
+    case 'coil':
+    case 'block':
+      return { type: id }
+    case 'contact-negated':
+      return { type: 'contact', variant: 'negated' }
+    case 'contact-rising':
+      return { type: 'contact', variant: 'risingEdge' }
+    case 'contact-falling':
+      return { type: 'contact', variant: 'fallingEdge' }
+    case 'coil-set':
+      return { type: 'coil', variant: 'set' }
+    case 'coil-reset':
+      return { type: 'coil', variant: 'reset' }
+    default: {
+      const exhaustive: never = id
+      return exhaustive
+    }
+  }
+}
 
 /** Radial menu order (clockwise from the top). */
 export const FBD_PLACEMENT_ELEMENTS: readonly PlacementElementDescriptor[] = [

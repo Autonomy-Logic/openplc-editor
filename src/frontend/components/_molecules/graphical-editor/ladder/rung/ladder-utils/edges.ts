@@ -1,8 +1,11 @@
+import { buildEdge } from '@root/middleware/shared/utils/ladder-layout'
 import type { Edge, Node } from '@xyflow/react'
 
 import type { RungLadderState } from '../../../../../../store/slices/ladder'
 import type { BasicNodeData, ParallelNode } from '../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { isNodeOfType } from './nodes'
+
+export { buildEdge }
 
 type ConnectionOptions = {
   sourceHandle?: string
@@ -16,16 +19,6 @@ export const checkIfConnectedInParallel = (
   const connectedInParallel = rung.edges.filter((edge) => edge.target === node.id)
   const sourceNode = rung.nodes.find((node) => node.id === connectedInParallel[0].source) as Node
   return { parentNode: sourceNode, connectedInParallel: isNodeOfType(sourceNode, 'parallel') }
-}
-
-export const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: ConnectionOptions): Edge => {
-  return {
-    id: `e_${sourceNodeId}_${targetNodeId}__${options?.sourceHandle}_${options?.targetHandle}`,
-    source: sourceNodeId,
-    target: targetNodeId,
-    sourceHandle: options?.sourceHandle,
-    targetHandle: options?.targetHandle,
-  }
 }
 
 export const removeEdge = (edges: Edge[], edgeId: string): Edge[] => {

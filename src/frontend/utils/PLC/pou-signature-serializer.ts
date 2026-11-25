@@ -139,6 +139,8 @@ export function serializePouSignatureToST(
 export function serializePouSignatureToSTWithBodyOffset(
   pou: PLCPou,
   aliasIndex: ReadonlyMap<string, string> = EMPTY_ALIAS_INDEX,
+  /** Gives every POU the opaque body, ST ones included: declarations only. */
+  declarationsOnly = false,
 ): {
   text: string
   bodyLineOffset: number
@@ -154,7 +156,7 @@ export function serializePouSignatureToSTWithBodyOffset(
   // Falls back to serialising the model for a POU that has no text yet (one
   // created in memory this session and not saved).
   const variables = resolveVariablesTextLocations(pou, aliasIndex)
-  const body = pou.body.language === 'st' ? (pou.body.value as string) : OPAQUE_BODY_PLACEHOLDER
+  const body = pou.body.language === 'st' && !declarationsOnly ? (pou.body.value as string) : OPAQUE_BODY_PLACEHOLDER
   const endKeyword = getEndKeyword(pou.pouType)
   const prefix = `${declaration}\n${variables}\n`
   // `prefix` ends with '\n', so its split count = lines-before-body + 1

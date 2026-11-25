@@ -13,13 +13,13 @@ import {
   VariableNode,
 } from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
 import { buildEdge } from '@root/frontend/components/_molecules/graphical-editor/ladder/rung/ladder-utils/edges'
-import { updateDiagramElementsPosition } from '@root/frontend/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { LadderFlowType, RungLadderState } from '@root/frontend/store/slices'
 import { newUuid } from '@root/frontend/utils/new-uuid'
 import {
   classifyBlockVariables,
   rebuildVariablesForInputCount,
 } from '@root/frontend/utils/PLC/extensible-block-variables'
+import { EMPTY_LABEL_SOURCE, type LadderLabelSource, relayoutRung } from '@root/middleware/shared/utils/ladder-layout'
 import { Edge, Position } from '@xyflow/react'
 
 import type { BlockSignature, BlockSignatureResolver } from '../block-signatures'
@@ -713,6 +713,7 @@ function rebuildRung(
   imported: { nodes: LadderParsedNode[]; links: ImportedLink[] },
   context: LadderParseContext,
   warnings: string[],
+  labelSource: LadderLabelSource,
 ): RebuildResult {
   const leftRails = imported.nodes.filter((node) => isRail(node) && node.data.variant === 'left')
   const rightRails = imported.nodes.filter((node) => isRail(node) && node.data.variant === 'right')
@@ -845,9 +846,8 @@ function rebuildRung(
     nodes,
     edges,
   }
-  const laidOut = updateDiagramElementsPosition(rung, NEW_RUNG_BOUNDS)
   warnings.push(...blockWarnings)
-  return { ok: true, rung: { ...rung, nodes: laidOut.nodes, edges: laidOut.edges } }
+  return { ok: true, rung: relayoutRung(rung, labelSource) }
 }
 
 function withResolvedSignature(
@@ -865,6 +865,7 @@ export function parseLadderXml(
   pouName: string,
   ldXml: unknown,
   context: LadderParseContext = NO_SIGNATURES,
+  labelSource: LadderLabelSource = EMPTY_LABEL_SOURCE,
 ): { body: LadderFlowType; warnings: string[] } {
   const ld = asRecord(ldXml)
   const warnings: string[] = []
@@ -974,6 +975,7 @@ export function parseLadderXml(
       { nodes: rungNodes, links: rungLinks },
       context,
       warnings,
+      labelSource,
     )
     if (rebuilt.ok) return rebuilt.rung
     warnings.push(`POU "${pouName}": rung ${index + 1} kept the layout from the XML, because ${rebuilt.reason}`)

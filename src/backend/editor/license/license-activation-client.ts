@@ -35,45 +35,9 @@
  */
 
 import { LIC_BLOB_SIZE } from '../../shared/debug/license-blob'
+import type { DeviceActivationInput, DeviceActivationResult } from '../../shared/license/license-flow'
 import { getEdgeApiBaseUrl } from '../library-manager/desktop-catalog-transport'
 import { defaultPortFor, httpModuleFor } from '../utils/http-module'
-
-/**
- * Input to `checkDeviceActivation` — exactly the two fields the wire accepts.
- *
- * There is deliberately no `vppId` or `keyId` here. Both existed only to feed the
- * removed dev signer: `ActivateVppLicenseDto` has no such field, and the backend
- * derives its own product and signing-key material from `packageId`. Keeping them
- * would advertise a choice the caller does not have.
- */
-export interface DeviceActivationInput {
-  /** 16-byte device id, LOWERCASE hex (from `deriveDeviceId`). */
-  deviceId: string
-  /** VPP package id (e.g. `com.openplc.espressif-licensed`) — `package.id`. */
-  packageId: string
-}
-
-/**
- * Result of an activation check. Best-effort: transport / backend errors surface
- * as `{ licensed: false, error }` rather than throwing, so the licensing routine
- * can degrade without a hard failure.
- *
- * `reason` and `error` are SEPARATE on purpose and callers must keep them apart.
- * `reason` is the backend's business answer ("no purchase on record") and means
- * demo mode is correct. `error` means we never got an answer — a 429 from the
- * rate limiter, a 503 when no signer is configured, a 404 for an unknown package,
- * a dropped connection. Collapsing the two tells someone who already owns a
- * license to go buy one.
- */
-export interface DeviceActivationResult {
-  licensed: boolean
-  /** License blob bytes (98 B) when `licensed` — ready to write via FC 0x49. */
-  license?: number[]
-  /** Backend-supplied reason (e.g. "no active subscription"). */
-  reason?: string
-  /** Populated on transport / backend failure (best-effort path). */
-  error?: string
-}
 
 /** The exact JSON body `ActivateVppLicenseDto` accepts. */
 interface EdgeActivationRequestBody {

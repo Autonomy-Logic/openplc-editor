@@ -8,6 +8,14 @@
   "beforePack": "scripts/before-pack-debug-seam.js",
   "afterPack": "scripts/mac-inject-local-network-usage.js",
   "afterSign": "scripts/notarize.js",
+  "electronFuses": {
+    "runAsNode": false,
+    "enableNodeOptionsEnvironmentVariable": false,
+    "enableNodeCliInspectArguments": false,
+    "enableEmbeddedAsarIntegrityValidation": true,
+    "onlyLoadAppFromAsar": true,
+    "resetAdHocDarwinSignature": true
+  },
   "directories": {
     "app": "release/app",
     "buildResources": "assets",
@@ -24,13 +32,38 @@
       "to": "./strucpp/libs"
     },
     {
-      "from": "./node_modules/@yowasp/clang",
+      "from": "./vendor/hmi-widgets",
+      "to": "./hmi-widgets"
+    },
+    {
+      "from": "./release/yowasp-clang",
       "to": "./yowasp-clang",
       "filter": ["package.json", "README.md", "gen/**"]
     },
     {
       "from": "./third-party-licenses/yowasp-clang",
       "to": "./yowasp-clang/licenses"
+    },
+    {
+      "from": "./release/hmi-objects",
+      "to": "./hmi-objects"
+    },
+    {
+      "from": "./node_modules/@wasmer/sdk",
+      "to": "./wasmer-sdk",
+      "filter": ["package.json", "LICENSE*", "README.md", "dist/**/*.js", "pkg/**"]
+    },
+    {
+      "from": "./vendor/python-runtime",
+      "to": "./python-runtime"
+    },
+    {
+      "from": "./python-runtime.json",
+      "to": "./python-runtime/python-runtime.json"
+    },
+    {
+      "from": "./third-party-licenses/python-runtime",
+      "to": "./python-runtime/licenses"
     }
   ],
   "mac": {

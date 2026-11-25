@@ -1,6 +1,6 @@
 {
   "name": "open-plc-editor",
-  "version": "4.3.4",
+  "version": "4.4.0",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
   "license": "GPL-3.0-only",
   "author": {
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "serialport": "^12.0.0",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "ssh2": "1.17.0"
   }
 }

@@ -15,6 +15,8 @@
  * read React Flow's `nodes`/`edges` directly.
  */
 
+import { isLdVariableNode, ldSinkBuckets } from '@root/middleware/shared/utils/ladder-layout'
+
 import { extractModifier } from '../core/modifiers'
 import {
   computePaths,
@@ -41,7 +43,7 @@ import {
   contactModifierFromVariant,
   type VariableData,
 } from './narrow'
-import type { RFBody, RFEdge, RFNode, RFRung } from './types'
+import type { RFBody, RFEdge, RFNode } from './types'
 
 /**
  * A variable the walker synthesises during emission that the caller
@@ -97,23 +99,9 @@ interface WalkerState {
   connectorExprs: Map<string, ProgramChunk[]>
   /** Connector names whose upstream walk is in progress — detects a loop of pairs with no block in it. */
   resolvingConnectors: Set<string>
-  /** Cumulative Y-offset per node id — mirrors how `ladder-xml.ts`
-   *  globalises rung positions when it serialises React Flow into
-   *  PLCOpen XML (each rung's `reactFlowViewport[1]` height adds to
-   *  the running offset).  Used to position-sort sinks across rungs
-   *  in the same coordinate space the python oracle sees. */
-  yOffset: Map<string, number>
   warnings: string[]
   /** Pin types from computeConnectionTypes; empty without a TypeContext. */
   connTypes: Map<string, string>
-}
-
-function rungHeight(rung: RFRung): number {
-  const vp = rung.reactFlowViewport
-  if (Array.isArray(vp) && typeof vp[1] === 'number' && Number.isFinite(vp[1])) {
-    return vp[1]
-  }
-  return 0
 }
 
 /**
@@ -135,23 +123,6 @@ function locId(node: RFNode): number | string {
   }
   if (typeof raw === 'number' && Number.isInteger(raw)) return raw
   return node.id
-}
-
-/**
- * True for any node that holds a variable reference — covers both
- * vocabularies the editor produces:
- *   - 'variable' with `data.variant` of 'input'/'output'/'inout' (LD
- *     bodies + the older FBD shape used by per-case fixtures)
- *   - 'input-variable' / 'output-variable' / 'inout-variable' (modern
- *     FBD bodies as harvested from real projects)
- */
-function isVariableNode(node: RFNode): boolean {
-  return (
-    node.type === 'variable' ||
-    node.type === 'input-variable' ||
-    node.type === 'output-variable' ||
-    node.type === 'inout-variable'
-  )
 }
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
@@ -177,7 +148,6 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
     emittedSinks: new Set(),
     connectorExprs: new Map(),
     resolvingConnectors: new Set(),
-    yOffset: new Map(),
     warnings: [],
     connTypes: typeContext ? computeConnectionTypes(body, typeContext) : new Map(),
   }
@@ -189,7 +159,6 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
   // in a later rung but must emit before unordered work earlier in the
   // body.  Each rung's local Y coords are shifted by the cumulative
   // viewport heights of earlier rungs (matches `ladder-xml.ts`:612).
-  let cumulativeYOffset = 0
   for (const rung of body.rungs) {
     for (const node of rung.nodes) {
       if (state.byId.has(node.id)) {
@@ -198,7 +167,6 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
       state.byId.set(node.id, node)
       state.incoming.set(node.id, [])
       state.outgoing.set(node.id, [])
-      state.yOffset.set(node.id, cumulativeYOffset)
     }
     for (const edge of rung.edges) {
       const targetBucket = state.incoming.get(edge.target)
@@ -206,53 +174,9 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
       const sourceBucket = state.outgoing.get(edge.source)
       if (sourceBucket !== undefined) sourceBucket.push(edge)
     }
-    cumulativeYOffset += rungHeight(rung)
   }
 
-  // Collect sinks across the body.  A sink is any instance that
-  // appears in the body iteration sweep (mirrors PLCGenerator.py's
-  // generate-instances loop):
-  //   - coils, outVariables, inOutVariables — write targets
-  //   - blocks (idempotent via `emittedBlocks`; ensures cascaded
-  //     blocks get their call site regardless of consumer chain)
-  //   - connectors — cache their upstream expression for later
-  //     continuation visits.
-  //
-  // Empty-name variables are dropped to match `ladder-xml.ts`:602, which
-  // filters them out of the PLCOpen serialization the oracle consumes.
-  // Those nodes represent dangling block outputs the user never wired
-  // to a real variable.
-  const sinks: RFNode[] = []
-  for (const rung of body.rungs) {
-    for (const node of rung.nodes) {
-      if (node.type === 'coil') {
-        if (asCoilData(node.data)?.variable) sinks.push(node)
-      } else if (isVariableNode(node)) {
-        const data = asVariableData(node.data)
-        if (data === null || data.variable === '') continue
-        if (data.variant === 'output' || data.variant === 'inout') sinks.push(node)
-      } else if (node.type === 'block') {
-        sinks.push(node)
-      } else if (node.type === 'connector') {
-        sinks.push(node)
-      }
-    }
-  }
-
-  // Bucket by executionOrderId: explicit > 0 emits first (sorted
-  // ascending), zero/unset falls back to position sort (Y first
-  // 10-unit tol, then X).  Mirrors `body_emit.ts` in the legacy
-  // walker.  Walks launched from an ordered sink propagate
-  // `order=true` so upstream blocks don't emit eagerly — they emit
-  // at their own iteration step instead.
-  const ordered: RFNode[] = []
-  const others: RFNode[] = []
-  for (const node of sinks) {
-    if (nodeExecutionOrder(node) > 0) ordered.push(node)
-    else others.push(node)
-  }
-  ordered.sort((a, b) => nodeExecutionOrder(a) - nodeExecutionOrder(b))
-  others.sort((a, b) => compareNodePosition(state, a, b))
+  const { ordered, others } = ldSinkBuckets(body.rungs)
 
   // Index each block's output-write sinks (coils / output / inOut
   // variables fed solely by that block).  These are emitted right after
@@ -281,24 +205,6 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
   return { bodySt, syntheticVars, warnings: state.warnings }
 }
 
-function nodeExecutionOrder(node: RFNode): number {
-  if (node.type === 'coil') return asCoilData(node.data)?.executionOrder ?? 0
-  if (node.type === 'block') return asBlockData(node.data)?.executionOrder ?? 0
-  if (isVariableNode(node)) return asVariableData(node.data)?.executionOrder ?? 0
-  return 0
-}
-
-function compareNodePosition(state: WalkerState, a: RFNode, b: RFNode): number {
-  const aOff = state.yOffset.get(a.id) ?? 0
-  const bOff = state.yOffset.get(b.id) ?? 0
-  const ax = Math.trunc(a.position.x)
-  const ay = Math.trunc(a.position.y + aOff)
-  const bx = Math.trunc(b.position.x)
-  const by = Math.trunc(b.position.y + bOff)
-  if (Math.abs(ay - by) >= 10) return ay - by
-  return ax - bx
-}
-
 /**
  * If `node` is an output-write sink (coil / output- or inOut-variable)
  * whose value comes solely from a single block, return that block's id.
@@ -308,7 +214,7 @@ function compareNodePosition(state: WalkerState, a: RFNode, b: RFNode): number {
  * sinks, non-block sources, blocks, connectors).
  */
 function blockFedSink(state: WalkerState, node: RFNode): string | null {
-  if (node.type !== 'coil' && !isVariableNode(node)) return null
+  if (node.type !== 'coil' && !isLdVariableNode(node)) return null
   const edges = state.incoming.get(node.id) ?? []
   // Only direct block->sink edges couple; sinks fed through a
   // passthrough node or with extra wires stay on the positional sweep.
@@ -326,7 +232,7 @@ function emitSink(state: WalkerState, node: RFNode): void {
   // concern, applied inside `buildInputArgs` based on the emitting
   // block's eoid.
   if (node.type === 'coil') return emitCoilNode(state, node)
-  if (isVariableNode(node)) {
+  if (isLdVariableNode(node)) {
     const data = asVariableData(node.data)
     if (data?.variant === 'output') return emitOutVariableNode(state, node, data)
     if (data?.variant === 'inout') return emitInOutVariableNode(state, node, data)

@@ -37,27 +37,32 @@ jest.mock('../../../../backend/editor/services', () => ({
 }))
 jest.mock('../../../../backend/editor/utils', () => ({ getOpenProjectPath: jest.fn(), getProjectPath: jest.fn() }))
 
-const simulatorModule = { loadAndRun: jest.fn(), stop: jest.fn(), isRunning: jest.fn(() => true) }
-jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
-  SimulatorModule: jest.fn(() => simulatorModule),
+const simulatorModule = {
+  loadAndRun: jest.fn<Promise<void>, [Uint8Array]>(),
+  stop: jest.fn(),
+  isRunning: jest.fn(() => true),
+  preparePython: jest.fn<Promise<void>, [number]>(() => Promise.resolve()),
+  onStopped: null,
+  onLog: null,
+}
+jest.mock('../../../../backend/editor/simulator/desktop-simulator', () => ({
+  createDesktopSimulator: jest.fn(() => simulatorModule),
 }))
 
-// The handler reads the hex off disk before it starts anything. Stubbing the read
-// to SUCCEED is what lets a test put the throw where the leak actually was —
-// after `loadAndRun` has marked the emulator running. A failing read throws
-// before that and proves nothing about it.
-const readFile = jest.fn<Promise<string>, [string, string?]>()
-jest.mock('fs/promises', () => ({ readFile: (...args: [string, string?]) => readFile(...args) }))
+// The handler reads the module off disk before it starts anything. Stubbing the read
+// to succeed lets a test fail the start itself.
+const readFile = jest.fn<Promise<Uint8Array>, [string]>()
+jest.mock('fs/promises', () => ({ readFile: (...args: [string]) => readFile(...args) }))
 
 type Bridge = MainProcessBridge
 
-function createBridge(): Bridge {
+function createBridge(send: jest.Mock = jest.fn()): Bridge {
   return new MainProcessBridge({
     ipcMain: {},
     mainWindow: {
       isDestroyed: jest.fn(() => false),
       isMaximized: jest.fn(() => false),
-      webContents: { reload: jest.fn(), send: jest.fn(), on: jest.fn() },
+      webContents: { reload: jest.fn(), send, on: jest.fn() },
     },
     projectService: {},
     store: { get: jest.fn(() => undefined) },
@@ -82,7 +87,7 @@ beforeEach(() => {
   simulatorModule.loadAndRun.mockReset()
   simulatorModule.stop.mockReset()
   simulatorModule.isRunning.mockReset().mockReturnValue(true)
-  readFile.mockReset().mockResolvedValue(':00000001FF')
+  readFile.mockReset().mockResolvedValue(new Uint8Array([0, 97, 115, 109]))
 })
 
 afterEach(() => {
@@ -144,24 +149,16 @@ describe('window:reload', () => {
 })
 
 describe('simulator:load-firmware', () => {
-  it('stops the emulator and closes the session when the start throws AFTER it is running', async () => {
+  it('stops the simulator and closes the session when the module does not start', async () => {
     const bridge = createBridge()
     const close = holdLink(bridge, 'simulator')
+    simulatorModule.loadAndRun.mockRejectedValue(new Error('The simulator module does not export sim_loop.'))
 
-    // The leak this covers: `loadAndRun` marks the emulator running before it
-    // finishes wiring, so a throw from that point on left one running with no
-    // session behind it. The read must succeed for the throw to land there —
-    // throwing on the read instead would exercise a path where the emulator was
-    // never started, and would stay green even if this leak came back.
-    simulatorModule.loadAndRun.mockImplementation(() => {
-      throw new Error('avr8js refused the hex')
-    })
-
-    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/tmp/simulator.hex')
+    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/tmp/simulator.wasm')
 
     expect(readFile).toHaveBeenCalledTimes(1)
     expect(simulatorModule.loadAndRun).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({ success: false, error: 'avr8js refused the hex' })
+    expect(result).toEqual({ success: false, error: 'The simulator module does not export sim_loop.' })
     expect(simulatorModule.stop).toHaveBeenCalledTimes(1)
     expect(close).toHaveBeenCalledTimes(1)
   })
@@ -171,7 +168,7 @@ describe('simulator:load-firmware', () => {
     const close = holdLink(bridge, 'simulator')
     readFile.mockRejectedValue(new Error('ENOENT'))
 
-    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/nonexistent/simulator.hex')
+    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/nonexistent/simulator.wasm')
 
     // Nothing was started, so there is nothing to leak — but the cleanup still
     // has to be harmless, because the catch cannot tell the two apart.
@@ -179,5 +176,29 @@ describe('simulator:load-firmware', () => {
     expect(result.success).toBe(false)
     expect(simulatorModule.stop).toHaveBeenCalledTimes(1)
     expect(close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('simulator:prepare-python', () => {
+  it('prepares the interpreters the renderer asks for, and ignores a count that is not one', async () => {
+    const bridge = createBridge()
+    simulatorModule.preparePython.mockClear()
+
+    await bridge.handleSimulatorPreparePython({} as never, 2)
+    await bridge.handleSimulatorPreparePython({} as never, -1)
+    await bridge.handleSimulatorPreparePython({} as never, '3')
+
+    expect(simulatorModule.preparePython.mock.calls).toEqual([[2]])
+  })
+})
+
+describe('simulator output', () => {
+  it('forwards the run output to the window', () => {
+    const send = jest.fn()
+    createBridge(send)
+    const onLog: unknown = Reflect.get(simulatorModule, 'onLog')
+    if (typeof onLog !== 'function') throw new Error('the simulator has no onLog')
+    onLog('[Block] hi', 'stdout')
+    expect(send).toHaveBeenCalledWith('simulator:log', '[Block] hi', 'stdout')
   })
 })

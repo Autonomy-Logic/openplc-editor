@@ -354,4 +354,168 @@ describe('createConsoleSlice', () => {
       expect(log.segments).toBeUndefined()
     })
   })
+
+  describe('logs kept until a project opens', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('starts with nothing kept and no project open', () => {
+      const state = store.getState()
+      expect(state.logsAwaitingProject).toEqual([])
+      expect(state.projectConsoleOpen).toBe(false)
+    })
+
+    it('keeps a log with its level, message and given tstamp while no project is open, and leaves logs empty', () => {
+      const failedAt = new Date('2026-11-16T10:00:00Z')
+      store
+        .getState()
+        .consoleActions.addLogWhenProjectOpen({ level: 'error', message: 'download failed', tstamp: failedAt })
+
+      const state = store.getState()
+      expect(state.logs).toEqual([])
+      expect(state.logsAwaitingProject).toHaveLength(1)
+      expect(state.logsAwaitingProject[0].level).toBe('error')
+      expect(state.logsAwaitingProject[0].message).toBe('download failed')
+      expect(state.logsAwaitingProject[0].tstamp).toEqual(failedAt)
+    })
+
+    it('stamps a kept log with the time it was kept when no tstamp is given', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-11-16T10:00:00Z'))
+
+      store.getState().consoleActions.addLogWhenProjectOpen({ level: 'error', message: 'download failed' })
+
+      const [kept] = store.getState().logsAwaitingProject
+      expect(kept.tstamp).toBeInstanceOf(Date)
+      expect(kept.tstamp).toEqual(new Date('2026-11-16T10:00:00Z'))
+    })
+
+    it('adds every kept log once at the project open, in the order kept, with the time it was kept', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-11-16T10:00:00Z'))
+      const { addLogWhenProjectOpen, openProjectConsole } = store.getState().consoleActions
+      addLogWhenProjectOpen({ level: 'error', message: 'first failure' })
+      addLogWhenProjectOpen({ level: 'error', message: 'second failure' })
+
+      vi.setSystemTime(new Date('2026-11-16T10:05:00Z'))
+      openProjectConsole()
+
+      const state = store.getState()
+      expect(state.logs.map((log) => log.message)).toEqual(['first failure', 'second failure'])
+      expect(state.logs.map((log) => log.tstamp)).toEqual([
+        new Date('2026-11-16T10:00:00Z'),
+        new Date('2026-11-16T10:00:00Z'),
+      ])
+      expect(state.logsAwaitingProject).toEqual([])
+      expect(state.projectConsoleOpen).toBe(true)
+    })
+
+    it('gives each log added at the project open a fresh id', () => {
+      const { addLog, addLogWhenProjectOpen, openProjectConsole } = store.getState().consoleActions
+      addLog({ level: 'info', message: 'already shown' })
+      addLogWhenProjectOpen({ level: 'error', message: 'same' })
+      addLogWhenProjectOpen({ level: 'error', message: 'same' })
+
+      openProjectConsole()
+
+      const ids = store.getState().logs.map((log) => log.id)
+      expect(ids).toHaveLength(3)
+      expect(ids.every((id) => typeof id === 'string' && id !== '')).toBe(true)
+      expect(new Set(ids).size).toBe(3)
+    })
+
+    it('adds nothing at a second project open', () => {
+      const { addLogWhenProjectOpen, openProjectConsole } = store.getState().consoleActions
+      addLogWhenProjectOpen({ level: 'error', message: 'download failed' })
+      openProjectConsole()
+
+      openProjectConsole()
+
+      expect(store.getState().logs.map((log) => log.message)).toEqual(['download failed'])
+    })
+
+    it('only marks the project open when nothing was kept', () => {
+      store.getState().consoleActions.openProjectConsole()
+
+      const state = store.getState()
+      expect(state.projectConsoleOpen).toBe(true)
+      expect(state.logs).toEqual([])
+      expect(state.logsAwaitingProject).toEqual([])
+    })
+
+    it('adds a log at once and keeps nothing while a project is open', () => {
+      const { addLogWhenProjectOpen, openProjectConsole } = store.getState().consoleActions
+      openProjectConsole()
+
+      addLogWhenProjectOpen({ level: 'error', message: 'download failed' })
+
+      const state = store.getState()
+      expect(state.logs.map((log) => log.message)).toEqual(['download failed'])
+      expect(state.logs[0].level).toBe('error')
+      expect(state.logs[0].tstamp).toBeInstanceOf(Date)
+      expect(state.logsAwaitingProject).toEqual([])
+    })
+
+    it('keeps a log again once the project is closed on the Console', () => {
+      const { addLogWhenProjectOpen, openProjectConsole, closeProjectConsole } = store.getState().consoleActions
+      openProjectConsole()
+
+      closeProjectConsole()
+      addLogWhenProjectOpen({ level: 'error', message: 'download failed' })
+
+      const state = store.getState()
+      expect(state.projectConsoleOpen).toBe(false)
+      expect(state.logs).toEqual([])
+      expect(state.logsAwaitingProject.map((log) => log.message)).toEqual(['download failed'])
+    })
+
+    it('leaves kept logs and shown logs as they are when the project is closed on the Console', () => {
+      const { addLog, addLogWhenProjectOpen, closeProjectConsole } = store.getState().consoleActions
+      addLog({ level: 'info', message: 'shown' })
+      addLogWhenProjectOpen({ level: 'error', message: 'kept' })
+
+      closeProjectConsole()
+
+      const state = store.getState()
+      expect(state.logs.map((log) => log.message)).toEqual(['shown'])
+      expect(state.logsAwaitingProject.map((log) => log.message)).toEqual(['kept'])
+    })
+
+    it('clearLogs keeps the kept logs and leaves the project closed on the Console', () => {
+      const { addLogWhenProjectOpen, clearLogs } = store.getState().consoleActions
+      addLogWhenProjectOpen({ level: 'error', message: 'download failed' })
+
+      clearLogs()
+
+      const state = store.getState()
+      expect(state.logsAwaitingProject.map((log) => log.message)).toEqual(['download failed'])
+      expect(state.projectConsoleOpen).toBe(false)
+    })
+
+    it('clearLogs leaves the project open on the Console', () => {
+      const { addLogWhenProjectOpen, clearLogs, openProjectConsole } = store.getState().consoleActions
+      openProjectConsole()
+
+      clearLogs()
+      addLogWhenProjectOpen({ level: 'error', message: 'download failed' })
+
+      const state = store.getState()
+      expect(state.projectConsoleOpen).toBe(true)
+      expect(state.logs.map((log) => log.message)).toEqual(['download failed'])
+    })
+
+    it('splits SGR colour off a kept log when it is added, as addLog does', () => {
+      const ESC = '\u001B'
+      const { addLogWhenProjectOpen, openProjectConsole } = store.getState().consoleActions
+      addLogWhenProjectOpen({ level: 'error', message: `${ESC}[93marduino:avr${ESC}[0m   1.8.8` })
+
+      openProjectConsole()
+
+      const [log] = store.getState().logs
+      expect(log.message).toBe('arduino:avr   1.8.8')
+      expect(log.segments?.map((segment) => segment.text).join('')).toBe('arduino:avr   1.8.8')
+      expect(log.segments?.[0].className).toContain('text-yellow-600')
+    })
+  })
 })

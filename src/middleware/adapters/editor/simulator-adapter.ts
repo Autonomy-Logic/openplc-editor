@@ -1,8 +1,8 @@
 /**
  * Editor SimulatorPort adapter — delegates to Electron IPC bridge.
  *
- * The main process runs the avr8js ATmega2560 emulator as a singleton.
- * Firmware is loaded from a .hex file path on disk. The virtual serial port
+ * The main process runs the WebAssembly simulator, each run in a worker thread.
+ * The module is loaded from its path on disk. The virtual serial port
  * and ModbusRtuClient are managed internally by the main process.
  *
  * Running state is tracked locally for synchronous access (the IPC bridge
@@ -40,6 +40,14 @@ export function createEditorSimulatorAdapter(
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
+    },
+
+    preparePython(count: number): Promise<void> {
+      return window.bridge.simulatorPreparePython(count)
+    },
+
+    onLog(callback: (line: string, stream: 'stdout' | 'stderr') => void): Unsubscribe {
+      return window.bridge.onSimulatorLog(callback)
     },
 
     async stop(): Promise<{ success: boolean }> {

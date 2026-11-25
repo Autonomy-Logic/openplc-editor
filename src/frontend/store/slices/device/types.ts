@@ -1,6 +1,7 @@
 import type { VppPackagePin } from '../../../../backend/shared/types/PLC/devices/configuration'
 import type { DeviceLicenseReport } from '../../../../middleware/shared/ports/device-port'
 import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/ethercat-types'
+import type { RuntimeUserRole } from '../../../../middleware/shared/ports/runtime-port'
 import type {
   BoardInfo,
   CommunicationPort,
@@ -15,6 +16,11 @@ import type {
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
 import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
+import type {
+  RuntimeCommercialLicense,
+  RuntimeHardwareElement,
+  TargetCommercialLicenseStatus,
+} from '../../../../middleware/shared/utils/licensing'
 import type { DeviceSetupRecord } from '../../../utils/vpp/device-setup'
 
 // ---------------------------------------------------------------------------
@@ -88,11 +94,15 @@ export type RuntimeConnection = {
    *  poll. `'run'` on any device without a physical switch, so a null-safe
    *  caller treats absence as "no gating". */
   switchPosition: 'run' | 'stop' | null
+  /** Commercial licence state the editor verified from `GET /api/runtime-license`, or null when none was verified. */
+  license: RuntimeCommercialLicense | null
   ipAddress: string | null
   /** Version string reported by the connected runtime (from
    *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
    *  when unknown. Gates version-dependent UI like User Management. */
   runtimeVersion: string | null
+  /** Role of the signed-in runtime account, from `whoami`, or null when unknown or not connected. */
+  accountRole: RuntimeUserRole | null
   /**
    * Features the connected runtime advertises in its hello
    * response, e.g. `["ethercat.dynamic_alloc"]`. `null` when
@@ -117,6 +127,26 @@ export type RuntimeConnection = {
    * said the device carries on by itself.
    */
   runtimeUpdateInProgress: boolean
+}
+
+/** Commercial licence of the connected runtime target, resolved in one place for every view. */
+export type RuntimeCommercialLicenseInfo = {
+  /** Hardware ID the connected runtime reports, or null. */
+  hardwareId: string | null
+  /** Element hashes of `hardwareId` from `GET /api/hardware-id`; absent or empty when unknown. */
+  hardwareElements?: RuntimeHardwareElement[]
+  /** Device ID (32 hex) of the connected built-in board, derived from its 0x48 report, or null. */
+  boardDeviceId: string | null
+  /** Runtime licence the editor verified on the connected built-in board, or null when not known. */
+  boardLicense: RuntimeCommercialLicense | null
+  /** Resolved status of the connected runtime target, or null while none is connected. */
+  status: TargetCommercialLicenseStatus | null
+  /** End (epoch ms) of the window in which a purchase started here is watched for, or null. */
+  awaitingPurchaseUntil: number | null
+  /** True while the licence check that runs on connect has not finished. */
+  checking: boolean
+  /** Hardware IDs whose connect dialog was dismissed; never persisted, so it lasts until the editor restarts. */
+  dismissedDisclaimers: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +249,7 @@ export type DeviceState = {
   runtimeConnection: RuntimeConnection
   deviceConnection: DeviceConnection
   deviceLicense: DeviceLicenseInfo
+  runtimeCommercialLicense: RuntimeCommercialLicenseInfo
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +324,7 @@ export type DeviceActions = {
   setRuntimeJwtToken: (token: string | null) => void
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
   setRuntimeVersion: (version: string | null) => void
+  setRuntimeAccountRole: (role: RuntimeUserRole | null) => void
   /** Record the EtherDOG features the runtime advertises.
    *  Pass `null` to clear (e.g. on disconnect), `[]` when the runtime
    *  does not publish a `features` array. */
@@ -300,6 +332,14 @@ export type DeviceActions = {
   setPlcRuntimeStatus: (status: PlcStatus | null) => void
   /** Set the mode-switch position (null clears it, e.g. on disconnect). */
   setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
+  setRuntimeLicense: (license: RuntimeCommercialLicense | null) => void
+  setRuntimeHardwareId: (hardwareId: string | null) => void
+  setRuntimeHardwareElements: (elements: RuntimeHardwareElement[]) => void
+  setBoardRuntimeLicense: (board: { deviceId: string | null; license: RuntimeCommercialLicense | null }) => void
+  setRuntimeCommercialLicenseStatus: (status: TargetCommercialLicenseStatus | null) => void
+  setRuntimeLicensePurchaseWatch: (until: number | null) => void
+  setRuntimeLicenseChecking: (checking: boolean) => void
+  dismissRuntimeLicenseDisclaimer: (hardwareId: string) => void
   setSelectedDevice: (device: SelectedDevice | null) => void
   /**
    * Record the vPLC this project targets (null clears it). A project property:

@@ -1,15 +1,15 @@
-import type { SimulatorModule } from '../simulator-module'
+import type { UartSimulator } from '../wasm-simulator-module'
 import { VirtualSerialPort } from '../virtual-serial-port'
 
-function makeSimulator(): SimulatorModule {
+function makeSimulator(): UartSimulator {
   return {
     onUartByte: null,
     feedByte: jest.fn(),
-  } as unknown as SimulatorModule
+  }
 }
 
 describe('VirtualSerialPort', () => {
-  let sim: SimulatorModule
+  let sim: UartSimulator
   let port: VirtualSerialPort
 
   beforeEach(() => {

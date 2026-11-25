@@ -6,7 +6,14 @@ import type { ShmLeaf, ShmWalkContext } from './shm-leaves'
 import { describeShmLayout, pinCrossesInDirection, pythonFunctionBlockInstances } from './shm-leaves'
 import { SHM_STRING_CHARS } from './shm-type-map'
 
+/**
+ * How the block reaches the PLC. `shared-memory`: the runtime's segments, paced by the block itself. `stdio`: the
+ * simulator host, which sends the inbound bytes as a hex line on stdin and reads `@@<marker> <hex>` lines back.
+ */
+type PythonBlockTransport = 'shared-memory' | 'stdio'
+
 type PythonRuntimeInjectionParams = {
+  transport?: PythonBlockTransport
   inputVariables: PLCVariable[]
   outputVariables: PLCVariable[]
   originalCode: string
@@ -203,8 +210,44 @@ const leavesFor = (variables: PLCVariable[], context: ShmWalkContext): ShmLeaf[]
   return 'refusal' in walked ? [] : walked.leaves
 }
 
+/**
+ * The simulator's exchange loop. The first stdin line is the marker that tells the block's own output from its
+ * exchange replies, the second the seeded outputs; then one line of inbound bytes per exchange, until EOF.
+ */
+const stdioExchange = (pouName: string): string => `
+import sys as _sim_sys
+
+_sim_stdin = _sim_sys.stdin.buffer
+_sim_marker = '@@' + _sim_stdin.readline().decode().strip() + ' '
+_sim_out = bytearray.fromhex(_sim_stdin.readline().decode().strip())
+
+if _shm_total(_SHM_OUT) > len(_sim_out):
+    print('Layout mismatch: table needs ' + str(_shm_total(_SHM_OUT)) + ' bytes, block provides ' + str(len(_sim_out)))
+    exit(1)
+
+# Outputs start from what the PLC already holds, as on the runtime.
+_shm_unpack(_sim_out, _SHM_OUT, globals())
+
+block_init()
+while True:
+    _sim_line = _sim_stdin.readline()
+    if not _sim_line:
+        break
+    _sim_in = bytearray.fromhex(_sim_line.decode().strip())
+    if _shm_total(_SHM_IN) > len(_sim_in):
+        print('Layout mismatch: table needs ' + str(_shm_total(_SHM_IN)) + ' bytes, block provides ' + str(len(_sim_in)))
+        exit(1)
+    _shm_unpack(_sim_in, _SHM_IN, globals())
+    block_loop()
+    _shm_pack(_sim_out, _SHM_OUT, globals())
+    _sim_sys.stdout.write(_sim_marker + _sim_out.hex() + '\\n')
+    _sim_sys.stdout.flush()
+print('Stopping Python block: ${pouName}')
+`
+
 const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
   const { inputVariables, outputVariables, originalCode, pouName, inbound, outbound } = params
+  const transport = params.transport ?? 'shared-memory'
 
   const inLeaves = leavesFor(inputVariables, inbound)
   const outLeaves = leavesFor(outputVariables, outbound)
@@ -214,6 +257,20 @@ const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
   // the fuller one — it carries a function block's outputs as well as its
   // inputs — so the emitted class has every pin.
   const typeDeclarations = generateTypeDeclarations([...inputVariables, ...outputVariables], inbound)
+
+  if (transport === 'stdio') {
+    return `
+from enum import IntEnum
+
+${typeDeclarations}
+${originalCode}
+
+${renderLayoutTable('_SHM_IN', inLeaves)}
+
+${renderLayoutTable('_SHM_OUT', outLeaves)}
+${pythonShmRuntime(SHM_STRING_CHARS)}
+${stdioExchange(pouName)}`
+  }
 
   const injectedCode = `
 from enum import IntEnum
@@ -287,4 +344,4 @@ except Exception as e:
   return injectedCode
 }
 
-export { injectPythonRuntime, type PythonRuntimeInjectionParams }
+export { injectPythonRuntime, type PythonBlockTransport, type PythonRuntimeInjectionParams }

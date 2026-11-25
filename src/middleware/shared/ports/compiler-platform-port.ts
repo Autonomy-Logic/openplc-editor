@@ -31,6 +31,7 @@
  */
 
 import type { PLCProjectData, StructuredCompileError } from './types'
+import type { WasmCompileRequest, WasmCompileResult } from './wasm-toolchain-types'
 
 /**
  * Canonical progress callback the pipeline passes to every port
@@ -112,27 +113,24 @@ export interface CompileArduinoArgs {
    *  `examples/Baremetal/Baremetal.ino`, `src/generated.cpp`,
    *  `src/c_blocks.h`, `examples/Baremetal/c_blocks_code.cpp`,
    *  `src/defines.h`, and the bundled firmware skeleton + strucpp
-   *  runtime headers.  On editor: written to disk before
-   *  arduino-cli runs.  On web: POSTed in the request body. */
+   *  runtime headers.  Written to disk before arduino-cli runs; no
+   *  web target builds with arduino-cli. */
   files: Record<string, string>
   /** Argv suffix for arduino-cli compile (after the `compile`
    *  subcommand).  Comes from the shared `buildArduinoCliCompileArgs`
    *  helper. */
   argv: string[]
-  /** When `false`, arduino-cli is invoked with `--jobs 1` (web
-   *  default — backend runs many clients in sandboxes, so saturating
-   *  cores would starve concurrents).  When `true`, arduino-cli
-   *  defaults to `--jobs 0` (editor default — uses every core). */
+  /** When `false`, arduino-cli is invoked with `--jobs 1`.  When
+   *  `true`, arduino-cli defaults to `--jobs 0` (editor default — uses
+   *  every core). */
   parallel: boolean
 }
 
 export interface CompileArduinoResult {
   ok: boolean
-  /** Compiled firmware bytes (`.hex` for AVR).  Editor: read from
+  /** Compiled firmware bytes when the core produces a `.hex`.  Editor: read from
    *  the build output directory.  Web: base64-decoded from the
-   *  server response.  Caller decides whether to write to disk
-   *  (editor: stores the path; web: holds in memory and hands to
-   *  the simulator). */
+   *  server response. */
   binary?: Uint8Array
   errors?: StructuredCompileError[]
 }
@@ -167,8 +165,8 @@ export interface UploadResult {
 
 /** Arduino direct-upload (editor-only, used for non-simulator
  *  Arduino targets).  Web's adapter MUST no-op this with
- *  `{ ok: true }` — web only targets the simulator (avr8js, no
- *  device upload step) or runtime v4 (handled separately). */
+ *  `{ ok: true }` — web only targets the simulator (no device
+ *  upload step) or runtime v4 (handled separately). */
 export interface UploadArduinoBoardArgs {
   /** Path arduino-cli reads the compiled artefacts from.  Editor:
    *  the build output dir.  Web: ignored (no-op). */
@@ -219,6 +217,8 @@ export interface CheckRuntimeVersionResult {
    * that stores snapshots says so.
    */
   supportsProjectSnapshot: boolean
+  /** Whether uploads may carry an `hmi/` folder, from `hmi` at `GET /api/capabilities`; `false` for older runtimes. */
+  supportsHmi: boolean
   /**
    * Oldest editor this runtime accepts programs from, declared at
    * `GET /api/capabilities` (DOPE-448).  `null` means the runtime
@@ -333,6 +333,17 @@ export interface CompilerPlatformPort {
 
   /** Step 12 of the editor pipeline.  Arduino-CLI compile. */
   compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult>
+
+  /** Compiles a request with the in-editor WebAssembly toolchain; the simulator build uses it in place of
+   *  arduino-cli.  Both platforms run the same shared compile service, so the request and result are the same. */
+  compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult>
+
+  /** Compiles a request with the same toolchain into a module only, leaving the build folder as it is: the HMI
+   *  browser client's module, built beside the program. */
+  compileWasmModule(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult>
+
+  /** Every file under the HMI sources folder (`core/`, `unit/`, `client/`, `fonts/`) by path, as text or bytes. */
+  readHmiSources(): Promise<Record<string, string | Uint8Array>>
 
   /** Step 13a of the editor pipeline (runtime v4 path).  Upload
    *  the strucpp bundle. */

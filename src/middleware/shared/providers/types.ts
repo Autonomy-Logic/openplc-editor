@@ -9,6 +9,7 @@ import type { EditSessionPort } from '../ports/edit-session-port'
 import type { EsiPort } from '../ports/esi-port'
 import type { EtherCATDiagnosticsPort } from '../ports/ethercat-diagnostics-port'
 import type { EtherCATScanPort } from '../ports/ethercat-scan-port'
+import type { HmiPreviewPort } from '../ports/hmi-preview-port'
 import type { LibraryPort } from '../ports/library-port'
 import type { NavigationPort } from '../ports/navigation-port'
 import type { OrchestratorPort } from '../ports/orchestrator-port'
@@ -16,6 +17,7 @@ import type { PackagePort } from '../ports/package-port'
 import type { PlatformCapabilities } from '../ports/platform-capabilities'
 import type { ProjectPort } from '../ports/project-port'
 import type { RuntimePort } from '../ports/runtime-port'
+import type { RuntimeProvisioningPort } from '../ports/runtime-provisioning-port'
 import type { SimulatorPort } from '../ports/simulator-port'
 import type { StlibSourcePort } from '../ports/stlib-source-port'
 import type { SystemPort } from '../ports/system-port'
@@ -41,6 +43,8 @@ export interface PlatformPorts {
   capabilities: PlatformCapabilities
   packages?: PackagePort
   esi?: EsiPort
+  /** Builds and runs HMI screen and widget-block previews. */
+  hmiPreview?: HmiPreviewPort
   /** Scan modules on a modular coupler via EtherDOG's 0xF050 path. */
   ethercatScan?: EtherCATScanPort
   /** Poll modular-coupler diagnostics (status word + per-module status byte). */
@@ -49,8 +53,9 @@ export interface PlatformPorts {
   // Gate on `capabilities.hasEdgeAccount`, not on presence: autonomy-node has no Edge account API.
   edgeAccount?: EdgeAccountPort
   editSession?: EditSessionPort
-  // Desktop only: the notice that a newer editor is out. Absent on web, which is deployed rather than installed.
+  // Desktop only: the notice that a newer editor is out. Absent on web.
   appUpdate?: AppUpdatePort
+  runtimeProvisioning?: RuntimeProvisioningPort
   // Required when `capabilities.hasStLSP` is true.
   stlibSource?: StlibSourcePort
 }

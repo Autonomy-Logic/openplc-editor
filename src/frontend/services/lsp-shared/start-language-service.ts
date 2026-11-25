@@ -36,7 +36,7 @@ import {
 
 import { attachDiagnosticsBridge, type DiagnosticsMirror } from './diagnostics'
 import type { NavigateToTarget } from './navigation'
-import { type DefinitionLocationMapper, type LspContext, registerLspProviders } from './providers'
+import { type DefinitionLocationMapper, type LspContext, type ProviderHooks, registerLspProviders } from './providers'
 import {
   registerLspSemanticTokens,
   type ResolveSemanticTokensViewport,
@@ -129,6 +129,7 @@ export interface StartLanguageServiceOptions {
   mapDefinitionLocation?: DefinitionLocationMapper
   navigateOutline?: NavigateToTarget
   filterFormattingEdits?: (edits: LspTextEdit[], offset: number) => LspTextEdit[]
+  filterCompletionItems?: ProviderHooks['filterCompletionItems']
   getLspDocumentText?: (lspUri: string) => string | undefined
   resolveSemanticTokensViewport?: ResolveSemanticTokensViewport
 
@@ -209,6 +210,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     mapDefinitionLocation,
     navigateOutline,
     filterFormattingEdits,
+    filterCompletionItems,
     getLspDocumentText,
     resolveSemanticTokensViewport,
     markerOwner,
@@ -282,6 +284,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
           ...(mapDefinitionLocation ? { mapDefinitionLocation } : {}),
           ...(navigateOutline ? { navigateOutline } : {}),
           ...(filterFormattingEdits ? { filterFormattingEdits } : {}),
+          ...(filterCompletionItems ? { filterCompletionItems } : {}),
           ...(getLspDocumentText ? { getLspDocumentText } : {}),
         },
       })

@@ -50,78 +50,16 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { PLCVariable, RungLadderState } from '../../../../middleware/shared/ports/types'
+import { relayoutRung } from '../../../../middleware/shared/utils/ladder-layout'
 import {
   defaultCustomNodesStyles,
   nodesBuilder,
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
-import type {
-  BlockVariant,
-  LadderBlockConnectedVariables,
-} from '../../../components/_atoms/graphical-editor/ladder/utils/types'
-import { getBlockSize } from '../../../components/_atoms/graphical-editor/ladder/utils/utils'
+import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
-import { updateDiagramElementsPosition } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { deriveHandleBranches } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
-
-/**
- * Whether a value carries everything `getBlockSize` reads off a variant.
- *
- * A block node is not required to carry a complete variant — a placeholder dropped on the
- * canvas, or a fixture, may have neither name nor pins. Sizing is an improvement on such a
- * node, never a precondition for loading it, so anything incomplete is left exactly as it is.
- * The entries are checked and not just the array, because `getBlockSize` reads every one's
- * `name` and `class`.
- *
- * A guard rather than an assertion: this runs against project-file data, which is whatever
- * the file said, and `as` would only silence the compiler about that.
- */
-const isSizableVariant = (value: unknown): value is BlockVariant => {
-  if (typeof value !== 'object' || value === null) return false
-  const { name, variables } = value as { name?: unknown; variables?: unknown }
-  return (
-    typeof name === 'string' &&
-    Array.isArray(variables) &&
-    variables.every(
-      (entry): boolean =>
-        typeof entry === 'object' &&
-        entry !== null &&
-        typeof (entry as { name?: unknown }).name === 'string' &&
-        typeof (entry as { class?: unknown }).class === 'string',
-    )
-  )
-}
-
-/** Give a block node the size the editor computes for its variant; leave anything else be. */
-const sizeBlockNode = (node: Node): Node => {
-  if (node.type !== 'block') return node
-  const variant: unknown = node.data?.variant
-  if (!isSizableVariant(variant)) return node
-  const { width, height } = getBlockSize(variant, { x: 0, y: 0 })
-  return {
-    ...node,
-    width,
-    height,
-    measured: { width, height },
-  }
-}
-
-/**
- * The rung's bounds, or the default when the file's are unusable.
- *
- * A short or malformed `defaultBounds` would otherwise reach the layout as `undefined` or a
- * negative extent, which is not a shape it is written against.
- */
-const rungBounds = (rung: RungLadderState): [number, number] => {
-  // `?? []` would only cover null/undefined; an object in the file makes the destructuring
-  // throw, which costs the rung its recovery.
-  const [width, height] = Array.isArray(rung.defaultBounds) ? rung.defaultBounds : []
-  return [
-    Number.isFinite(width) && width > 0 ? width : DEFAULT_RUNG_BOUNDS[0],
-    Number.isFinite(height) && height > 0 ? height : DEFAULT_RUNG_BOUNDS[1],
-  ]
-}
 
 /**
  * Whether every element the rung came in with is still there.
@@ -147,9 +85,6 @@ const positionsChanged = (before: Node[], after: Node[]): boolean => {
     return prior.x !== node.position.x || prior.y !== node.position.y
   })
 }
-
-/** Bounds a rung falls back to when the file does not carry usable ones. */
-const DEFAULT_RUNG_BOUNDS: [number, number] = [300, 100]
 
 export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], LadderFlowSlice> = (setState) => ({
   ladderFlows: [],
@@ -244,14 +179,14 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               // its branches, but block WIDTH comes from the variant and is otherwise only
               // computed when one is created or edited, so a rung recovered without this lays
               // out around blocks of zero width.
-              const sized = { ...rung, nodes: rung.nodes.map(sizeBlockNode) }
-              const { nodes, edges } = updateDiagramElementsPosition(sized, rungBounds(sized))
+              const laidOut = relayoutRung(rung)
+              const { nodes } = laidOut
 
               // Recovery may MOVE an element; it may never lose one. The layout can return a
               // set that has dropped elements for a rung it did not understand — on a skeletal
               // or unwired rung it comes back empty — and accepting that deletes part of the
               // user's diagram on open, silently.
-              if (!elementsSurvived(sized.nodes, nodes)) return rung
+              if (!elementsSurvived(rung.nodes, nodes)) return rung
 
               // The layout hands the ORIGINAL geometry straight back when it cannot walk the
               // rung (`diagram/index.ts`, the `previousLinkedNodes` early return) — no throw,
@@ -261,7 +196,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               if (!positionsChanged(rung.nodes, nodes)) return rung
 
               recovered = true
-              return { ...sized, nodes, edges }
+              return laidOut
             } catch {
               // Best-effort by definition: a rung the layout cannot walk keeps the geometry it
               // arrived with, and `recovered` is left alone — one rung failing must not erase

@@ -1,9 +1,8 @@
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import type { RungLadderState } from '../../../store/slices/ladder'
-import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
+import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { Modal, ModalContent } from '../../_molecules/modal'
 
@@ -12,20 +11,14 @@ type ConfirmDeleteElementProps = {
   isOpen: boolean
 }
 
-const compareVariableTypes = (type1: PLCVariable['type'], type2: PLCVariable['type']): boolean => {
-  if (type1.definition !== type2.definition) return false
-
-  if (type1.definition === 'array' && type2.definition === 'array') {
-    if (type1.value.toLowerCase() !== type2.value.toLowerCase()) return false
-    if (!type1.data || !type2.data) return false
-    if (type1.data.dimensions.length !== type2.data.dimensions.length) return false
-    return type1.data.dimensions.every((dim1, idx) => dim1.dimension === type2.data!.dimensions[idx].dimension)
-  }
-
-  return type1.value.toLowerCase() === type2.value.toLowerCase()
-}
-
-type DeleteElementType = 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device'
+type DeleteElementType =
+  | 'pou'
+  | 'datatype'
+  | 'global-variable-list'
+  | 'server'
+  | 'remote-device'
+  | 'hmi-screen'
+  | 'hmi-widget'
 
 const DELETE_ELEMENT_TYPES: readonly DeleteElementType[] = [
   'pou',
@@ -33,6 +26,8 @@ const DELETE_ELEMENT_TYPES: readonly DeleteElementType[] = [
   'global-variable-list',
   'server',
   'remote-device',
+  'hmi-screen',
+  'hmi-widget',
 ]
 
 /** Legacy `leafLang` values, mapped onto the element types the modal deletes. */
@@ -96,6 +91,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
       data: { pous },
     },
     projectActions: { deleteVariable },
+    ladderFlows,
     ladderFlowActions: { removeRung },
     editorActions: { updateModelVariables },
     modalActions: { onOpenChange, closeModal },
@@ -106,6 +102,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
   const deleteDatatypeAction = store.datatypeActions.delete
   const deleteServerAction = store.serverActions.delete
   const deleteRemoteDeviceAction = store.remoteDeviceActions.delete
+  const deleteHmiAction = store.hmiActions.delete
   const deleteGlobalVariableListAction = store.globalVariableListActions.delete
 
   const modalData = modals['confirm-delete-element']?.data
@@ -119,36 +116,21 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
     const blockNodes = rung.nodes.filter((node) => node.type === 'block')
 
     if (blockNodes.length > 0) {
-      let variables: PLCVariable[] = []
-      if (pou?.interface?.variables) variables = [...pou.interface.variables] as PLCVariable[]
+      const variables = pou?.interface?.variables ?? []
+      const currentFlow = ladderFlows.find((flow) => flow.name === editorName)
+      const remainingRungs = (currentFlow?.rungs ?? []).filter((flowRung) => flowRung.id !== rung.id)
+      const variablesToCleanup = getFunctionBlockVariablesToCleanup(rung.nodes, remainingRungs, variables)
 
-      blockNodes.forEach((blockNode) => {
-        const variableData = (blockNode.data as BasicNodeData)?.variable
-        if (!variableData) return
+      variablesToCleanup.forEach((variableName) => {
+        const variableIndex = variables.findIndex(
+          (variable) => variable.name.toLowerCase() === variableName.toLowerCase(),
+        )
 
-        // Try matching by id first (web repo), then by name+type (editor repo)
-        let variableIndex = -1
-        if ('id' in variableData && variableData.id) {
-          variableIndex = variables.findIndex((variable) => variable.id === variableData.id)
-        }
-        if (variableIndex === -1 && variableData.name) {
-          variableIndex = variables.findIndex((variable) => {
-            if (variable.name.toLowerCase() !== variableData.name.toLowerCase()) return false
-            if ('type' in variableData && variableData.type) {
-              return compareVariableTypes(variable.type, variableData.type)
-            }
-            return true
-          })
-        }
-
-        if (variableIndex !== -1) {
-          deleteVariable({
-            rowId: variableIndex,
-            scope: 'local',
-            associatedPou: editorName,
-          })
-          variables.splice(variableIndex, 1)
-        }
+        deleteVariable({
+          variableName,
+          scope: 'local',
+          associatedPou: editorName,
+        })
 
         if (
           editor.type === 'plc-graphical' &&
@@ -232,6 +214,15 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
           toast({
             title: 'Remote device deleted success!',
             description: `Remote device "${name}" was successfully deleted.`,
+            variant: 'default',
+          })
+          break
+        case 'hmi-screen':
+        case 'hmi-widget':
+          deleteHmiAction(elementType === 'hmi-screen' ? 'screen' : 'widget', name)
+          toast({
+            title: elementType === 'hmi-screen' ? 'Screen deleted' : 'Widget block deleted',
+            description: `"${name}" was deleted. References to it are reported by the next build.`,
             variant: 'default',
           })
           break

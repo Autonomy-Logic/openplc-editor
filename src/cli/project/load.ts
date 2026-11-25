@@ -19,7 +19,7 @@
 
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { ProjectService } from '@root/backend/editor/services'
-import { parseProjectFiles } from '@root/backend/shared/utils/parse-project-files'
+import { parseRawProjectFiles } from '@root/backend/shared/utils/parse-project-files'
 import type { OpenPLCStore } from '@root/frontend/store'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 
@@ -50,19 +50,7 @@ export async function loadProject(store: OpenPLCStore, projectPath: string): Pro
     }
   }
 
-  const parsed = parseProjectFiles(
-    raw.data.projectPath,
-    raw.data.projectJson,
-    raw.data.deviceConfig,
-    raw.data.pinMapping,
-    raw.data.pouFiles,
-    raw.data.serverFiles,
-    raw.data.remoteDeviceFiles,
-    raw.data.libraryManifest,
-    // Array guard, same as the project adapter: the IPC payload is a cast,
-    // not validated, so a version-skewed main process must not crash a load.
-    Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
-  )
+  const parsed = parseRawProjectFiles(raw.data)
 
   // Boards first, exactly as the workspace screen does on load: target-capability
   // resolution and the debug-spec resolver both read `availableBoards`, and

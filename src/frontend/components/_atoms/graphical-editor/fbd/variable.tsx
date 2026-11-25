@@ -21,6 +21,7 @@ import { DebugValueBadge } from '../debug-value-badge'
 import { BlockVariant } from '../types/block'
 import { validateVariableType } from '../utils'
 import { FBDBlockAutoComplete } from './autocomplete'
+import { FbdSlimFrame } from './block-visual'
 import { CustomHandle } from './handle'
 import {
   BlockNode,
@@ -30,6 +31,7 @@ import {
   VariableNode,
   VariableProps,
 } from './utils'
+import { FBD_MONO_CLASS } from './utils/block-style'
 import {
   DEFAULT_VARIABLE_HEIGHT,
   DEFAULT_VARIABLE_WIDTH,
@@ -471,12 +473,6 @@ const VariableElement = (block: VariableProps) => {
               style={{
                 width: elementWidth,
                 height: VARIABLE_ELEMENT_HEIGHT,
-                ...(debuggerColor
-                  ? {
-                      borderColor: debuggerColor,
-                      boxShadow: `0 0 0 2px ${debuggerColor}33 inset`,
-                    }
-                  : {}),
                 ...(isDebuggerVisible
                   ? {
                       pointerEvents: 'auto' as const,
@@ -484,18 +480,13 @@ const VariableElement = (block: VariableProps) => {
                     }
                   : {}),
               }}
-              className={cn(
-                'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
-                'hover:border-transparent hover:ring-2 hover:ring-brand',
-                {
-                  'border-transparent ring-2 ring-brand': selected && !debuggerColor,
-                },
-              )}
+              className='group relative flex items-center justify-center p-1 text-neutral-1000 dark:text-neutral-50'
               onMouseEnter={onMouseEnter}
               onMouseLeave={onMouseLeave}
               onClick={isDebuggerVisible ? handleClick : undefined}
               onContextMenu={isDebuggerVisible ? handleClick : undefined}
             >
+              <FbdSlimFrame selected={selected && !debuggerColor} borderColour={debuggerColor} />
               <div
                 className='relative flex items-center'
                 style={{
@@ -504,14 +495,14 @@ const VariableElement = (block: VariableProps) => {
                 }}
               >
                 <HighlightedTextArea
-                  textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
+                  textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', FBD_MONO_CLASS, {
                     'text-yellow-500': !isAVariable,
                     'text-red-500': inputError,
                     'font-bold': isForced,
                     'text-[#80C000]': isForced && forcedBoolValue,
                     'text-[#4080FF]': isForced && !forcedBoolValue,
                   })}
-                  highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
+                  highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', FBD_MONO_CLASS)}
                   scrollableIndicatorClassName={cn({
                     '-right-1': data.variant === 'output-variable' || data.variant === 'inout-variable',
                     '-left-1': data.variant === 'input-variable',

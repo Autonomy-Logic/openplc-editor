@@ -2,6 +2,7 @@ import type {
   CoordinateExtent,
   DefaultEdgeOptions,
   Node as FlowNode,
+  NodeChange,
   OnNodesChange,
   ReactFlowInstance,
 } from '@xyflow/react'
@@ -10,6 +11,7 @@ import { parseInt } from 'lodash'
 import {
   DragEvent,
   MouseEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type SyntheticEvent,
   useEffect,
@@ -19,6 +21,16 @@ import {
 } from 'react'
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
+import {
+  displayShift,
+  LADDER_STYLE,
+  layoutRungOrStored,
+  pouLabelSource,
+  presentPou,
+  rungPresentation,
+  toCanonicalPosition,
+  toDisplayNodes,
+} from '../../../../../../middleware/shared/utils/ladder-layout'
 import { mapsEqual, useContentStable } from '../../../../../hooks/use-content-stable'
 import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
 import { useDebugBoolValuesMap, useIsDebuggerVisible } from '../../../../../hooks/use-debug-value'
@@ -26,6 +38,7 @@ import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useStableCallback } from '../../../../../hooks/use-stable-callback'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
+import type { GraphicalElementModalData } from '../../../../../store/slices/modal'
 import { cn } from '../../../../../utils/cn'
 import { getLadderBlockType, isLadderBlockDrag } from '../../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -33,9 +46,19 @@ import {
   findPlaceholderWithinRadius,
   selectOnlyPlaceholder,
 } from '../../../../../utils/graphical/ladder-placeholder-snap'
-import { isLadderPlacementElement, PLACEMENT_TARGET_ATTRIBUTE } from '../../../../../utils/graphical/placement-elements'
+import {
+  isLadderPlacementElement,
+  ladderPlacementNode,
+  PLACEMENT_TARGET_ATTRIBUTE,
+} from '../../../../../utils/graphical/placement-elements'
 import { syncNodesWithVariables } from '../../../../../utils/graphical/sync-nodes-with-variables'
 import { customNodeTypes } from '../../../../_atoms/graphical-editor/ladder'
+import { ladderEdgeTypes, ladderRouteEdgeData } from '../../../../_atoms/graphical-editor/ladder/route-edge'
+import {
+  ladderDisplayNode,
+  LadderRungViewProvider,
+  useLadderThemePalette,
+} from '../../../../_atoms/graphical-editor/ladder/rung-view'
 import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
 import { getVariableRestrictionType } from '../../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
@@ -48,35 +71,28 @@ import {
   removePlaceholderElements,
   renderPlaceholderElements,
   searchNearestPlaceholder,
+  withTransientShifts,
 } from './ladder-utils/elements/placeholder'
 import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
-import { computeRungDebugStates, type RungDebugStates } from './rung-debug-states'
+import { useLadderLabelSource, useLadderPouCanvas } from './pou-canvas'
+import { computeRungDebugStates, poweredBlockIds, type RungDebugStates } from './rung-debug-states'
+import { RungMenu, type RungMenuItem } from './rung-menu'
 import { isSameSelection } from './selection'
 
-/**
- * Check recursively if the related target or any of its parent elements are within the ladder area
- * Optimized version with early returns and efficient DOM traversal
- */
+/** Whether the related target or one of its ancestors is inside the ladder viewport. */
 const isDragEventFromWithinLadderArea = (
   relatedTarget: EventTarget | null,
   ladderViewportRef: HTMLDivElement | null,
 ): boolean => {
-  // Early return for null checks
   if (!relatedTarget || !ladderViewportRef) return false
 
-  // Cast to Element for better type safety and DOM methods access
   let currentElement = relatedTarget as Element
 
-  // Use Element type check to ensure we have DOM methods available
   if (!currentElement || typeof currentElement.closest !== 'function') return false
-
-  // Use the native closest() method for optimal performance
-  // This is much faster than manual DOM traversal
 
   const isInside = ladderViewportRef.contains(currentElement)
   if (isInside) return true
 
-  // Fallback to manual traversal if contains() fails for any reason
   while (currentElement && currentElement !== document.documentElement) {
     if (currentElement === ladderViewportRef) return true
     currentElement = currentElement.parentElement as Element
@@ -93,12 +109,31 @@ type RungBodyProps = {
   isDebuggerActive?: boolean
 }
 
-const EDGE_COLOR_TRUE = '#00FF00'
+/** The modifiers a contact or coil offers in its right-click menu, in menu order. */
+const ELEMENT_MODIFIERS: Record<'contact' | 'coil', readonly { variant: string; label: string }[]> = {
+  contact: [
+    { variant: 'default', label: 'Normally open' },
+    { variant: 'negated', label: 'Negated' },
+    { variant: 'risingEdge', label: 'Rising edge' },
+    { variant: 'fallingEdge', label: 'Falling edge' },
+  ],
+  coil: [
+    { variant: 'default', label: 'Normal' },
+    { variant: 'negated', label: 'Negated' },
+    { variant: 'set', label: 'Set' },
+    { variant: 'reset', label: 'Reset' },
+    { variant: 'risingEdge', label: 'Rising edge' },
+    { variant: 'fallingEdge', label: 'Falling edge' },
+  ],
+}
+
+/** Stroke width of an LD wire, and of one drawn in the energized colour. */
+const WIRE_STROKE = { normal: 1.25, on: 2 } as const
 
 const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
   deletable: false,
   selectable: false,
-  type: 'smoothstep',
+  type: 'ladderWire',
 }
 const PRO_OPTIONS = { hideAttribution: true }
 const NOOP = () => {}
@@ -139,50 +174,46 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   const placement = useGraphicalPlacement()
   const armedElement = placement?.language === 'ld' && !isDebuggerActive ? placement.armed : null
   const [placementHover, setPlacementHover] = useState(false)
+  const [elementMenu, setElementMenu] = useState<{ at: { x: number; y: number }; nodeId: string } | null>(null)
   const swallowUntilRef = useRef(0)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
-  /**
-   * -- Which means, by default, the flow panel extent is:
-   * minX: 0    | minY: 0
-   * maxX: 1530 | maxY: 200
-   */
   const [reactFlowPanelExtent, setReactFlowPanelExtent] = useState<CoordinateExtent>([
     [0, 0],
     (rung?.reactFlowViewport as [number, number]) ?? [1530, 200],
   ])
 
-  /**
-   * Update flow panel extent based on the bounds of the nodes
-   * For getRungNodesBounds to work, the nodes must have width and height properties set in the node data
-   * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
-   */
+  const canvas = useLadderPouCanvas()
+  const labelSource = useLadderLabelSource(pouName, canvas?.labelSource)
+  const layout = useMemo(
+    () => canvas?.layouts.get(rung) ?? layoutRungOrStored(rung, labelSource),
+    [canvas?.layouts, rung, labelSource],
+  )
+  const presentation = useMemo(
+    () => rungPresentation(canvas?.presentation ?? presentPou([layout], 0), layout),
+    [canvas?.presentation, layout],
+  )
+  const shifts = useMemo(() => withTransientShifts(presentation, rungLocal.nodes), [presentation, rungLocal.nodes])
+  const displayNodes = useMemo(() => toDisplayNodes(rungLocal.nodes, shifts), [rungLocal.nodes, shifts])
+  const palette = useLadderThemePalette()
+  const rungView = useMemo(() => ({ layout, labelSource, palette }), [layout, labelSource, palette])
+
   const updateReactFlowPanelExtent = (rung: RungLadderState) => {
     const bounds = getRungNodesBounds(rung.nodes)
-    const [defaultWidth, defaultHeight] = rung.defaultBounds
-
-    // If the bounds are less than the default extent, set the panel extent to the default extent
-    if (bounds.width < defaultWidth) bounds.width = defaultWidth
-    if (bounds.height < defaultHeight) bounds.height = defaultHeight
+    const width = Math.max(bounds.width, layout.size.width)
+    const height = Math.max(bounds.height, layout.size.height)
 
     setReactFlowPanelExtent((prev) =>
-      prev[1][0] === bounds.width && prev[1][1] === bounds.height + 20
+      prev[1][0] === width && prev[1][1] === height
         ? prev
         : [
             [0, 0],
-            [bounds.width, bounds.height + 20],
+            [width, height],
           ],
     )
-    ladderFlowActions.updateReactFlowViewport({
-      editorName: pouName,
-      rungId: rungLocal.id,
-      reactFlowViewport: [bounds.width, bounds.height + 20],
-    })
   }
-
-  // --- Debug edge coloring and node lockdown ---
 
   const debugStates = useMemo(
     () =>
@@ -205,44 +236,30 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     ],
   )
 
-  // Identity-stable across polls that didn't change this rung's states, so
-  // the styled arrays below keep their identity and the rung skips re-render.
   const stableDebugStates = useContentStable(debugStates, rungDebugStatesEqual)
 
+  const poweredBlocks = useMemo(
+    () =>
+      stableDebugStates ? poweredBlockIds(rungLocal.nodes, rungLocal.edges, stableDebugStates.edgeStates) : undefined,
+    [rungLocal.nodes, rungLocal.edges, stableDebugStates],
+  )
+
   const styledEdges = useMemo(() => {
-    if (!stableDebugStates) {
-      return rungLocal.edges
-    }
+    const nodeById = new Map(rungLocal.nodes.map((node) => [node.id, node]))
 
-    const { edgeStates } = stableDebugStates
     return rungLocal.edges.map((edge) => {
-      if (edgeStates.get(edge.id) === true) {
-        return {
-          ...edge,
-          style: { stroke: EDGE_COLOR_TRUE, strokeWidth: 2 },
-        }
+      const energized = stableDebugStates?.edgeStates.get(edge.id) === true
+      const style = {
+        stroke: energized ? palette.on : palette.wire,
+        strokeWidth: energized ? WIRE_STROKE.on : WIRE_STROKE.normal,
       }
-
-      return edge
+      const route = ladderRouteEdgeData(layout, edge, nodeById, (id) => displayShift(shifts, id))
+      return route === undefined ? { ...edge, style } : { ...edge, type: 'ladderRoute', style, data: route }
     })
-  }, [rungLocal.edges, stableDebugStates])
+  }, [rungLocal.nodes, rungLocal.edges, stableDebugStates, layout, palette, shifts])
 
   const styledNodes = useMemo(() => {
-    const baseNodes = !stableDebugStates
-      ? rungLocal.nodes
-      : rungLocal.nodes.map((node) => {
-          if (node.type === 'parallel') {
-            const isFlowActive = stableDebugStates.nodeInputStates.get(node.id) || false
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                isFlowActive,
-              },
-            }
-          }
-          return node
-        })
+    const baseNodes = displayNodes.map(ladderDisplayNode)
 
     if (isDebuggerActive) {
       return baseNodes.map((node) => ({
@@ -254,11 +271,47 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     return baseNodes
-  }, [rungLocal.nodes, stableDebugStates, isDebuggerActive])
+  }, [displayNodes, isDebuggerActive])
 
-  /**
-   *  Update the local rung state when the rung state changes
-   */
+  const canvasWidth = Math.max(reactFlowPanelExtent[1][0], presentation.widthPx)
+  const translateExtent = useMemo<CoordinateExtent>(
+    () => [
+      [0, 0],
+      [canvasWidth, reactFlowPanelExtent[1][1]],
+    ],
+    [canvasWidth, reactFlowPanelExtent],
+  )
+
+  /** `nodes` at the positions they are drawn at, the space the pointer is read in. */
+  const displayed = (nodes: FlowNode[]): FlowNode[] => toDisplayNodes(nodes, withTransientShifts(presentation, nodes))
+
+  /** A node xyflow reports, moved back to its canonical position. */
+  const toCanonicalNode = <T extends FlowNode>(node: T): T => {
+    const position = toCanonicalPosition(node.id, node.position, shifts)
+    return position.x === node.position.x ? node : { ...node, position }
+  }
+
+  /** A node change xyflow reports, its position or node moved back to canonical coordinates. */
+  const toCanonicalChange = (change: NodeChange<FlowNode>): NodeChange<FlowNode> => {
+    switch (change.type) {
+      case 'position':
+        return change.position === undefined
+          ? change
+          : { ...change, position: toCanonicalPosition(change.id, change.position, shifts) }
+      case 'add':
+      case 'replace':
+        return { ...change, item: toCanonicalNode(change.item) }
+      case 'dimensions':
+      case 'select':
+      case 'remove':
+        return change
+      default: {
+        const unreachable: never = change
+        return unreachable
+      }
+    }
+  }
+
   useEffect(() => {
     setRungLocal({
       ...rung,
@@ -270,13 +323,13 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     updateReactFlowPanelExtent(rung)
   }, [rung.nodes])
 
-  /**
-   *  Update the local rung state when the rung state changes
-   */
+  useEffect(() => {
+    updateReactFlowPanelExtent(rung)
+  }, [layout])
+
   useEffect(() => {
     if (dragging || isSameSelection(rungLocal.selectedNodes, rung.selectedNodes)) return
 
-    // Update the selected nodes in the rung state
     ladderFlowActions.setSelectedNodes({
       editorName: pouName,
       rungId: rung.id,
@@ -298,40 +351,26 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       const pan = reactFlowInstance?.toObject() ?? { x: 0, y: 0 }
 
       const adjustedSearchNodePosition = {
-        x: nodePosition.x * zoom + ('x' in pan ? pan.x : 0),
+        x: (nodePosition.x + displayShift(shifts, foundNode.id)) * zoom + ('x' in pan ? pan.x : 0),
         y: nodePosition.y * zoom + ('y' in pan ? pan.y : 0),
       }
 
       setSearchNodePosition(adjustedSearchNodePosition)
-
-      reactFlowViewportRef.current?.scrollTo({
-        top: adjustedSearchNodePosition.y,
-        left: adjustedSearchNodePosition.x - 100,
-        behavior: 'smooth',
-      })
     } else {
       setSearchNodePosition({ x: 0, y: 0 })
     }
-  }, [searchQuery, rungLocal, reactFlowInstance])
+  }, [searchQuery, rungLocal, reactFlowInstance, shifts])
 
-  /**
-   * Cleanup effect: Reset dragging state when drag ends anywhere (even outside rung)
-   * Fixes Safari issue where dropping outside the rung leaves app in broken state
-   */
   useEffect(() => {
     const handleGlobalDragEnd = () => {
       if (dragging) {
-        // Reset dragging state
         setDragging(false)
-        // Shrink rung back to normal size
         setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
-        // Remove placeholders
         const nodes = removePlaceholderElements(rungLocal.nodes)
         setRungLocal((rung) => ({ ...rung, nodes }))
       }
     }
 
-    // Listen for drag end events at document level
     document.addEventListener('dragend', handleGlobalDragEnd)
     document.addEventListener('drop', handleGlobalDragEnd)
 
@@ -341,13 +380,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
   }, [dragging, rungLocal, setReactFlowPanelExtent])
 
-  /**
-   * Add a new node to the rung
-   */
   const handleAddNode = (
     newNodeType: string = 'mockNode',
     blockType: string | undefined,
     sourceRung: RungLadderState = rungLocal,
+    variant?: string,
   ) => {
     const { libraries, ladderFlows } = store.getState()
     let pouLibrary = undefined
@@ -358,14 +395,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         const libraryPou = libraries.system
           .find((Library) => Library.name === blockLibrary)
           ?.pous.find((p) => p.name === pouName)
-        // Copy the signature, not the library entry. That entry also carries
-        // `body` (the authored source, which for a native C/C++ or Python block
-        // is the entire file) and `language`, and passing the object straight
-        // through froze a copy of the library's source into every project that
-        // placed the block. Nothing ever reads either field back off a placed
-        // variant, and the embedded VAR ... END_VAR broke the POU parser badly
-        // enough that the project would not open (DOPE-592). The user-library
-        // branch below has always built a curated object this way.
         pouLibrary = libraryPou
           ? {
               name: libraryPou.name,
@@ -421,10 +450,16 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }
     }
 
-    const { nodes, edges, newNode, handleBranches } = addNewElement(sourceRung, {
-      elementType: newNodeType,
-      blockVariant: pouLibrary,
-    })
+    const added = addNewElement(
+      sourceRung,
+      { elementType: newNodeType, blockVariant: pouLibrary },
+      pouLabelSource(store.getState().project.data, pouName),
+    )
+    const { edges, newNode, handleBranches } = added
+    const nodes =
+      variant === undefined || newNode === undefined
+        ? added.nodes
+        : added.nodes.map((node) => (node.id === newNode.id ? { ...node, data: { ...node.data, variant } } : node))
 
     captureAndPush(pouName)
 
@@ -452,12 +487,13 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
   }
 
-  /**
-   * Remove some nodes from the rung
-   */
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { ladderFlows } = store.getState()
-    const { nodes: newNodes, edges: newEdges, handleBranches } = removeElements({ ...rungLocal }, nodes)
+    const {
+      nodes: newNodes,
+      edges: newEdges,
+      handleBranches,
+    } = removeElements({ ...rungLocal }, nodes, pouLabelSource(store.getState().project.data, pouName))
 
     captureAndPush(pouName)
 
@@ -472,47 +508,28 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       nodes: [],
     })
 
-    /**
-     * Remove the variable associated with the block node
-     * If the editor is a graphical editor and the variable display is set to table, update the model variables
-     * If the variable is the selected row, set the selected row to -1
-     *
-     * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
-     * -- This block of code references at project:
-     *    -- src/components/_molecules/rung/body.tsx
-     *    -- src/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
-     *    -- src/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
-     *    -- src/components/_molecules/graphical-editor/fbd/index.tsx
-     */
     const blockNodes = nodes.filter((node) => node.type === 'block')
     if (blockNodes.length > 0) {
       let variables: PLCVariable[] = []
       if (pouRef) variables = [...(pouRef.interface?.variables ?? [])] as PLCVariable[]
 
       const currentFlow = ladderFlows.find((f) => f.name === pouName)
-      const allRungs = currentFlow?.rungs ?? []
-      const variablesToCleanup = getFunctionBlockVariablesToCleanup(blockNodes, allRungs, variables)
+      const allRungs = (currentFlow?.rungs ?? []).map((flowRung) =>
+        flowRung.id === rungLocal.id ? { ...flowRung, nodes: newNodes } : flowRung,
+      )
+      const variablesToCleanup = getFunctionBlockVariablesToCleanup(nodes, allRungs, variables)
 
       variablesToCleanup.forEach((variableName) => {
+        const variableIndex = variables.findIndex(
+          (variable) => variable.name.toLowerCase() === variableName.toLowerCase(),
+        )
+
         deleteVariable({
           variableName,
           scope: 'local',
           associatedPou: pouName,
         })
-      })
 
-      blockNodes.forEach((blockNode) => {
-        const variableData = (blockNode.data as BasicNodeData)?.variable
-        const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
-
-        if (variableIndex !== -1) {
-          deleteVariable({
-            variableId: (blockNode.data as BasicNodeData).variable.id,
-            scope: 'local',
-            associatedPou: pouName,
-          })
-          variables.splice(variableIndex, 1)
-        }
         if (
           editor.type === 'plc-graphical' &&
           editor.variable.display === 'table' &&
@@ -523,28 +540,23 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       })
     }
 
-    // Flow-scoped (no rungId): removing a block can delete its backing
-    // variable, which may strand bindings in this POU's other rungs.
     if (pouRef) {
       syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNodes, pouName)
     }
   }
 
-  /**
-   * Handle the start of a node drag
-   */
   const handleNodeStartDrag = (node: FlowNode) => {
     const result = onElementDragStart(rungLocal, node)
     setDragging(true)
     setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
   }
 
-  /**
-   * Handle the drag of a node
-   */
   const handleNodeDrag = (event: globalThis.MouseEvent | globalThis.TouchEvent) => {
     if (!reactFlowInstance || !('clientX' in event)) return
-    const closestPlaceholder = onElementDragOver(rungLocal, reactFlowInstance, { x: event.clientX, y: event.clientY })
+    const closestPlaceholder = onElementDragOver({ ...rungLocal, nodes: displayNodes }, reactFlowInstance, {
+      x: event.clientX,
+      y: event.clientY,
+    })
     if (!closestPlaceholder) return
 
     setRungLocal((rung) => ({
@@ -564,12 +576,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }))
   }
 
-  /**
-   * Handle the stop of a node drag
-   */
   const handleNodeDragStop = (node: FlowNode) => {
     const { ladderFlows } = store.getState()
-    const result = onElementDrop(rungLocal, rung, node)
+    const result = onElementDrop(rungLocal, rung, node, pouLabelSource(store.getState().project.data, pouName))
 
     captureAndPush(pouName)
 
@@ -595,9 +604,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
   }
 
-  /**
-   * Handle the double click of a node
-   */ //
   const handleNodeDoubleClick = (node: FlowNode) => {
     const modalToOpen =
       node.type === 'block'
@@ -609,31 +615,27 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
             : undefined
     if (!modalToOpen) return
 
-    openModal(modalToOpen, node)
+    openModal(modalToOpen, { pouName, node } satisfies GraphicalElementModalData)
   }
 
   const onNodesDelete = useStableCallback((nodes: FlowNode[]) => {
-    handleRemoveNode(nodes)
+    handleRemoveNode(nodes.map(toCanonicalNode))
   })
   const onNodeDragStart = useStableCallback((_event: globalThis.MouseEvent | globalThis.TouchEvent, node: FlowNode) => {
-    handleNodeStartDrag(node)
+    handleNodeStartDrag(toCanonicalNode(node))
   })
   const onNodeDrag = useStableCallback((event: globalThis.MouseEvent | globalThis.TouchEvent) => {
     handleNodeDrag(event)
   })
   const onNodeDragStop = useStableCallback((_event: globalThis.MouseEvent | globalThis.TouchEvent, node: FlowNode) => {
-    handleNodeDragStop(node)
+    handleNodeDragStop(toCanonicalNode(node))
   })
   const onNodeDoubleClick = useStableCallback((_event: MouseEvent, node: FlowNode) => {
-    handleNodeDoubleClick(node)
+    handleNodeDoubleClick(toCanonicalNode(node))
   })
 
-  /**
-   * Handle the change of the nodes
-   * This function is called every time the nodes change
-   * It is used to update the local rung state
-   */
-  const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((changes) => {
+  const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((displayChanges) => {
+    const changes = displayChanges.map(toCanonicalChange)
     setRungLocal((rung) => {
       let selectedNodes: FlowNode[] = rung.nodes.filter((node) => node.selected)
       changes.forEach((change) => {
@@ -667,18 +669,12 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     })
   })
 
-  /**
-   * Handle the drag enter of the viewport
-   * This function is called when a dragged element enters the viewport
-   */
   const onDragEnterViewport = useStableCallback((event: DragEvent) => {
     if (isDebuggerActive) return
-    // Check recursively if the drag event is coming from within the ladder area
     if (isDragEventFromWithinLadderArea(event.relatedTarget, reactFlowViewportRef.current)) {
       return
     }
 
-    // Only expand rung once when drag first enters (not on every placeholder hover)
     const isFirstDragEnter = !dragging
     if (isFirstDragEnter) {
       setDragging(true)
@@ -686,12 +682,10 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     event.preventDefault()
-    // Check if the dragged element is not a ladder block (cross-browser compatible)
     if (!isLadderBlockDrag(event.dataTransfer)) {
       return
     }
 
-    // Only render placeholders once on first enter (avoid re-rendering on every hover)
     if (isFirstDragEnter) {
       const copyRungLocal = { ...rungLocal }
       const nodes = renderPlaceholderElements(copyRungLocal)
@@ -699,21 +693,12 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
   })
 
-  /**
-   * Handle the drag leave of the viewport
-   * This function is called when a dragged element leaves the viewport
-   */
   const onDragLeaveViewport = useStableCallback((event: DragEvent) => {
     if (isDebuggerActive) return
-    // Check if the dragged element is a child of the flow viewport
     if (isDragEventFromWithinLadderArea(event.relatedTarget, reactFlowViewportRef.current)) {
       return
     }
 
-    // Safari/WebKit quirk: When placeholders appear under cursor, Safari fires dragLeave
-    // with relatedTarget as null. We need to distinguish between:
-    // 1. Spurious dragLeave (hovering over placeholders) - cursor still inside rung
-    // 2. Real dragLeave (actually leaving) - cursor outside rung
     if (!event.relatedTarget && dragging && reactFlowViewportRef.current) {
       const rect = reactFlowViewportRef.current.getBoundingClientRect()
       const isInsideBounds =
@@ -722,25 +707,18 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         event.clientY >= rect.top &&
         event.clientY <= rect.bottom
 
-      // If cursor is still inside rung bounds, it's a spurious event - keep placeholders
       if (isInsideBounds) {
         return
       }
-      // If cursor is outside bounds, it's a real leave - cleanup immediately
     }
 
     setDragging(false)
     setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
 
-    // If it is, remove the placeholder elements`
     const nodes = removePlaceholderElements(rungLocal.nodes)
     setRungLocal((rung) => ({ ...rung, nodes }))
   })
 
-  /**
-   * Handle the drag over of the viewport
-   * This function is called when a dragged element is over the viewport
-   */
   const onDragOver = useStableCallback((event: DragEvent) => {
     if (isDebuggerActive) return
     if (!reactFlowInstance) return
@@ -748,7 +726,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
 
-    const closestPlaceholder = searchNearestPlaceholder(rungLocal, reactFlowInstance, {
+    const closestPlaceholder = searchNearestPlaceholder({ ...rungLocal, nodes: displayNodes }, reactFlowInstance, {
       x: event.clientX,
       y: event.clientY,
     })
@@ -771,38 +749,26 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }))
   })
 
-  /**
-   * Handle the drop of the viewport
-   * This function is called when a dragged element is dropped in the viewport
-   */
   const onDrop = useStableCallback((event: DragEvent) => {
     if (isDebuggerActive) return
     setDragging(false)
     setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
 
     event.preventDefault()
-    // Check if there is a ladder block in the dragged data (cross-browser compatible)
     const blockType = getLadderBlockType(event.dataTransfer)
     if (!blockType) {
       setRungLocal(rung)
       return
     }
 
-    // Check if there is a library in the dragged data
     const library =
       event.dataTransfer.getData('application/library') === ''
         ? undefined
         : event.dataTransfer.getData('application/library')
 
-    // Then add the node to the rung
     handleAddNode(blockType, library)
   })
 
-  /**
-   * Click-to-place: while an element is armed, hovering the rung shows the
-   * placeholders and highlights the one under the pointer; a left click
-   * inserts there or cancels when no placeholder is close enough.
-   */
   const endPlacementHover = useStableCallback(() => {
     if (!placementHover) return
     setPlacementHover(false)
@@ -816,7 +782,10 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const findPlacementPlaceholder = (nodes: FlowNode[], clientX: number, clientY: number) => {
     if (!reactFlowInstance) return undefined
-    return findPlaceholderWithinRadius(nodes, reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY }))
+    return findPlaceholderWithinRadius(
+      displayed(nodes),
+      reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY }),
+    )
   }
 
   const handlePlacementPointerMove = (event: ReactPointerEvent) => {
@@ -837,6 +806,35 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     })
   }
 
+  /** A right click on a contact or coil opens its modifier menu; other nodes keep the rung's own right click. */
+  const handleNodeContextMenu = (event: ReactMouseEvent, node: FlowNode) => {
+    if (node.type !== 'contact' && node.type !== 'coil') return
+    event.preventDefault()
+    event.stopPropagation()
+    setElementMenu({ at: { x: event.clientX, y: event.clientY }, nodeId: node.id })
+  }
+
+  /** The modifier menu of the contact or coil `elementMenu` names: each modifier, the current one checked. */
+  const elementMenuItems = (): RungMenuItem[] => {
+    const node = rung.nodes.find((candidate) => candidate.id === elementMenu?.nodeId)
+    if (node === undefined || (node.type !== 'contact' && node.type !== 'coil')) return []
+    const current = typeof node.data.variant === 'string' ? node.data.variant : 'default'
+    return ELEMENT_MODIFIERS[node.type].map(({ variant, label }) => ({
+      label,
+      shortcut: variant === current ? '✓' : '',
+      onSelect: () => {
+        if (variant === current) return
+        captureAndPush(pouName)
+        ladderFlowActions.updateNode({
+          editorName: pouName,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: { ...node, data: { ...node.data, variant } },
+        })
+      },
+    }))
+  }
+
   const handlePlacementPointerDown = (event: ReactPointerEvent) => {
     if (!armedElement || !placement || event.button !== 0) return
     event.preventDefault()
@@ -853,7 +851,8 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     const element = placement.consume()
     if (!element || !isLadderPlacementElement(element)) return
     endPlacementHover()
-    handleAddNode(element, undefined, { ...rungLocal, nodes: selectOnlyPlaceholder(nodes, target.id) })
+    const { type, variant } = ladderPlacementNode(element)
+    handleAddNode(type, undefined, { ...rungLocal, nodes: selectOnlyPlaceholder(nodes, target.id) }, variant)
   }
 
   const swallowAfterPlacement = (event: SyntheticEvent) => {
@@ -864,16 +863,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   }
 
   return (
-    <div
-      className={cn(
-        'relative h-fit w-full p-1',
-        // 'rounded-b-lg border border-t-0 dark:border-neutral-800',
-        className,
-      )}
-    >
+    <div className={cn('relative h-fit w-full py-1', className)}>
       <div
         aria-label='Rung body'
-        className={cn('h-full w-full overflow-x-auto', armedElement && 'cursor-crosshair')}
+        className={cn('h-full w-full', armedElement && 'cursor-crosshair')}
+        style={{ paddingLeft: LADDER_STYLE.gutter }}
         ref={reactFlowViewportRef}
         {...{ [PLACEMENT_TARGET_ATTRIBUTE]: 'ld-rung' }}
         onPointerMove={armedElement ? handlePlacementPointerMove : undefined}
@@ -885,55 +879,57 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         <div
           style={{
             height: reactFlowPanelExtent[1][1] + 8,
-            width: reactFlowPanelExtent[1][0],
+            width: canvasWidth,
           }}
         >
-          <ReactFlowPanel
-            viewportConfig={{
-              nodeTypes: nodeTypes,
-              nodes: styledNodes,
-              edges: styledEdges,
-              nodesFocusable: false,
-              edgesFocusable: false,
-              elementsSelectable: true,
-              nodesDraggable: !isDebuggerActive,
-              nodesConnectable: !isDebuggerActive,
-              defaultEdgeOptions: DEFAULT_EDGE_OPTIONS,
+          <LadderRungViewProvider view={rungView} poweredBlockIds={poweredBlocks}>
+            <ReactFlowPanel
+              viewportConfig={{
+                nodeTypes: nodeTypes,
+                edgeTypes: ladderEdgeTypes,
+                nodes: styledNodes,
+                edges: styledEdges,
+                nodesFocusable: false,
+                edgesFocusable: false,
+                elementsSelectable: true,
+                nodesDraggable: !isDebuggerActive,
+                nodesConnectable: !isDebuggerActive,
+                defaultEdgeOptions: DEFAULT_EDGE_OPTIONS,
 
-              onInit: setReactFlowInstance,
+                onInit: setReactFlowInstance,
 
-              onNodesChange: onNodesChange,
-              onNodeClick: isDebuggerActive ? NOOP : undefined,
-              onNodesDelete: isDebuggerActive ? undefined : onNodesDelete,
-              onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,
-              onNodeDrag: isDebuggerActive ? undefined : onNodeDrag,
-              onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
-              onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
+                onNodesChange: onNodesChange,
+                onNodeClick: isDebuggerActive ? NOOP : undefined,
+                onNodesDelete: isDebuggerActive ? undefined : onNodesDelete,
+                onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,
+                onNodeDrag: isDebuggerActive ? undefined : onNodeDrag,
+                onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
+                onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
+                onNodeContextMenu: isDebuggerActive ? undefined : handleNodeContextMenu,
 
-              onDragEnter: onDragEnterViewport,
-              onDragLeave: onDragLeaveViewport,
-              onDragOver: onDragOver,
-              onDrop: onDrop,
+                onDragEnter: onDragEnterViewport,
+                onDragLeave: onDragLeaveViewport,
+                onDragOver: onDragOver,
+                onDrop: onDrop,
 
-              // No nodeExtent here: node positions belong to the ladder layout engine. xyflow ≥12.9
-              // stopped recomputing drag-clamped positionAbsolute when the extent later grows, so a
-              // mid-drag clamp against the stale extent would freeze nodes at wrong positions (DOPE-492).
-              translateExtent: reactFlowPanelExtent,
-              panActivationKeyCode: null,
-              panOnDrag: false,
-              panOnScroll: false,
-              zoomActivationKeyCode: null,
-              zoomOnDoubleClick: false,
-              zoomOnPinch: false,
-              zoomOnScroll: false,
-              preventScrolling: false,
-              nodeDragThreshold: 25,
+                translateExtent,
+                panActivationKeyCode: null,
+                panOnDrag: false,
+                panOnScroll: false,
+                zoomActivationKeyCode: null,
+                zoomOnDoubleClick: false,
+                zoomOnPinch: false,
+                zoomOnScroll: false,
+                preventScrolling: false,
+                nodeDragThreshold: 25,
 
-              proOptions: PRO_OPTIONS,
-            }}
-          />
+                proOptions: PRO_OPTIONS,
+              }}
+            />
+          </LadderRungViewProvider>
         </div>
       </div>
+      {elementMenu && <RungMenu at={elementMenu.at} items={elementMenuItems()} onClose={() => setElementMenu(null)} />}
     </div>
   )
 }

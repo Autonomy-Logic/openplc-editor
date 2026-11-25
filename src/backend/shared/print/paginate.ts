@@ -1,6 +1,6 @@
 import { renderFbdPou } from './fbd-renderer'
 import { resolvePageBox, transformDrawOps } from './geometry'
-import { renderLadderPou } from './ladder-renderer'
+import { renderLadderPou } from './ladder-painter'
 import { INK_COLOR } from './symbols'
 import { renderTextPou } from './text-renderer'
 import type { ContentBlock, DrawOp, PdfPageContent, PrintPou, PrintRenderMode, PrintRequest } from './types'
@@ -39,7 +39,7 @@ function renderPouBlocks(
   let contentBlocks: ContentBlock[]
   switch (pou.kind) {
     case 'ld':
-      contentBlocks = renderLadderPou(pou.rungs, mode, contentWidthPt, availableContentHeightPt)
+      contentBlocks = renderLadderPou(pou, mode, contentWidthPt, availableContentHeightPt)
       break
     case 'fbd':
       contentBlocks = renderFbdPou(pou.rung, mode, contentWidthPt, availableContentHeightPt)
@@ -87,7 +87,7 @@ export function paginate(req: PrintRequest): PdfPageContent[] {
       if (hasContent && currentY + block.heightPt > box.contentHeightPt) flushPage()
       const transform = { dx: box.marginsPt.left, dy: box.marginsPt.top + currentY, scale: 1 }
       currentOps.push(...transformDrawOps(block.ops, transform))
-      currentY += block.heightPt + BLOCK_GAP_PT
+      currentY += block.heightPt + (block.gapAfterPt ?? BLOCK_GAP_PT)
       hasContent = true
     }
   }

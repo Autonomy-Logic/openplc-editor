@@ -249,6 +249,20 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        /** A screen or widget block, edited as ST until the designer opens it. */
+        type: 'plc-hmi'
+        meta: {
+          name: string
+          kind: 'screen' | 'widget'
+        }
+      }
+    | {
+        type: 'plc-hmi-settings'
+        meta: {
+          name: string
+        }
+      }
+    | {
         type: 'plc-ethercat-device'
         meta: {
           name: string

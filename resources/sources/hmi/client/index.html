@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>OpenPLC HMI</title>
+    <link rel="stylesheet" href="hmi.css" />
+    <script src="socket.io.min.js" defer></script>
+    <script src="hmi-client.js" defer></script>
+  </head>
+  <body>
+    <main id="screen" hidden>
+      <canvas id="surface" tabindex="0"></canvas>
+    </main>
+    <form id="sign-in" class="panel" hidden>
+      <h1>OpenPLC HMI</h1>
+      <label for="username">User name</label>
+      <input id="username" name="username" autocomplete="username" autocapitalize="none" required />
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+      <p id="sign-in-message" role="alert"></p>
+      <button type="submit">Sign in</button>
+    </form>
+    <div id="notice" class="panel" role="status" hidden></div>
+  </body>
+</html>

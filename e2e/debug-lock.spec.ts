@@ -123,7 +123,7 @@ const openDebugSession = async (page: Page) => {
 const closeDebugSession = (page: Page) => page.evaluate(() => window.__OPENPLC_E2E_DEBUG_SESSION__?.close())
 
 test.describe('the debug-mode lock through the test-only seam', () => {
-  test('locks the toolbox sources, the rung actions and frames the window, then gives them back', async () => {
+  test('locks the toolbox sources and the rung actions without framing the window, then gives them back', async () => {
     test.setTimeout(180000)
     writeFixture()
     const { app, page } = await launch()
@@ -145,7 +145,7 @@ test.describe('the debug-mode lock through the test-only seam', () => {
       await expect(source).toHaveAttribute('aria-disabled', 'true')
       await expect(source).not.toHaveAttribute('draggable', 'true')
       await expect(createRung).toBeDisabled()
-      await expect(frame).toBeVisible()
+      await expect(frame).toHaveCount(0)
 
       await closeDebugSession(page)
 

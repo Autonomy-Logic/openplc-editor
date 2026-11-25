@@ -1,13 +1,18 @@
 import {
   buildPlcSetStateRequest,
+  buildProvisionBoardIdRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
   isGetListOverflowException,
+  parseGetDeviceIdResponse,
   parsePlcSetStateResponse,
+  parseProvisionBoardIdResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
+  DebugBoardIdProvisionResult,
+  DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugStatusResult,
@@ -37,7 +42,11 @@ interface ModbusRtuClientOptions {
   slaveId: number
   timeout: number
   serialPort: SerialPortLike
+  /** How long to wait after the port opens before the first request; a board's bootloader needs the default. */
+  readyDelayMs?: number
 }
+
+const DEFAULT_READY_DELAY_MS = 2500
 
 const MD5_REQUEST_MAX_RETRIES = 3
 const MD5_REQUEST_RETRY_DELAY_MS = 500
@@ -89,6 +98,7 @@ export class ModbusRtuClient {
   private timeout: number
   private serialPort: SerialPortLike | null = null
   private injectedSerialPort: SerialPortLike
+  private readonly readyDelayMs: number
 
   private static readonly CRC_HI_TABLE = [
     0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41, 0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80,
@@ -128,6 +138,7 @@ export class ModbusRtuClient {
     this.slaveId = options.slaveId
     this.timeout = options.timeout
     this.injectedSerialPort = options.serialPort
+    this.readyDelayMs = options.readyDelayMs ?? DEFAULT_READY_DELAY_MS
   }
 
   private calculateCrc(buffer: Uint8Array): number {
@@ -165,7 +176,7 @@ export class ModbusRtuClient {
         // Matches ARDUINO_BOOTLOADER_DELAY_MS in the editor's ModbusRtuClient.
         setTimeout(() => {
           resolve()
-        }, 2500)
+        }, this.readyDelayMs)
       })
       this.serialPort!.once('error', (err: unknown) => reject(err instanceof Error ? err : new Error(String(err))))
       this.serialPort!.open()
@@ -566,7 +577,7 @@ export class ModbusRtuClient {
     }
   }
 
-  async getDeviceId(): Promise<{ success: boolean; deviceId?: Uint8Array; deviceIdHex?: string; error?: string }> {
+  async getDeviceId(): Promise<DebugDeviceIdResult> {
     try {
       const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_DEVICE_ID, allocBytes(0))
       const response = await this.sendRequest(request)
@@ -574,28 +585,7 @@ export class ModbusRtuClient {
       if (response.length < 10) {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 10)` }
       }
-
-      const functionCodeResponse = readUint8(response, 7)
-      const statusCode = readUint8(response, 8)
-
-      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_DEVICE_ID as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
-      }
-
-      const idLen = readUint8(response, 9)
-      if (response.length < 10 + idLen) {
-        return {
-          success: false,
-          error: `Incomplete device-id data (expected ${idLen} bytes, got ${response.length - 10})`,
-        }
-      }
-
-      const deviceId = response.slice(10, 10 + idLen)
-      const deviceIdHex = Array.from(deviceId, (b) => b.toString(16).padStart(2, '0')).join('')
-      return { success: true, deviceId, deviceIdHex }
+      return parseGetDeviceIdResponse(response.slice(7))
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -639,6 +629,22 @@ export class ModbusRtuClient {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
       }
       return parseWriteLicenseResponse(response.subarray(7))
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** FC 0x4E. Stores a generated board ID once; the board refuses it when it already has one. */
+  async provisionBoardId(id: Uint8Array): Promise<DebugBoardIdProvisionResult> {
+    try {
+      const pdu = buildProvisionBoardIdRequest(id)
+      const response = await this.sendRequest(
+        this.assembleRequest(ModbusFunctionCode.PROVISION_BOARD_ID, pdu.subarray(1)),
+      )
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+      return parseProvisionBoardIdResponse(response.subarray(7))
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

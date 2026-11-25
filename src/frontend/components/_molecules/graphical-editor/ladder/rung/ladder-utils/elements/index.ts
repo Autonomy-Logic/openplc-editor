@@ -1,5 +1,6 @@
 import type { RungLadderState } from '@root/frontend/store/slices'
 import { toast } from '@root/frontend/utils/toast'
+import { EMPTY_LABEL_SOURCE, type LadderLabelSource, relayoutRung } from '@root/middleware/shared/utils/ladder-layout'
 import type { Edge, Node } from '@xyflow/react'
 
 import type {
@@ -9,7 +10,6 @@ import type {
 } from '../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { disconnectNodes } from '../edges'
 import { isNodeOfType, removeNode } from '../nodes'
-import { updateDiagramElementsPosition } from './diagram'
 import {
   blockHasBranches,
   getBranch,
@@ -42,6 +42,7 @@ export const addNewElement = <T>(
         blockVariant?: T
       }
     | Node,
+  labelSource: LadderLabelSource = EMPTY_LABEL_SOURCE,
 ): { nodes: Node[]; edges: Edge[]; newNode?: Node; handleBranches?: HandleBranch[] } => {
   let newNodeData: Node | undefined
   let newNodes = [...rung.nodes]
@@ -186,14 +187,14 @@ export const addNewElement = <T>(
   /**
    * After adding the new element, update the diagram with the new rung
    */
-  const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = updateDiagramElementsPosition(
+  const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = relayoutRung(
     {
       ...rung,
-      nodes: newNodes,
+      nodes: removePlaceholderElements(newNodes),
       edges: newEdges,
       ...(handleBranches && { handleBranches }),
     },
-    rung.defaultBounds as [number, number],
+    labelSource,
   )
 
   newNodes = updatedDiagramNodes
@@ -212,6 +213,7 @@ export const removeElement = (
    *  pre-strip node set when `rung.nodes` had its variable nodes removed
    *  earlier in the pipeline (see updateVariableBlockPosition). */
   previousNodes?: Node[],
+  labelSource: LadderLabelSource = EMPTY_LABEL_SOURCE,
 ): { nodes: Node[]; edges: Edge[]; handleBranches?: HandleBranch[] } => {
   let newNodes: Node[]
   let newEdges: Edge[]
@@ -313,14 +315,14 @@ export const removeElement = (
   /**
    * After removing the element, update the diagram with the new rung
    */
-  const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = updateDiagramElementsPosition(
+  const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = relayoutRung(
     {
       ...rung,
       nodes: newNodes,
       edges: newEdges,
       ...(handleBranches && { handleBranches }),
     },
-    rung.defaultBounds as [number, number],
+    labelSource,
     previousNodes,
   )
   newNodes = updatedDiagramNodes
@@ -335,6 +337,7 @@ export const removeElement = (
 export const removeElements = (
   rung: RungLadderState,
   nodesToRemove: Node[],
+  labelSource: LadderLabelSource = EMPTY_LABEL_SOURCE,
 ): { nodes: Node[]; edges: Edge[]; handleBranches?: HandleBranch[] } => {
   if (!nodesToRemove || nodesToRemove.length === 0) return { nodes: rung.nodes, edges: rung.edges }
 
@@ -344,7 +347,7 @@ export const removeElements = (
     // Skip if node was already removed (e.g., branch element cleaned up when its parent block was deleted)
     if (!state.nodes.find((n) => n.id === node.id)) continue
 
-    const { nodes, edges, handleBranches } = removeElement(state, node)
+    const { nodes, edges, handleBranches } = removeElement(state, node, undefined, labelSource)
     state.nodes = nodes
     state.edges = edges
     if (handleBranches) {

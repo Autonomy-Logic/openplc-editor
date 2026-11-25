@@ -34,7 +34,7 @@ import { connectToRuntime } from '../connect-runtime'
 import { resolveRuntimeCredentials } from '../credentials'
 import { ErrorCode, ExitCode, type ExitCodeValue } from '../exit-codes'
 import type { CliFailure, CliResult, Reporter } from '../output'
-import { applyConnectionOverrides, loadProject } from '../project/load'
+import { applyConnectionOverrides, type LoadedProject, loadProject } from '../project/load'
 
 export interface BuildOptions {
   /** True for `upload`: connect to a runtime and let the pipeline flash it. */
@@ -67,8 +67,12 @@ export interface BuildRequest {
   /** `--create-user`: may bootstrap the first user on a fresh runtime. */
   mayCreateUser: boolean
   withUpload: boolean
+  /** Defaults to `!withUpload`. False without an upload is Play on the simulator, which returns the module path. */
+  compileOnly?: boolean
   cleanBuild: boolean
   autoApprove: boolean
+  /** `--hmi-test-readout`: board firmware with HMI screens answers the test-only display-list readout. */
+  hmiTestReadout?: boolean
 }
 
 /** The command line's entry: parse argv into a `BuildRequest`, then run it. */
@@ -108,17 +112,68 @@ export async function runBuild(
       withUpload: options.withUpload,
       cleanBuild: boolFlag(args, 'clean'),
       autoApprove: boolFlag(args, 'yes'),
+      hmiTestReadout: boolFlag(args, 'hmi-test-readout'),
     },
     reporter,
   )
 }
 
+/** A build that succeeded, with what a caller needs to report or run it. */
+export interface CompiledProject {
+  ok: true
+  project: LoadedProject
+  target: string
+  /** Where the upload went, for an upload to a network target. */
+  host: string | null
+  firmwarePath: string | undefined
+  warnings: string[]
+}
+
+/** A build that failed; the failure has already been reported. */
+export interface FailedBuild {
+  ok: false
+  result: CliResult
+}
+
 async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter: Reporter): Promise<CliResult> {
+  const built = await compileProject(store, request, reporter)
+  if (!built.ok) return built.result
+  const { project, target, host } = built
+  return reporter.success(
+    {
+      project: project.name,
+      projectPath: project.projectPath,
+      target,
+      uploaded: request.withUpload,
+      buildDirectory: join(project.projectPath, 'build', target),
+      firmwarePath: built.firmwarePath,
+      warnings: built.warnings,
+    },
+    () =>
+      request.withUpload
+        ? `Uploaded "${project.name}" to ${host ?? currentCommunicationPort(store) ?? 'the target'} (${target}).`
+        : `Built "${project.name}" for ${target}.\nArtifacts: ${join(project.projectPath, 'build', target)}`,
+  )
+}
+
+/**
+ * Loads, gates and builds (and uploads, for `upload`) a project, reporting progress and any failure, but not the
+ * result: the caller decides what success looks like.
+ */
+export async function compileProject(
+  store: OpenPLCStore,
+  request: BuildRequest,
+  reporter: Reporter,
+): Promise<CompiledProject | FailedBuild> {
+  const fail = (failure: CliFailure, exitCode: ExitCodeValue): FailedBuild => ({
+    ok: false,
+    result: reporter.failure(failure, exitCode),
+  })
   const projectPath = request.projectPath
 
   const loaded = await loadProject(store, projectPath)
   if (!loaded.success) {
-    return reporter.failure({ code: ErrorCode.ProjectNotFound, message: loaded.error }, ExitCode.NotFound)
+    return fail({ code: ErrorCode.ProjectNotFound, message: loaded.error }, ExitCode.NotFound)
   }
   const project = loaded.project
   for (const warning of project.warnings) reporter.progress(`warning: ${warning}`)
@@ -133,7 +188,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
       }),
     )
     if (verdict.kind === 'refuse') {
-      return reporter.failure({ code: ErrorCode.ProjectInvalid, message: verdict.reason }, ExitCode.CompileFailed)
+      return fail({ code: ErrorCode.ProjectInvalid, message: verdict.reason }, ExitCode.CompileFailed)
     }
   }
 
@@ -144,7 +199,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
   // overrides it so one fixture can be built for several targets in a matrix.
   const target = request.target ?? project.board
   if (!target) {
-    return reporter.failure(
+    return fail(
       {
         code: ErrorCode.MissingArgument,
         message: 'This project names no board — pass --target, e.g. --target "OpenPLC Runtime v4"',
@@ -161,7 +216,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
   const boards = await new HardwareModule().getAvailableBoards()
   const boardInfo = boards.get(target)
   if (!boardInfo) {
-    return reporter.failure(
+    return fail(
       {
         code: ErrorCode.TargetUnknown,
         message:
@@ -185,7 +240,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
   if (request.withUpload && isEthernetArduino) {
     host = request.host ?? null
     if (!host) {
-      return reporter.failure(
+      return fail(
         {
           code: ErrorCode.MissingArgument,
           message: `"${target}" is flashed over Ethernet — pass --host <address> (the device IP)`,
@@ -196,7 +251,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
   } else if (request.withUpload && capabilities.directUsbUpload) {
     // arduino-cli needs the port; the project may already remember it.
     if (!currentCommunicationPort(store)) {
-      return reporter.failure(
+      return fail(
         {
           code: ErrorCode.MissingArgument,
           message: `"${target}" is flashed over USB — pass --port <serial> (see \`openplc-cli devices\`)`,
@@ -207,7 +262,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
   } else if (request.withUpload) {
     host = request.host ?? null
     if (!host) {
-      return reporter.failure(
+      return fail(
         {
           code: ErrorCode.MissingArgument,
           message: `"${target}" is reached through its runtime API — pass --host <address> (see \`openplc-cli devices\`)`,
@@ -220,7 +275,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
     // Required only on this branch — a USB target needs no login at all, which
     // is why the resolution upstream is allowed to have failed.
     if (!request.credentials) {
-      return reporter.failure(
+      return fail(
         {
           code: ErrorCode.MissingArgument,
           message:
@@ -237,10 +292,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
       onProgress: (m) => reporter.progress(m),
     })
     if (!connected.ok) {
-      return reporter.failure(
-        { code: connected.failure.code, message: connected.failure.message },
-        connected.failure.exitCode,
-      )
+      return fail({ code: connected.failure.code, message: connected.failure.message }, connected.failure.exitCode)
     }
     runtime = connected.value.runtime
   }
@@ -260,7 +312,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
       reporter,
     })
     if ('error' in gate) {
-      return reporter.failure(gate.error, gate.exitCode)
+      return fail(gate.error, gate.exitCode)
     }
   }
 
@@ -281,14 +333,14 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
       boardTarget: target,
       // The alias-resolved snapshot, from the same store action the button uses.
       projectData: project.compileReady,
-      compileOnly: !request.withUpload,
+      compileOnly: request.compileOnly ?? !request.withUpload,
       cleanBuild: request.cleanBuild,
       runtimeIpAddress: host,
       runtimeJwtToken: runtime?.tokens.getToken() ?? null,
       communicationPort: currentCommunicationPort(store) || undefined,
       vendorScreenData: project.vendorScreenData,
     },
-    createCliCompileTransport(runtime),
+    createCliCompileTransport(runtime, { hmiTestReadout: request.hmiTestReadout ?? false }),
     (event: CompileProgressEvent) => {
       if (event.stage === 'upload') reachedUpload = true
       if (event.level === 'warning' && event.message) warnings.push(event.message)
@@ -297,7 +349,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
   )
 
   if (!result.success) {
-    return reporter.failure(
+    return fail(
       {
         code: request.withUpload && reachedUpload ? ErrorCode.UploadRejected : ErrorCode.CompileFailed,
         message: result.error ?? 'Compilation failed',
@@ -306,21 +358,7 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
     )
   }
 
-  return reporter.success(
-    {
-      project: project.name,
-      projectPath: project.projectPath,
-      target,
-      uploaded: request.withUpload,
-      buildDirectory: join(project.projectPath, 'build', target),
-      firmwarePath: result.hexPath,
-      warnings,
-    },
-    () =>
-      request.withUpload
-        ? `Uploaded "${project.name}" to ${host ?? currentCommunicationPort(store) ?? 'the target'} (${target}).`
-        : `Built "${project.name}" for ${target}.\nArtifacts: ${join(project.projectPath, 'build', target)}`,
-  )
+  return { ok: true, project, target, host, firmwarePath: result.hexPath, warnings }
 }
 
 /**

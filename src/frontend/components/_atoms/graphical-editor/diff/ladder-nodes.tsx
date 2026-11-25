@@ -1,131 +1,159 @@
-import type { NodeProps } from '@xyflow/react'
+import { symbolKindOf } from '@root/middleware/shared/utils/ladder-layout'
+import { Handle, type NodeProps, Position } from '@xyflow/react'
 
 import type { DiffStatus } from '../../../../../middleware/shared/ports/version-control-port'
 import { PlaceholderNodeFilled } from '../../../../assets/icons/flow/Placeholder'
-import {
-  blockInputVariables,
-  blockOutputVariables,
-  inOutVariableNames,
-} from '../../../../utils/graphical/in-out-pin-rules'
-import { BlockNodeVisual } from '../ladder/block-visual'
-import { CoilVisual } from '../ladder/coil-visual'
-import { ContactVisual } from '../ladder/contact-visual'
-import {
-  DEFAULT_PARALLEL_HEIGHT,
-  DEFAULT_PARALLEL_WIDTH,
-  DEFAULT_PLACEHOLDER_HEIGHT,
-  DEFAULT_PLACEHOLDER_WIDTH,
-  DEFAULT_POWER_RAIL_HEIGHT,
-  DEFAULT_POWER_RAIL_WIDTH,
-} from '../ladder/utils/constants'
-import { VariableVisual } from '../ladder/variable-visual'
+import { inOutVariableNames } from '../../../../utils/graphical/in-out-pin-rules'
+import { LadderBlockVisual } from '../ladder/block-visual'
+import { ladderHandleStyle } from '../ladder/handle'
+import { LadderCellVisual } from '../ladder/ladder-cell'
+import { ladderSymbolInset } from '../ladder/ladder-symbol'
+import { useLadderNodeView } from '../ladder/rung-view'
+import { DEFAULT_PLACEHOLDER_HEIGHT, DEFAULT_PLACEHOLDER_WIDTH } from '../ladder/utils/constants'
+import { LadderPinVariableVisual } from '../ladder/variable-visual'
 import { DiffWrapper, renderHandles } from './diff-wrapper'
 
-export function ReadOnlyPowerRail({ data }: NodeProps) {
-  const status = (data.diffStatus as DiffStatus) ?? 'unchanged'
+const POSITIONS: Readonly<Record<string, Position>> = {
+  left: Position.Left,
+  right: Position.Right,
+  top: Position.Top,
+  bottom: Position.Bottom,
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+const DIFF_STATUSES: readonly DiffStatus[] = ['added', 'removed', 'modified', 'unchanged']
+
+/** The diff status the viewer stored on a node, or `unchanged`. */
+function diffStatusOf(data: Record<string, unknown>): DiffStatus {
+  return DIFF_STATUSES.find((status) => status === data.diffStatus) ?? 'unchanged'
+}
+
+/** The `name` of a node's variable, or empty. */
+function variableNameOf(data: Record<string, unknown>): string {
+  const variable = data.variable
+  return isRecord(variable) && typeof variable.name === 'string' ? variable.name : ''
+}
+
+/** A node's stored handles drawn as hidden points on their relative positions; a symbol's handles `inset` inside it. */
+function renderLadderHandles(handles: unknown, inset = 0) {
+  if (!Array.isArray(handles)) return null
+  return handles.map((handle: unknown, index) => {
+    if (!isRecord(handle)) return null
+    const type = handle.type === 'source' || handle.type === 'target' ? handle.type : undefined
+    const position = typeof handle.position === 'string' ? POSITIONS[handle.position] : undefined
+    if (type === undefined || position === undefined) return null
+    return (
+      <Handle
+        key={index}
+        id={typeof handle.id === 'string' ? handle.id : undefined}
+        type={type}
+        position={position}
+        style={ladderHandleStyle({ relPosition: handle.relPosition }, type === 'target' ? inset : -inset)}
+        className='opacity-0'
+        isConnectable={false}
+      />
+    )
+  })
+}
+
+export function ReadOnlyPowerRail({ id, data, height }: NodeProps) {
+  const status = diffStatusOf(data)
+  const { palette, geometry } = useLadderNodeView(id)
+  const railHeight = geometry?.height ?? height ?? 0
   return (
     <DiffWrapper status={status}>
-      <svg width={DEFAULT_POWER_RAIL_WIDTH} height={DEFAULT_POWER_RAIL_HEIGHT} xmlns='http://www.w3.org/2000/svg'>
-        <rect width={DEFAULT_POWER_RAIL_WIDTH} height={DEFAULT_POWER_RAIL_HEIGHT} className='fill-neutral-500' />
+      <svg width={1} height={railHeight} style={{ display: 'block', overflow: 'visible' }}>
+        <line x1={0} y1={0} x2={0} y2={railHeight} stroke={palette.rail} strokeWidth={2.5} />
       </svg>
-      {renderHandles(data.handles)}
+      {renderLadderHandles(data.handles)}
     </DiffWrapper>
   )
 }
 
-export function ReadOnlyContact({ data }: NodeProps) {
-  const status = (data.diffStatus as DiffStatus) ?? 'unchanged'
-  const varName = (data.variable as { name?: string })?.name
-  const variant = (data.variant as string) ?? 'default'
+/** A read-only contact or coil of the diff view, drawn as the editor draws it. */
+function ReadOnlyCell({ id, data, type }: NodeProps) {
+  const status = diffStatusOf(data)
+  const { palette } = useLadderNodeView(id)
+  const variant = typeof data.variant === 'string' ? data.variant : undefined
+  const kind = symbolKindOf(type, variant) ?? 'contact'
   return (
     <DiffWrapper status={status}>
-      <ContactVisual variant={variant} variableName={varName} className='hover:outline-none' />
-      {renderHandles(data.handles)}
+      <LadderCellVisual nodeId={id} kind={kind} variableName={variableNameOf(data)} symbolColour={palette.text} />
+      {renderLadderHandles(data.handles, ladderSymbolInset(kind))}
     </DiffWrapper>
   )
 }
 
-export function ReadOnlyCoil({ data }: NodeProps) {
-  const status = (data.diffStatus as DiffStatus) ?? 'unchanged'
-  const varName = (data.variable as { name?: string })?.name
-  const variant = (data.variant as string) ?? 'default'
+export function ReadOnlyContact(props: NodeProps) {
+  return <ReadOnlyCell {...props} />
+}
+
+export function ReadOnlyCoil(props: NodeProps) {
+  return <ReadOnlyCell {...props} />
+}
+
+export function ReadOnlyBlock({ id, data, width, height }: NodeProps) {
+  const status = diffStatusOf(data)
+  const { labels, palette } = useLadderNodeView(id)
+  const variant = isRecord(data.variant) ? data.variant : {}
+  const blockType = typeof variant.type === 'string' ? variant.type : ''
+  const typeName = typeof variant.name === 'string' ? variant.name : '???'
+  const variables = Array.isArray(variant.variables)
+    ? variant.variables.flatMap((entry: unknown) =>
+        isRecord(entry) && typeof entry.name === 'string' && typeof entry.class === 'string'
+          ? [{ name: entry.name, class: entry.class }]
+          : [],
+      )
+    : []
+
   return (
     <DiffWrapper status={status}>
-      <CoilVisual variant={variant} variableName={varName} className='hover:outline-none' />
-      {renderHandles(data.handles)}
+      <LadderBlockVisual
+        nodeId={id}
+        width={width ?? 0}
+        height={height ?? 0}
+        labels={labels}
+        palette={palette}
+        typeName={typeName}
+        instanceName={variableNameOf(data)}
+        showInstance={blockType !== 'function' && blockType !== 'generic'}
+        inOutPins={inOutVariableNames(variables)}
+        borderColour={palette.wire}
+      />
+      {renderLadderHandles(data.handles)}
     </DiffWrapper>
   )
 }
 
-export function ReadOnlyBlock({ data, width, height }: NodeProps) {
-  const status = (data.diffStatus as DiffStatus) ?? 'unchanged'
-  const variant = data.variant as
-    | { name?: string; type?: string; variables?: Array<{ name: string; class: string }> }
-    | undefined
-  const blockName = variant?.name ?? '???'
-  const blockType = variant?.type ?? ''
-  const blockVars = variant?.variables ?? []
-  const inputs = blockInputVariables(blockVars).map((v) => v.name)
-  const outputs = blockOutputVariables(blockVars).map((v) => v.name)
-  const inOuts = inOutVariableNames(blockVars)
-  const varName = (data.variable as { name?: string })?.name ?? ''
-  const showInstanceName = blockType !== 'function' && blockType !== 'generic' && varName
-  const w = (width as number) ?? 216
-  const h = (height as number) ?? 128
+export function ReadOnlyVariable({ id, data, width }: NodeProps) {
+  const status = diffStatusOf(data)
+  const owner = isRecord(data.block) ? data.block : {}
+  const pinType = isRecord(owner.variableType) && isRecord(owner.variableType.type) ? owner.variableType.type.value : ''
+  const placeholder = typeof pinType === 'string' && pinType !== '' ? `(*${pinType}*)` : ''
 
   return (
     <DiffWrapper status={status}>
-      <div className='relative'>
-        {showInstanceName && (
-          <div className='absolute -top-[16px]' style={{ width: w }}>
-            <div className='truncate text-center text-xs leading-3 text-neutral-500'>{varName}</div>
-          </div>
-        )}
-        <BlockNodeVisual
-          blockName={blockName}
-          inputConnectors={inputs}
-          outputConnectors={outputs}
-          inOutConnectors={inOuts}
-          width={w}
-          height={h}
-          disabled
+      <div className='relative' style={{ width: width ?? 0, height: '100%' }}>
+        <LadderPinVariableVisual
+          nodeId={id}
+          side={data.variant === 'output' ? 'output' : 'input'}
+          variableName={variableNameOf(data)}
+          placeholder={placeholder}
+          width={width ?? 0}
         />
       </div>
-      {renderHandles(data.handles)}
-    </DiffWrapper>
-  )
-}
-
-export function ReadOnlyVariable({ data }: NodeProps) {
-  const status = (data.diffStatus as DiffStatus) ?? 'unchanged'
-  const varName = (data.variable as { name?: string })?.name ?? ''
-  const blockData = data.block as { variableType?: { type?: { value?: string } } } | undefined
-  const typeValue = blockData?.variableType?.type?.value
-  const placeholder = typeValue ? `(*${typeValue}*)` : ''
-
-  return (
-    <DiffWrapper status={status}>
-      <VariableVisual variableName={varName} placeholder={placeholder} variant={(data.variant as string) ?? ''} />
-      {renderHandles(data.handles)}
+      {renderLadderHandles(data.handles)}
     </DiffWrapper>
   )
 }
 
 export function ReadOnlyParallel({ data }: NodeProps) {
-  const status = (data.diffStatus as DiffStatus) ?? 'unchanged'
+  const status = diffStatusOf(data)
   return (
     <DiffWrapper status={status}>
-      <div style={{ width: DEFAULT_PARALLEL_WIDTH, height: DEFAULT_PARALLEL_HEIGHT }}>
-        <svg style={{ width: DEFAULT_PARALLEL_WIDTH, height: DEFAULT_PARALLEL_HEIGHT }}>
-          <rect
-            width={DEFAULT_PARALLEL_WIDTH}
-            height={DEFAULT_PARALLEL_HEIGHT}
-            className='stroke-[--xy-edge-stroke-default]'
-            fill='none'
-          />
-        </svg>
-      </div>
-      {renderHandles(data.handles)}
+      <div style={{ width: 1, height: 1 }} />
+      {renderLadderHandles(data.handles)}
     </DiffWrapper>
   )
 }

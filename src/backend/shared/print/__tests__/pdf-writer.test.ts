@@ -1,9 +1,20 @@
-import { PDFDocument } from 'pdf-lib'
+import { PDFDict, PDFDocument, PDFName } from 'pdf-lib'
 
 import { getTestFontSet } from './fixtures/test-font-set'
 import type { PdfBackend } from '../pdf-writer'
 import { createPdfLibBackend, drawPages } from '../pdf-writer'
 import type { DrawOp, PdfPageContent } from '../types'
+
+/** The `BaseFont` names of the fonts each page of a saved PDF uses, page by page. */
+async function pageFontNames(bytes: Uint8Array): Promise<string[][]> {
+  const doc = await PDFDocument.load(bytes)
+  return doc.getPages().map((page) => {
+    const fonts = page.node.Resources()?.lookup(PDFName.of('Font'), PDFDict)
+    return (fonts?.values() ?? []).map((ref) =>
+      doc.context.lookup(ref, PDFDict).lookup(PDFName.of('BaseFont'), PDFName).decodeText(),
+    )
+  })
+}
 
 describe('createPdfLibBackend', () => {
   it('throws if a drawing op is received before any page was added', async () => {
@@ -34,6 +45,21 @@ describe('createPdfLibBackend', () => {
 
     const reparsed = await PDFDocument.load(bytes)
     expect(reparsed.getPageCount()).toBe(1)
+  })
+
+  it('embeds JetBrains Mono Regular for ldMono and JetBrains Mono SemiBold for ldMonoSemibold', async () => {
+    const backend = await createPdfLibBackend(getTestFontSet())
+    backend.addPage(400, 600)
+    backend.drawText('Start', 10, 10, 12, { r: 0, g: 0, b: 0 }, 'ldMono', 'left')
+    backend.addPage(400, 600)
+    backend.drawText('TON', 10, 10, 12, { r: 0, g: 0, b: 0 }, 'ldMonoSemibold', 'center')
+
+    const [ldMonoPage, ldMonoSemiboldPage] = await pageFontNames(await backend.finish())
+
+    expect(ldMonoPage).toHaveLength(1)
+    expect(ldMonoPage[0]).toMatch(/^JetBrainsMono-Regular/)
+    expect(ldMonoSemiboldPage).toHaveLength(1)
+    expect(ldMonoSemiboldPage[0]).toMatch(/^JetBrainsMono-SemiBold/)
   })
 })
 

@@ -7,27 +7,111 @@ on:
       - development
 
 jobs:
+  # Decides whether build-check, lint and unit-tests may skip their steps.
+  # Before every push of a pull request MisterFlow runs the full unit suite,
+  # lint and type check locally on the exact head it pushes, then sets the
+  # commit status misterflow/local-ci to success on that SHA. On any
+  # pull_request event into development, the steps skip only when the head
+  # SHA of the event carries that status. A push made without MisterFlow has
+  # no such status and runs everything, as does every pull request into main.
+  local-ci-gate:
+    name: Local CI status check
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Read the misterflow/local-ci commit status
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CONTEXT: misterflow/local-ci
+        run: |
+          skip=false
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$BASE_REF" != "development" ]; then
+            reason="Not a pull request into development"
+          elif ! printf '%s' "$HEAD_SHA" | grep -Eqx '[0-9a-f]{40}'; then
+            reason="No valid head SHA in the event"
+          else
+            # MisterFlow sets the status seconds after the push, so poll every
+            # 3 seconds for up to 12 seconds (at 0, 3, 6, 9 and 12 seconds).
+            # The combined status holds only the latest state of each context.
+            reason="Status $CONTEXT not found as success on $HEAD_SHA (or the statuses could not be read) within 12 seconds"
+            for i in 1 2 3 4 5; do
+              if state=$(timeout 10 gh api "repos/$REPO/commits/$HEAD_SHA/status?per_page=100" --jq ".statuses[] | select(.context == \"$CONTEXT\") | .state"); then
+                if [ "$state" = "success" ]; then
+                  skip=true
+                  break
+                elif [ "$state" = "failure" ] || [ "$state" = "error" ]; then
+                  reason="Status $CONTEXT is $state on $HEAD_SHA"
+                  break
+                fi
+              else
+                echo "::warning::Could not read the commit statuses of $HEAD_SHA (attempt $i)."
+              fi
+              if [ "$i" -lt 5 ]; then sleep 3; fi
+            done
+          fi
+          if [ "$skip" = "true" ]; then
+            msg="Status $CONTEXT is success on $HEAD_SHA: build-check, lint and unit-tests skip their steps (they ran locally on this commit)."
+          else
+            msg="$reason: every job runs."
+          fi
+          echo "$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
   architecture:
     uses: ./.github/workflows/ci-architecture.yml
 
+  # The skip is passed into the called workflow instead of being an `if:`
+  # here: a skipped caller job never reports the called job's check name
+  # (e.g. `lint / Lint Check`), so a required check would stay "Expected".
+  # `!cancelled()` keeps these running in full if the status check fails.
   build-check:
+    needs: [local-ci-gate]
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/ci-build.yml
+    with:
+      skip: ${{ needs.local-ci-gate.outputs.skip == 'true' }}
 
   lint:
+    needs: [local-ci-gate]
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/ci-lint.yml
+    with:
+      skip: ${{ needs.local-ci-gate.outputs.skip == 'true' }}
 
   unit-tests:
+    needs: [local-ci-gate]
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/ci-unit-tests.yml
+    with:
+      skip: ${{ needs.local-ci-gate.outputs.skip == 'true' }}
 
+  hmi-core:
+    uses: ./.github/workflows/ci-hmi-core.yml
   debug-lock-e2e:
     uses: ./.github/workflows/ci-e2e-debug-lock.yml
 
+  # The explicit conditions below keep the usual rule (run only when the
+  # direct needs succeeded) but ignore the status check further upstream:
+  # without them a failed status check would skip format, sync and
+  # complete-build through the implicit success(), which looks at every
+  # upstream job, and the required checks would never report.
   format:
     needs: [architecture, build-check, lint]
+    if: ${{ !cancelled() && needs.architecture.result == 'success' && needs.build-check.result == 'success' && needs.lint.result == 'success' }}
     uses: ./.github/workflows/ci-format.yml
 
   sync:
     needs: [format]
+    if: ${{ !cancelled() && needs.format.result == 'success' }}
     uses: ./.github/workflows/ci-sync.yml
     secrets: inherit
 
@@ -36,5 +120,5 @@ jobs:
     # Full 3-OS packaging is release work: the tag-triggered release
     # workflow builds it for real, so PRs into development skip it and
     # only the promotion PRs into main still prove the app packages.
-    if: github.base_ref == 'main'
+    if: ${{ !cancelled() && needs.sync.result == 'success' && github.base_ref == 'main' }}
     uses: ./.github/workflows/build.yml

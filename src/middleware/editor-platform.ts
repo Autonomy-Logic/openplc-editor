@@ -1,7 +1,3 @@
-/**
- * Editor platform adapter — wires all port interfaces to Electron IPC bridge (`window.bridge.*`).
- */
-
 import { APP_VERSION } from '../frontend/data/constants/app-version'
 import type { OpenPLCStore } from '../frontend/store'
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
@@ -15,6 +11,7 @@ import { editorEditSessionPort } from './adapters/editor/edit-session-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorEtherCATDiagnosticsAdapter } from './adapters/editor/ethercat-diagnostics-adapter'
 import { createEditorEtherCATScanAdapter } from './adapters/editor/ethercat-scan-adapter'
+import { createEditorHmiPreviewAdapter } from './adapters/editor/hmi-preview-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
 import { openFetchedProject } from './adapters/editor/open-fetched-project'
@@ -23,6 +20,7 @@ import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
 import { createPackageUpdateNotifier } from './adapters/editor/package-update-notice'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
+import { createEditorRuntimeProvisioningAdapter } from './adapters/editor/runtime-provisioning-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
 import { createEditorStlibSourceAdapter } from './adapters/editor/stlib-source-adapter'
 import { createEditorSystemAdapter } from './adapters/editor/system-adapter'
@@ -32,10 +30,6 @@ import { createEditorWindowAdapter } from './adapters/editor/window-adapter'
 import { EDITOR_CAPABILITIES } from './shared/ports/platform-capabilities'
 import type { PlatformPorts } from './shared/providers/types'
 
-/**
- * Runtime connection target — IP address of the OpenPLC runtime device.
- * Set by the store/UI when the user configures or connects to a device.
- */
 let _runtimeIpAddress = ''
 let _projectPath = ''
 
@@ -59,12 +53,6 @@ function onProjectPathChanged(listener: () => void): () => void {
 
 const editorPackages = createEditorPackageAdapter()
 
-/**
- * Tells a build whether the board's package has a newer, editor-compatible
- * release. Exported so the app root can `prime()` it at startup: the catalogue
- * is fetched once, off the build's critical path, and every build after that
- * reads the answer without touching the network.
- */
 export const packageUpdateNotifier = createPackageUpdateNotifier(editorPackages, APP_VERSION)
 
 /**
@@ -73,7 +61,6 @@ export const packageUpdateNotifier = createPackageUpdateNotifier(editorPackages,
 export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
   const editorProject = createEditorProjectAdapter(store)
   const editorRuntime = createEditorRuntimeAdapter(store, () => _runtimeIpAddress)
-  // Composed here because it needs both the project and runtime ports in scope; see `open-fetched-project.ts`.
   editorRuntime.openFetchedProject = (project) => openFetchedProject(store, project, editorProject)
 
   return {
@@ -81,6 +68,7 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
       findPackageUpdateNotice: (packageId) => packageUpdateNotifier.notice(packageId),
     }),
     runtime: editorRuntime,
+    runtimeProvisioning: createEditorRuntimeProvisioningAdapter(),
     debugger: createEditorDebuggerAdapter(),
     simulator: createEditorSimulatorAdapter(),
     project: editorProject,
@@ -92,19 +80,17 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
     theme: createEditorThemeAdapter(),
     packages: editorPackages,
     esi: createEditorEsiAdapter(() => _projectPath, onProjectPathChanged),
+    hmiPreview: createEditorHmiPreviewAdapter(),
     ethercatScan: createEditorEtherCATScanAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
     ethercatDiagnostics: createEditorEtherCATDiagnosticsAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
     versionControl: createEditorVersionControlAdapter(),
     navigation: createEditorNavigationAdapter(store),
     library: createEditorLibraryAdapter(),
     stlibSource: createEditorStlibSourceAdapter(),
-    // Paired with `requiresEdgeAccount: false` in EDITOR_CAPABILITIES, so signing in stays optional here.
     edgeAccount: editorEdgeAccountPort,
     editSession: editorEditSessionPort,
     appUpdate: createEditorAppUpdateAdapter(),
-    // Wired unconditionally; visibility is gated by capabilities/consent/sign-in, not by the port's absence.
     ai: createEditorAIAdapter({
-      // No build-time kill switch: the main process is the only route to AI endpoints, so an absent proxy already fails closed.
       isFeatureEnabled: true,
       hasUserConsented: hasAiConsent(),
       inlineCompletionsEnabled: readInlineCompletionsPreference(),
@@ -122,7 +108,7 @@ function hasAiConsent(): boolean {
   }
 }
 
-// Defaults to on (like the store) so a first run or unreadable value never silently disables the feature.
+// Defaults to on when the value is absent or unreadable.
 function readInlineCompletionsPreference(): boolean {
   try {
     const raw = localStorage.getItem('ai-preferences-v1')
