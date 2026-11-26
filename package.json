@@ -155,7 +155,7 @@
     "css-minimizer-webpack-plugin": "^8.0.0",
     "detect-port": "^1.5.1",
     "electron": "^45.4.1",
-    "electron-builder": "^26.0.12",
+    "electron-builder": "^26.18.0",
     "electron-devtools-installer": "^3.2.0",
     "electronmon": "^2.0.2",
     "eslint": "^9.20.1",
@@ -207,13 +207,14 @@
       "glob": "^7.2.3"
     },
     "@isaacs/brace-expansion": "^5.0.1",
+    "@svgr/plugin-svgo": {
+      "svgo": "^3.3.5"
+    },
     "@xmldom/xmldom@0": "^0.8.15",
-    "app-builder-lib": "^26.15.0",
     "body-parser": "^1.20.9",
     "brace-expansion@1": "^1.1.20",
     "brace-expansion@2": "^2.1.6",
     "browserslist": "^4.28.7",
-    "builder-util-runtime": "^9.7.0",
     "compression": "^1.8.2",
     "fast-xml-builder": "^1.1.7",
     "flatted": "^3.4.2",
@@ -233,11 +234,19 @@
     "path-to-regexp": "^0.1.13",
     "picomatch@2": "^2.3.2",
     "picomatch@4": "^4.0.4",
+    "postcss-svgo": {
+      "svgo": "^4.1.0"
+    },
     "proxy-addr": "^2.0.8",
+    "rimraf@2": {
+      "glob": "^7.2.3"
+    },
+    "rimraf@3": {
+      "glob": "^7.2.3"
+    },
     "shell-quote": "^1.9.0",
     "socket.io-parser": "^4.2.7",
     "source-map-js": "^1.2.2",
-    "svgo": "^3.3.5",
     "test-exclude": {
       "glob": "^7.2.3"
     },

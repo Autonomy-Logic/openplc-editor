@@ -17,7 +17,7 @@ const nodeSchema = z.object({
     .optional(),
   draggable: z.boolean(),
   selectable: z.boolean(),
-  data: z.any().optional(),
+  data: z.unknown().optional(),
 })
 
 const edgeSchema = z.object({
