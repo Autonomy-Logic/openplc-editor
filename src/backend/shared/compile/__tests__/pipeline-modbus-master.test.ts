@@ -372,7 +372,7 @@ describe('pipeline: Modbus master refusals in the validate stage', () => {
 
     expect(result.success).toBe(false)
     expect(validateErrors(events)).toContain('Remote devices "A" and "B" on 10.0.0.5:502 disagree on Reconnect.')
-    expect(port.compileArduino).not.toHaveBeenCalled()
+    expect(port.compileToWasm).not.toHaveBeenCalled()
   })
 
   it('builds a project the Simulator can only ignore, with a hostname and a host serial port', async () => {
