@@ -91,11 +91,17 @@ describe('PropertiesCard', () => {
       'FUNCTION_BLOCK S EXTENDS HmiScreen\n  VAR\n    Title : HmiLabel;\n  END_VAR\nEND_FUNCTION_BLOCK\n',
     )
     const name = screen.getByTestId('hmi-element-name')
+    expect(name).not.toHaveProperty('disabled', true)
     fireEvent.change(name, { target: { value: 'Heading' } })
     fireEvent.keyDown(name, { key: 'Enter' })
     fireEvent.click(screen.getByTestId('hmi-show-in-code'))
     expect(result.renamed).toEqual(['Heading'])
     expect(result.shown).toEqual(['Title'])
+  })
+
+  it('keeps the name read-only for an element edited in the code view', () => {
+    setup("FUNCTION_BLOCK S EXTENDS HmiScreen\n  VAR\n    Title : HmiLabel := 'x';\n  END_VAR\nEND_FUNCTION_BLOCK\n")
+    expect(screen.getByTestId('hmi-element-name')).toHaveProperty('disabled', true)
   })
 })
 

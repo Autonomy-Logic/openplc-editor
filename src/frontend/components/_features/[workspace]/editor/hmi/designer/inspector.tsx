@@ -419,7 +419,7 @@ export function PropertiesCard(props: {
       <div className='flex shrink-0 items-center gap-2 bg-neutral-50 px-3 py-2 dark:bg-neutral-900'>
         <NameField
           value={element.name}
-          disabled={props.locked || element.locked !== undefined}
+          disabled={props.locked || element.locked !== null}
           onCommit={(name) => actions.rename(element.name, name.trim())}
         />
         <span className='shrink-0 font-caption text-[11px] text-neutral-850 dark:text-neutral-400'>
