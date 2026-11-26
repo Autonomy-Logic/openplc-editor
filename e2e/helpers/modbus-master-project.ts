@@ -119,6 +119,15 @@ const OUTPUT_TAIL_LINES = 40
 /** How many distinct caught errors a launch failure quotes. */
 const CAUGHT_ERRORS_KEPT = 5
 
+/** How long the main-process window list may take before it counts as not answering. */
+const WINDOW_LIST_TIMEOUT_MS = 5000
+
+/** How long a closed main window waits for the splash to show a startup error before the close is the reason. */
+const MAIN_CLOSE_GRACE_MS = 2000
+
+/** How long discarding the launch trace may take once the project opened. */
+const TRACE_STOP_TIMEOUT_MS = 10000
+
 /** How many lines of app output a launch keeps. */
 const OUTPUT_KEPT_LINES = 2000
 
@@ -129,6 +138,34 @@ interface LaunchedApp {
 }
 
 const launched = new WeakMap<ElectronApplication, LaunchedApp>()
+
+/** A window as the main process sees it. */
+interface MainWindowState {
+  url: string
+  loading: boolean
+  crashed: boolean
+  pid: number
+}
+
+/** One line per main-process window: its URL, renderer process id and loading or crashed state. */
+function describeWindows(windows: MainWindowState[]): string {
+  return windows
+    .map(
+      (w) =>
+        `${w.url || 'no page'} (renderer pid ${w.pid}${w.loading ? ', loading' : ''}${w.crashed ? ', crashed' : ''})`,
+    )
+    .join('; ')
+}
+
+/** Why no main window page reached Playwright, from the last main-process window list. */
+function noMainWindowReason(windows: MainWindowState[] | undefined): string {
+  if (windows === undefined) return 'the main process never answered the window list'
+  if (windows.length === 0) return 'the main process has no window'
+  if (windows.some((w) => w.url.includes('index.html'))) {
+    return `the main process shows index.html but its page never reached Playwright: ${describeWindows(windows)}`
+  }
+  return `the main process has ${windows.length} window(s) and none loaded index.html: ${describeWindows(windows)}`
+}
 
 /** A launch that can no longer succeed, with its reason. */
 class LaunchFailure extends Error {}
@@ -165,6 +202,10 @@ async function within<T>(step: Promise<T>, ms: number, what: string): Promise<T>
  */
 class LaunchWatch {
   reason: string | undefined
+  mainClosed: string | undefined
+  mainWindows: MainWindowState[] | undefined
+  windowListCalls = 0
+  windowListFailures = 0
   readonly errors: string[] = []
   readonly urls = new Set<string>()
   readonly crashed = new Set<Page>()
@@ -223,7 +264,8 @@ class LaunchWatch {
   }
 
   private exited(code: number | null, signal: NodeJS.Signals | null): void {
-    this.fail(`the app process exited with code ${String(code)} and signal ${String(signal)}`)
+    const exit = `the app process exited with code ${String(code)} and signal ${String(signal)}`
+    this.fail(this.mainClosed === undefined ? exit : `the main window closed (${this.mainClosed}) and ${exit}`)
   }
 
   private watch(page: Page): void {
@@ -244,7 +286,9 @@ class LaunchWatch {
     })
     page.on('close', () => {
       const url = this.urlOf(page)
-      if (url.includes('index.html')) this.fail(`the main window closed (${url})`)
+      if (!url.includes('index.html')) return
+      this.mainClosed = url
+      setTimeout(() => this.fail(`the main window closed (${url})`), MAIN_CLOSE_GRACE_MS)
     })
     page.on('pageerror', (error) =>
       appendOutput(this.target.output, `${this.urlOf(page)}: ${error.message}`, '[pageerror] '),
@@ -263,6 +307,21 @@ function currentTest(): TestInfo | undefined {
     return test.info()
   } catch {
     return undefined
+  }
+}
+
+/** Records `description` on stderr and, inside a test, as a test annotation of `type`. */
+function note(type: string, description: string): void {
+  process.stderr.write(`${description}\n`)
+  currentTest()?.annotations.push({ type, description })
+}
+
+/** Stops the launch trace of an app whose project opened, without saving it; a stop that fails or hangs is noted. */
+async function discardTrace(app: ElectronApplication): Promise<void> {
+  try {
+    await within(app.context().tracing.stop(), TRACE_STOP_TIMEOUT_MS, 'trace stop')
+  } catch (error) {
+    note('launch-trace', `the launch trace was not discarded: ${firstLine(error)}`)
   }
 }
 
@@ -342,6 +401,8 @@ async function failLaunch(
       `Last caught error: ${watch.errors.at(-1) ?? 'none'}`,
       ...(earlier.length > 0 ? ['Earlier caught errors:', ...earlier.map((line) => `  ${line}`)] : []),
       `Window URLs seen: ${watch.urls.size > 0 ? [...watch.urls].join(', ') : 'none'}`,
+      `Main-process window list: ${watch.windowListFailures} of ${watch.windowListCalls} calls failed or did not answer within ${WINDOW_LIST_TIMEOUT_MS / 1000} s`,
+      `Main-process windows, last list: ${watch.mainWindows === undefined ? 'none answered' : describeWindows(watch.mainWindows) || 'no window'}`,
       `App output, last ${tail.length} lines:`,
       ...tail.map((line) => `  ${line}`),
       'Launch artifacts:',
@@ -381,28 +442,42 @@ export async function launchProject(userData: string): Promise<{ app: ElectronAp
     if (!(error instanceof LaunchFailure)) watch.caught(`trace not started: ${firstLine(error)}`)
   }
 
+  let stage: string | undefined
   try {
     while (watch.reason === undefined && Date.now() < deadline) {
-      const urls = await watch
+      watch.windowListCalls += 1
+      const windows = await watch
         .step(
           within(
-            app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => w.webContents.getURL())),
-            left(),
-            'window list',
+            app.evaluate(({ BrowserWindow }) =>
+              BrowserWindow.getAllWindows().map((w) => ({
+                url: w.webContents.getURL(),
+                loading: w.webContents.isLoading(),
+                crashed: w.webContents.isCrashed(),
+                pid: w.webContents.getOSProcessId(),
+              })),
+            ),
+            Math.min(left(), WINDOW_LIST_TIMEOUT_MS),
+            'main-process window list',
           ),
         )
         .catch((error: unknown) => {
           if (error instanceof LaunchFailure) throw error
-          if (Date.now() < deadline) watch.caught(error)
-          return []
+          watch.windowListFailures += 1
+          watch.caught(error)
+          return undefined
         })
-      for (const url of urls) watch.seeUrl(url)
+      if (windows !== undefined) watch.mainWindows = windows
+      for (const w of windows ?? []) watch.seeUrl(w.url)
       const main = app.windows().find((w) => !w.isClosed() && watch.urlOf(w).includes('index.html'))
       if (main) {
         try {
           const project = main.getByText(PROJECT_NAME, { exact: true }).first()
+          stage = 'waiting for DOMContentLoaded of the main window'
           await watch.step(main.waitForLoadState('domcontentloaded', { timeout: left() }))
+          stage = `waiting for the project "${PROJECT_NAME}" in the start screen`
           await watch.step(project.waitFor({ timeout: left() }))
+          stage = 'stubbing the package signature check in the main process'
           await watch.step(
             within(
               app.evaluate(({ ipcMain }) => {
@@ -413,17 +488,22 @@ export async function launchProject(userData: string): Promise<{ app: ElectronAp
               'signature stub',
             ),
           )
+          stage = 'clicking the project in the start screen'
           await watch.step(project.click({ timeout: left() }))
-          if (tracing) await app.context().tracing.stop()
+          if (tracing) await discardTrace(app)
           return { app, page: main }
         } catch (error) {
           if (error instanceof LaunchFailure) throw error
           watch.caught(error)
         }
+      } else {
+        stage = undefined
       }
       await watch.step(new Promise((r) => setTimeout(r, Math.min(500, left()))))
     }
-    watch.fail(`the project did not show in the main window within ${LAUNCH_TIMEOUT_MS / 1000} s`)
+    watch.fail(
+      `the project did not show in the main window within ${LAUNCH_TIMEOUT_MS / 1000} s, ${stage ?? `no main window page: ${noMainWindowReason(watch.mainWindows)}`}`,
+    )
   } catch (error) {
     if (!(error instanceof LaunchFailure)) watch.fail(`the launch threw: ${firstLine(error)}`)
   }
@@ -437,9 +517,10 @@ export async function launchProject(userData: string): Promise<{ app: ElectronAp
 export async function shutdown(app: ElectronApplication): Promise<void> {
   const proc = launched.get(app)?.proc ?? app.process()
   if (proc.exitCode !== null || proc.signalCode !== null) {
-    const description = `the app had already exited with code ${String(proc.exitCode)} and signal ${String(proc.signalCode)}`
-    process.stderr.write(`${description}\n`)
-    currentTest()?.annotations.push({ type: 'app-exit', description })
+    note(
+      'app-exit',
+      `the app had already exited with code ${String(proc.exitCode)} and signal ${String(proc.signalCode)}`,
+    )
     return
   }
   const exited = new Promise((resolve) => proc.once('exit', resolve))
