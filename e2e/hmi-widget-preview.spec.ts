@@ -46,9 +46,12 @@ async function open(widgets: Record<string, string>) {
 test.describe('HMI widget preview', () => {
   test.setTimeout(180000)
 
-  test('draws a block once in its box and warns when it draws past the box', async () => {
+  test('draws a block once in its box, outline included, and warns when it draws past the box', async () => {
     const { app, page } = await open({
-      Tall: block('Tall', 'HMI_FillRect(Left, Top, Width, Height, 5, COLOR.Danger);'),
+      Tall: block(
+        'Tall',
+        'HMI_FillRect(Left, Top, Width, Height, 5, COLOR.Danger); HMI_StrokeRect(Left, Top, Width, Height, 5, 4, COLOR.Text);',
+      ),
       Wide: block('Wide', 'HMI_FillRect(Left - 10, Top, Width + 30, Height, 5, COLOR.Danger);'),
     })
     try {
@@ -63,7 +66,8 @@ test.describe('HMI widget preview', () => {
         60000,
       )
       expect(await page.locator('[data-testid="hmi-widget-canvas"]:visible').count()).toBe(1)
-      await expect(overflow).toHaveCount(0)
+      await page.waitForTimeout(1500)
+      expect(await overflow.count()).toBe(0)
 
       await leaf(page, 'Wide').click()
       await waitFor(F, page, 'the overflow notice', async () => (await overflow.count()) > 0, 60000)

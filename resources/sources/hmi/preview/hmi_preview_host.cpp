@@ -233,12 +233,11 @@ void measure_drawn() {
             p += HMI_PAYLOAD_CLEAR;
             break;
         case HMI_OP_RECT:
-        case HMI_OP_RECT_STROKE: {
+        case HMI_OP_RECT_STROKE: { /* a stroke is drawn inside its rectangle */
             const size_t sz = op == HMI_OP_RECT ? HMI_PAYLOAD_RECT : HMI_PAYLOAD_RECT_STROKE;
             if (avail < sz) return;
             const int64_t x = hmi_rd_i32(p), y = hmi_rd_i32(p + 4), w = hmi_rd_i32(p + 8), h = hmi_rd_i32(p + 12);
-            const int64_t half = op == HMI_OP_RECT ? 0 : llabs(static_cast<int64_t>(hmi_rd_i32(p + 20))) / 2;
-            if (visible(hmi_rd_u32(p + sz - 4))) add_drawn(x - half, y - half, x + w + half, y + h + half, clip, clipped, &any);
+            if (visible(hmi_rd_u32(p + sz - 4))) add_drawn(x, y, x + w, y + h, clip, clipped, &any);
             p += sz;
             break;
         }
