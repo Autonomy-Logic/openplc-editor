@@ -369,8 +369,13 @@ export async function launchProject(userData: string): Promise<{ app: ElectronAp
   const left = () => Math.max(1, deadline - Date.now())
   let tracing = false
 
+  const traceStart = app.context().tracing.start({ screenshots: true, snapshots: true })
+  void traceStart.then(
+    () => (tracing = true),
+    () => undefined,
+  )
   try {
-    await watch.step(app.context().tracing.start({ screenshots: true, snapshots: true }))
+    await watch.step(within(traceStart, left(), 'trace start'))
     tracing = true
   } catch (error) {
     if (!(error instanceof LaunchFailure)) watch.caught(`trace not started: ${firstLine(error)}`)
