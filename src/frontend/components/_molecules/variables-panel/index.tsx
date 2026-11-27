@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import type { DebugTreeNode } from '../../../../middleware/shared/ports/types'
 import ViewIcon from '../../../assets/icons/interface/View'
 import ZapIcon from '../../../assets/icons/interface/Zap'
+import { useVirtualRows } from '../../../hooks/use-virtual-rows'
 import { cn } from '../../../utils/cn'
 import { encodeForceValue, isForcedValueHigh } from '../../../utils/variable-sizes'
 import { TreeNode } from '../../_atoms/debug-tree-node'
@@ -30,6 +31,8 @@ type VariablePanelProps = {
   debugExpandedNodes?: Map<string, boolean>
   onToggleExpandedNode?: (compositeKey: string) => void
   isDebuggerVisible?: boolean
+  /** Receives the composite keys of the rows on screen, or none while the panel is hidden. */
+  onVisibleKeysChange?: (keys: string[]) => void
   onForceVariable?: (
     compositeKey: string,
     variableType: string,
@@ -37,6 +40,35 @@ type VariablePanelProps = {
     valueBuffer?: Uint8Array,
     lookupKey?: string,
   ) => Promise<void>
+}
+
+/** Height of one debugger panel row, in pixels; matches the `h-5` row of TreeNode. */
+const PANEL_ROW_HEIGHT = 20
+/** Rows mounted beyond each edge of the visible panel area. */
+const PANEL_OVERSCAN = 10
+const NO_EXPANDED_NODES = new Map<string, boolean>()
+
+/** `rowKey` is unique per row: a node shown both as a root and inside its parent gets two rows. */
+type PanelRow = { rowKey: string; node: DebugTreeNode; level: number; isExpanded: boolean }
+
+/** Debug tree rows in display order, descending only into expanded nodes. */
+const flattenDebugTree = (roots: Iterable<DebugTreeNode>, expandedNodes: Map<string, boolean>): PanelRow[] => {
+  const rows: PanelRow[] = []
+  const stack: Array<{ node: DebugTreeNode; level: number; rootKey: string }> = Array.from(roots, (node) => ({
+    node,
+    level: 0,
+    rootKey: node.compositeKey,
+  })).reverse()
+  while (stack.length > 0) {
+    const { node, level, rootKey } = stack.pop()!
+    const isExpanded = expandedNodes.get(node.compositeKey) ?? false
+    rows.push({ rowKey: level === 0 ? rootKey : `${rootKey}>${node.compositeKey}`, node, level, isExpanded })
+    if (node.isComplex && isExpanded && node.children) {
+      for (let i = node.children.length - 1; i >= 0; i--)
+        stack.push({ node: node.children[i], level: level + 1, rootKey })
+    }
+  }
+  return rows
 }
 
 /**
@@ -102,9 +134,27 @@ const VariablesPanel = ({
   debugExpandedNodes,
   onToggleExpandedNode,
   isDebuggerVisible,
+  onVisibleKeysChange,
   onForceVariable,
 }: VariablePanelProps) => {
-  const expandedNodes = debugExpandedNodes ?? new Map<string, boolean>()
+  const expandedNodes = debugExpandedNodes ?? NO_EXPANDED_NODES
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [viewportHeight, setViewportHeight] = useState(0)
+  const hasTree = !!variableTree && variableTree.size > 0
+  const hasRows = hasTree || (variables?.length ?? 0) > 0
+  const treeRows = useMemo(
+    () => (variableTree ? flattenDebugTree(variableTree.values(), expandedNodes) : []),
+    [variableTree, expandedNodes],
+  )
+  const getOffsetTop = useCallback(() => 0, [])
+  const { start, end, paddingTop, paddingBottom } = useVirtualRows({
+    count: treeRows.length,
+    rowHeight: PANEL_ROW_HEIGHT,
+    overscan: PANEL_OVERSCAN,
+    scrollElement: scrollRef,
+    getOffsetTop,
+    enabled: hasTree,
+  })
   const [contextMenuState, setContextMenuState] = useState<{
     isOpen: boolean
     compositeKey: string
@@ -139,15 +189,6 @@ const VariablesPanel = ({
   const handleToggleExpand = (compositeKey: string) => {
     if (onToggleExpandedNode) {
       onToggleExpandedNode(compositeKey)
-    }
-  }
-
-  const updateNodeExpansion = (node: DebugTreeNode): DebugTreeNode => {
-    const isExpanded = expandedNodes.get(node.compositeKey) ?? false
-    return {
-      ...node,
-      isExpanded,
-      children: node.children?.map(updateNodeExpansion),
     }
   }
 
@@ -317,17 +358,41 @@ const VariablesPanel = ({
     }
   }, [])
 
-  const renderTreeView = () => {
-    if (!variableTree || variableTree.size === 0) return null
+  useEffect(() => {
+    const element = scrollRef.current
+    if (!element) return undefined
+    setViewportHeight(element.clientHeight)
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(() => setViewportHeight(element.clientHeight))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [hasRows])
 
-    const rootNodes = Array.from(variableTree.values()).map(updateNodeExpansion)
+  const visibleKeys = useMemo(() => {
+    if (viewportHeight <= 0) return []
+    if (hasTree) return treeRows.slice(start, end).map((row) => row.node.compositeKey)
+    return (variables ?? []).map((variable) => variable.compositeKey)
+  }, [viewportHeight, hasTree, treeRows, start, end, variables])
+
+  useEffect(() => {
+    onVisibleKeysChange?.(visibleKeys)
+  }, [visibleKeys, onVisibleKeysChange])
+
+  const onVisibleKeysChangeRef = useRef(onVisibleKeysChange)
+  onVisibleKeysChangeRef.current = onVisibleKeysChange
+  useEffect(() => () => onVisibleKeysChangeRef.current?.([]), [])
+
+  const renderTreeView = () => {
+    if (!hasTree) return null
 
     return (
-      <div className='flex h-full flex-col overflow-auto whitespace-nowrap'>
-        {rootNodes.map((node) => (
+      <div ref={scrollRef} className='flex h-full flex-col overflow-auto whitespace-nowrap'>
+        <div style={{ height: paddingTop, flexShrink: 0 }} />
+        {treeRows.slice(start, end).map(({ rowKey, node, level, isExpanded }) => (
           <TreeNode
-            key={node.compositeKey}
-            node={node}
+            key={rowKey}
+            node={node.isExpanded === isExpanded ? node : { ...node, isExpanded }}
+            level={level}
             onToggleExpand={handleToggleExpand}
             onViewToggle={toggleGraphVisibility}
             isViewing={isViewingPredicate}
@@ -338,6 +403,7 @@ const VariablesPanel = ({
             onRowClick={handleRowClick}
           />
         ))}
+        <div style={{ height: paddingBottom, flexShrink: 0 }} />
       </div>
     )
   }
@@ -346,7 +412,7 @@ const VariablesPanel = ({
     if (!variables || variables.length === 0) return null
 
     return (
-      <div className='flex h-full flex-col gap-2 overflow-auto whitespace-nowrap'>
+      <div ref={scrollRef} className='flex h-full flex-col gap-2 overflow-auto whitespace-nowrap'>
         {variables.map((variable) => {
           const isForced = isForcedPredicate(variable.compositeKey)
           const forcedVal = getForcedValue(variable.compositeKey)

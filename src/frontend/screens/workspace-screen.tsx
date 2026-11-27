@@ -94,9 +94,8 @@ const WorkspaceScreen = () => {
   const project = useProject()
 
   // STABLE: action references (never change)
-  const { toggleCollapse, clearPlcLogs, toggleDebugExpandedNode, setDebugGraphList } = useOpenPLCStore(
-    useCallback((s) => s.workspaceActions, []),
-  )
+  const { toggleCollapse, clearPlcLogs, toggleDebugExpandedNode, setDebugGraphList, setDebugPanelVisibleKeys } =
+    useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
   const { setAvailableOptions } = useOpenPLCStore(useCallback((s) => s.deviceActions, []))
   const addLog = useOpenPLCStore(useCallback((s) => s.consoleActions.addLog, []))
 
@@ -952,6 +951,7 @@ const WorkspaceScreen = () => {
                                 debugForcedVariables={debugForcedVariables}
                                 debugExpandedNodes={debugExpandedNodes}
                                 onToggleExpandedNode={toggleDebugExpandedNode}
+                                onVisibleKeysChange={setDebugPanelVisibleKeys}
                                 isDebuggerVisible={isDebuggerVisible}
                                 onForceVariable={handleForceVariable}
                               />

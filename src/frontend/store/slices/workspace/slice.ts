@@ -46,6 +46,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugTick: 0,
     debugVariableTree: new Map(),
     debugExpandedNodes: new Map(),
+    debugPanelVisibleKeys: [],
     fbDebugInstances: new Map(),
     fbSelectedInstance: new Map(),
     debugHarness: null,
@@ -167,6 +168,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugTick = 0
           workspace.debugVariableTree = new Map()
           workspace.debugExpandedNodes = new Map()
+          workspace.debugPanelVisibleKeys = []
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
           workspace.debugHarness = null
@@ -332,6 +334,15 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setDebugPanelVisibleKeys: (keys: string[]) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const current = workspace.debugPanelVisibleKeys
+          if (current.length === keys.length && current.every((key, i) => key === keys[i])) return
+          workspace.debugPanelVisibleKeys = keys
+        }),
+      )
+    },
     setFbDebugInstances: (instances: Map<string, FbInstanceInfo[]>) => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -401,6 +412,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugTick = 0
           workspace.debugVariableTree = new Map()
           workspace.debugExpandedNodes = new Map()
+          workspace.debugPanelVisibleKeys = []
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
           workspace.debugHarness = null

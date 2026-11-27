@@ -4,12 +4,11 @@
  * Builds the set of debug indexes that should be polled each tick,
  * filtering to only variables that are actively needed:
  *
- * 1. Watched variables (debug === true in POU declaration)
+ * 1. Debugger panel rows on screen (watched and forced roots, expanded children)
  * 2. Forced variables (currently forced, must stay polled)
  * 3. Graph-listed variables (being plotted in real-time charts)
  * 4. Diagram-visible variables (LD/FBD contacts, coils, variable nodes, block outputs)
  * 5. Source-visible variables (ST/IL — regex-matched against source text)
- * 6. Expanded nested children (only when parent hierarchy is expanded)
  *
  * Diagram/source scan results are cached per {pouName, language, fbContext}
  * since the editor is read-only during debug — no recomputation needed
@@ -17,7 +16,6 @@
  */
 
 import type { FbInstanceInfo, PLCPou } from '../../middleware/shared/ports/types'
-import { buildGlobalCompositeKey } from './debug-variable-finder'
 import { edgeTriggerInstanceName, edgeTriggerTypeForVariant } from './PLC/edge-trigger-instance'
 
 /**
@@ -29,7 +27,7 @@ export interface DebugPollingState {
   workspace: {
     debugVariableIndexes: Map<string, number>
     debugForcedVariables: Map<string, unknown>
-    debugExpandedNodes: Map<string, boolean>
+    debugPanelVisibleKeys: string[]
     debugGraphList: string[]
     fbSelectedInstance: Map<string, string>
     fbDebugInstances: Map<string, FbInstanceInfo[]>
@@ -79,53 +77,17 @@ export function buildActiveIndexSet(
 ): { activeIndexes: number[]; cacheResult: VisibleVarsCache } {
   const activeKeys = new Set<string>()
 
-  const {
-    debugVariableIndexes,
-    debugForcedVariables,
-    debugExpandedNodes,
-    debugGraphList,
-    fbSelectedInstance,
-    fbDebugInstances,
-    debugHarness,
-  } = state.workspace
-  // A library-debug session runs a generated harness program that is not
-  // part of the project.  Its variables (one instance per library block,
-  // all flagged for debug) have to be polled like any other watch, so it
-  // joins the project's own POUs here rather than replacing them — a flag
-  // the author ticks mid-session must still take effect.
+  const { debugVariableIndexes, debugForcedVariables, debugPanelVisibleKeys, debugGraphList, debugHarness } =
+    state.workspace
   const pous = debugHarness ? [...state.project.data.pous, debugHarness.programPou] : state.project.data.pous
   const { editor } = state
+  const { fbSelectedInstance } = state.workspace
 
   // -----------------------------------------------------------------------
-  // 1. Watched variables (debug === true)
+  // 1. Debugger panel rows on screen
   // -----------------------------------------------------------------------
-  for (const pou of pous) {
-    const variables = pou.interface?.variables ?? []
-    const watched = variables.filter((v) => v.debug === true)
-    if (watched.length === 0) continue
-
-    // VAR_EXTERNAL watches resolve to a shared global by its canonical,
-    // POU-independent key (Config0:<name>) — matching the debug tree — so a
-    // global watched from a program body, a function block, or any nesting polls
-    // the one global address regardless of POU kind or selected FB instance.
-    for (const v of watched) {
-      if (v.class === 'external') activeKeys.add(buildGlobalCompositeKey(v.name))
-    }
-
-    const localWatched = watched.filter((v) => v.class !== 'external')
-    if (localWatched.length === 0) continue
-
-    if (pou.pouType === 'function-block') {
-      const resolved = resolveFbInstance(pou.name, fbSelectedInstance, fbDebugInstances)
-      if (!resolved) continue
-      for (const v of localWatched) {
-        activeKeys.add(`${resolved.programName}:${resolved.fbVariableName}.${v.name}`)
-      }
-    } else {
-      for (const v of localWatched) {
-        activeKeys.add(`${pou.name}:${v.name}`)
-      }
-    }
+  for (const compositeKey of debugPanelVisibleKeys) {
+    activeKeys.add(compositeKey)
   }
 
   // -----------------------------------------------------------------------
@@ -143,31 +105,7 @@ export function buildActiveIndexSet(
   }
 
   // -----------------------------------------------------------------------
-  // 4. Expanded nested children
-  //    Walk all leaves whose compositeKey is a child of some other variable
-  //    — either a struct/FB field (`.field`) or an array element (`[idx]`)
-  //    — and include them if they have a watched/forced/graphed ancestor
-  //    AND every node in the hierarchy from that ancestor down is expanded.
-  // -----------------------------------------------------------------------
-  for (const [, metas] of allLeaves) {
-    for (const meta of metas) {
-      const key = meta.compositeKey
-      const colonIdx = key.indexOf(':')
-      if (colonIdx === -1) continue
-      const pouName = key.slice(0, colonIdx)
-      const varName = key.slice(colonIdx + 1)
-      // Only nested leaves (struct fields, FB fields, array elements) need
-      // ancestor-resolution; flat leaves are handled by the watched-key path.
-      if (!varName.includes('.') && !varName.includes('[')) continue
-
-      if (shouldPollNestedVariable(varName, pouName, activeKeys, debugExpandedNodes, debugGraphList)) {
-        activeKeys.add(key)
-      }
-    }
-  }
-
-  // -----------------------------------------------------------------------
-  // 5 & 6. Diagram-visible / Source-visible variables (cached)
+  // 4 & 5. Diagram-visible / Source-visible variables (cached)
   // -----------------------------------------------------------------------
   const editorName = editor.meta.name
   const editorLanguage = 'language' in editor.meta ? (editor.meta.language as string) : ''
@@ -196,20 +134,11 @@ export function buildActiveIndexSet(
   // Resolve composite keys → debug indexes
   // -----------------------------------------------------------------------
   const indexSet = new Set<number>()
+  const leafIndexes = leafIndexByKey(allLeaves)
   for (const key of activeKeys) {
     const idx = debugVariableIndexes.get(key)
-    if (idx !== undefined) {
-      indexSet.add(idx)
-    }
-  }
-
-  // Also include by scanning allLeaves (handles cases where debugVariableIndexes
-  // doesn't have the key but the tree does, e.g. deeply nested fields). One
-  // index can carry several keys (shared globals) — active if ANY is active.
-  for (const [index, metas] of allLeaves) {
-    if (metas.some((m) => activeKeys.has(m.compositeKey))) {
-      indexSet.add(index)
-    }
+    if (idx !== undefined) indexSet.add(idx)
+    for (const leafIdx of leafIndexes.get(key) ?? []) indexSet.add(leafIdx)
   }
 
   const activeIndexes = Array.from(indexSet).sort((a, b) => a - b)
@@ -235,72 +164,22 @@ function resolveFbInstance(
   return instances.find((inst) => inst.key === selectedKey) ?? null
 }
 
-/**
- * Determine if a nested variable (contains '.') should be polled.
- *
- * A nested variable is polled if:
- * - It's in the graph list (for real-time plotting), OR
- * - It has a watched/forced/graphed ancestor AND all nodes from that
- *   ancestor to this variable are expanded in the debugger panel
- */
-/**
- * Yield the proper-prefix ancestor paths of a variable, treating both
- * `.` (struct/FB field) and `[` (array element) as ancestor boundaries.
- *
- *   "MY_ARRAY[1]"      → ["MY_ARRAY"]
- *   "FB.NESTED[2]"     → ["FB", "FB.NESTED"]
- *   "FB.STRUCT.FIELD"  → ["FB", "FB.STRUCT"]
- *
- * The shallowest ancestor comes first; the variable itself is not yielded.
- */
-function ancestorPaths(varName: string): string[] {
-  const result: string[] = []
-  for (let i = 1; i < varName.length; i++) {
-    if (varName[i] === '.' || varName[i] === '[') {
-      result.push(varName.slice(0, i))
+/** Composite key → debug indexes of the leaves carrying it, built once per leaf map. */
+const leafIndexCache = new WeakMap<Map<number, { compositeKey: string }[]>, Map<string, number[]>>()
+
+function leafIndexByKey(allLeaves: Map<number, { compositeKey: string }[]>): Map<string, number[]> {
+  const cached = leafIndexCache.get(allLeaves)
+  if (cached) return cached
+  const byKey = new Map<string, number[]>()
+  for (const [index, metas] of allLeaves) {
+    for (const meta of metas) {
+      const indexes = byKey.get(meta.compositeKey)
+      if (indexes) indexes.push(index)
+      else byKey.set(meta.compositeKey, [index])
     }
   }
-  return result
-}
-
-function shouldPollNestedVariable(
-  varName: string,
-  pouName: string,
-  watchedKeys: Set<string>,
-  debugExpandedNodes: Map<string, boolean>,
-  debugGraphList: string[],
-): boolean {
-  const compositeKey = `${pouName}:${varName}`
-
-  // Graph-listed → always poll
-  if (debugGraphList.includes(compositeKey)) return true
-
-  const ancestors = ancestorPaths(varName)
-  /* istanbul ignore next -- defensive: caller already checks for '.' or '[' */
-  if (ancestors.length === 0) return true
-
-  // Find the deepest watched ancestor
-  let watchedAncestorIndex = -1
-  for (let i = ancestors.length - 1; i >= 0; i--) {
-    if (watchedKeys.has(`${pouName}:${ancestors[i]}`)) {
-      watchedAncestorIndex = i
-      break
-    }
-  }
-
-  if (watchedAncestorIndex === -1) return false
-
-  // Check that every node from the watched ancestor down to (but not
-  // including) the leaf is expanded. For arrays, the array root is the
-  // only intermediate node; for struct/FB fields, every parent in the
-  // chain must be expanded.
-  for (let i = watchedAncestorIndex; i < ancestors.length; i++) {
-    if (!(debugExpandedNodes.get(`${pouName}:${ancestors[i]}`) ?? false)) {
-      return false
-    }
-  }
-
-  return true
+  leafIndexCache.set(allLeaves, byKey)
+  return byKey
 }
 
 /**

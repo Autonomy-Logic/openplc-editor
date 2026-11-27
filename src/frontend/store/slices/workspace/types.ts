@@ -97,6 +97,8 @@ export type WorkspaceState = {
     debugTick: number
     debugVariableTree: Map<string, DebugTreeNode>
     debugExpandedNodes: Map<string, boolean>
+    /** Composite keys of the debugger panel rows currently on screen; empty while the panel is hidden. */
+    debugPanelVisibleKeys: string[]
     fbDebugInstances: Map<string, FbInstanceInfo[]>
     fbSelectedInstance: Map<string, string>
     /**
@@ -217,6 +219,7 @@ export type WorkspaceActions = {
   setDebugVariableTree: (tree: Map<string, DebugTreeNode>) => void
   setDebugExpandedNodes: (expandedNodes: Map<string, boolean>) => void
   toggleDebugExpandedNode: (compositeKey: string) => void
+  setDebugPanelVisibleKeys: (keys: string[]) => void
   setFbDebugInstances: (instances: Map<string, FbInstanceInfo[]>) => void
   /** Install (or clear, with `null`) the session's harness overlay. */
   setDebugHarness: (harness: { programPou: PLCPou; instances: PLCInstance[] } | null) => void

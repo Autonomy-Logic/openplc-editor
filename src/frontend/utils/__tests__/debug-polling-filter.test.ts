@@ -59,7 +59,7 @@ function makeState(overrides: {
   pous?: PLCPou[]
   debugVariableIndexes?: Map<string, number>
   debugForcedVariables?: Map<string, unknown>
-  debugExpandedNodes?: Map<string, boolean>
+  debugPanelVisibleKeys?: string[]
   debugGraphList?: string[]
   fbSelectedInstance?: Map<string, string>
   fbDebugInstances?: Map<
@@ -80,7 +80,7 @@ function makeState(overrides: {
     workspace: {
       debugVariableIndexes: overrides.debugVariableIndexes ?? new Map(),
       debugForcedVariables: overrides.debugForcedVariables ?? new Map(),
-      debugExpandedNodes: overrides.debugExpandedNodes ?? new Map(),
+      debugPanelVisibleKeys: overrides.debugPanelVisibleKeys ?? [],
       debugGraphList: overrides.debugGraphList ?? [],
       fbSelectedInstance: overrides.fbSelectedInstance ?? new Map(),
       fbDebugInstances: overrides.fbDebugInstances ?? new Map(),
@@ -109,121 +109,61 @@ describe('buildActiveIndexSet', () => {
     expect(cacheResult).toBeNull()
   })
 
-  describe('watched variables (debug === true)', () => {
-    it('collects watched variables from a program POU', () => {
-      const pou = makePou('Main', 'program', [
-        makeVariable('SPEED', 'local', true),
-        makeVariable('TEMP', 'local', false),
+  describe('debugger panel rows on screen', () => {
+    it('polls the rows the panel reports on screen', () => {
+      const indexMap = new Map([
+        ['Main:SPEED', 10],
+        ['Main:TEMP', 11],
       ])
-      const indexMap = new Map([['Main:SPEED', 10]])
-      const state = makeState({ pous: [pou], debugVariableIndexes: indexMap })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
+      const state = makeState({ debugPanelVisibleKeys: ['Main:SPEED'], debugVariableIndexes: indexMap })
 
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      const { activeIndexes } = buildActiveIndexSet(state, new Map(), null)
       expect(activeIndexes).toEqual([10])
     })
 
-    it('resolves FB watched variables through fbSelectedInstance', () => {
-      const fbPou = makePou('MyFB', 'function-block', [makeVariable('OUT', 'output', true)])
-      const indexMap = new Map([['Main:fb0.OUT', 5]])
-      const fbInstances = new Map([
-        [
-          'MYFB',
-          [
-            {
-              fbTypeName: 'MyFB',
-              programName: 'Main',
-              programInstanceName: 'INSTANCE0',
-              fbVariableName: 'fb0',
-              key: 'Main:fb0',
-            },
-          ],
-        ],
+    it('does not poll watched variables the panel has scrolled out of view or hidden', () => {
+      const pou = makePou('Main', 'program', [makeVariable('SPEED', 'local', true)])
+      const state = makeState({ pous: [pou], debugVariableIndexes: new Map([['Main:SPEED', 10]]) })
+
+      const { activeIndexes } = buildActiveIndexSet(state, new Map(), null)
+      expect(activeIndexes).toEqual([])
+    })
+
+    it('polls only the on-screen elements of an expanded array', () => {
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
+      for (let i = 0; i < 1000; i++) allLeaves.set(100 + i, [{ compositeKey: `Main:ARR[${i}]`, type: 'INT' }])
+      const state = makeState({ debugPanelVisibleKeys: ['Main:ARR', 'Main:ARR[0]', 'Main:ARR[1]', 'Main:ARR[2]'] })
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual([100, 101, 102])
+    })
+
+    it('keeps forced and graphed variables polled while they are off screen', () => {
+      const indexMap = new Map([
+        ['Main:FORCED', 1],
+        ['Main:PLOTTED', 2],
+        ['Main:SHOWN', 3],
       ])
-      const fbSelected = new Map([['MYFB', 'Main:fb0']])
       const state = makeState({
-        pous: [fbPou],
+        debugPanelVisibleKeys: ['Main:SHOWN'],
+        debugForcedVariables: new Map([['Main:FORCED', true]]),
+        debugGraphList: ['Main:PLOTTED'],
         debugVariableIndexes: indexMap,
-        fbSelectedInstance: fbSelected,
-        fbDebugInstances: fbInstances,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual([5])
+      const { activeIndexes } = buildActiveIndexSet(state, new Map(), null)
+      expect(activeIndexes).toEqual([1, 2, 3])
     })
 
-    it('skips FB watched variables when no instance is selected', () => {
-      const fbPou = makePou('MyFB', 'function-block', [makeVariable('OUT', 'output', true)])
-      const state = makeState({ pous: [fbPou] })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual([])
-    })
-
-    it('skips FB watched variables when selected key does not match any instance', () => {
-      const fbPou = makePou('MyFB', 'function-block', [makeVariable('OUT', 'output', true)])
-      const fbInstances = new Map([
-        [
-          'MYFB',
-          [
-            {
-              fbTypeName: 'MyFB',
-              programName: 'Main',
-              programInstanceName: 'INSTANCE0',
-              fbVariableName: 'fb0',
-              key: 'Main:fb0',
-            },
-          ],
-        ],
+    it('polls every index that carries an on-screen key', () => {
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [4, [{ compositeKey: 'Main:SHARED', type: 'INT' }]],
+        [9, [{ compositeKey: 'Main:SHARED', type: 'INT' }]],
       ])
-      const fbSelected = new Map([['MYFB', 'NONEXISTENT_KEY']])
-      const state = makeState({
-        pous: [fbPou],
-        fbSelectedInstance: fbSelected,
-        fbDebugInstances: fbInstances,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
+      const state = makeState({ debugPanelVisibleKeys: ['Main:SHARED'] })
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual([])
-    })
-
-    it('skips POUs with no variables at all', () => {
-      const pou: PLCPou = {
-        name: 'Empty',
-        pouType: 'program',
-        body: { language: 'st', value: '' },
-      }
-      const state = makeState({ pous: [pou] })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual([])
-    })
-
-    it('polls a program VAR_EXTERNAL watch by its canonical global key', () => {
-      const pou = makePou('Main', 'program', [makeVariable('SHARED', 'external', true)])
-      // The debug tree exposes the shared global under Config0:SHARED.
-      const allLeaves = new Map([[42, [{ compositeKey: 'Config0:SHARED', type: 'INT' }]]])
-      const state = makeState({ pous: [pou] })
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual([42])
-    })
-
-    it('polls an FB VAR_EXTERNAL watch even with no instance selected (globals are instance-independent)', () => {
-      const fbPou = makePou('MyFB', 'function-block', [
-        makeVariable('SHARED', 'external', true),
-        makeVariable('OUT', 'output', true),
-      ])
-      const allLeaves = new Map([[7, [{ compositeKey: 'Config0:SHARED', type: 'INT' }]]])
-      const state = makeState({ pous: [fbPou] })
-
-      // OUT (local) is skipped for want of an instance; the external still polls.
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual([7])
+      expect(activeIndexes).toEqual([4, 9])
     })
   })
 
@@ -247,261 +187,6 @@ describe('buildActiveIndexSet', () => {
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([3])
-    })
-  })
-
-  describe('expanded nested children', () => {
-    it('includes nested variable when ancestor is watched and path is expanded', () => {
-      const pou = makePou('Main', 'program', [makeDerivedVariable('MyStruct', 'MY_STRUCT_TYPE', true)])
-      const indexMap = new Map([
-        ['Main:MyStruct', 10],
-        ['Main:MyStruct.field1', 11],
-      ])
-      const expandedNodes = new Map([['Main:MyStruct', true]])
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: expandedNodes,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [11, [{ compositeKey: 'Main:MyStruct.field1', type: 'INT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toContain(11)
-    })
-
-    it('excludes nested variable when path is not expanded', () => {
-      const pou = makePou('Main', 'program', [makeDerivedVariable('MyStruct', 'MY_STRUCT_TYPE', true)])
-      const indexMap = new Map([
-        ['Main:MyStruct', 10],
-        ['Main:MyStruct.field1', 11],
-      ])
-      // No expanded nodes
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [11, [{ compositeKey: 'Main:MyStruct.field1', type: 'INT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).not.toContain(11)
-    })
-
-    it('skips leaf entry with no colon in compositeKey', () => {
-      const state = makeState({})
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [99, [{ compositeKey: 'no-colon-key', type: 'INT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual([])
-    })
-
-    // Regression: array elements use `[N]` notation, not `.N`. Step 4
-    // used to filter them out before resolving expansion, so a watched +
-    // expanded array was silently empty.
-    it('includes array elements when array root is watched and expanded', () => {
-      const pou = makePou('Main', 'program', [makeArrayVariable('MY_ARRAY', 'DINT', '1..3', true)])
-      const indexMap = new Map([
-        ['Main:MY_ARRAY', 100],
-        ['Main:MY_ARRAY[1]', 101],
-        ['Main:MY_ARRAY[2]', 102],
-        ['Main:MY_ARRAY[3]', 103],
-      ])
-      const expandedNodes = new Map([['Main:MY_ARRAY', true]])
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: expandedNodes,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [101, [{ compositeKey: 'Main:MY_ARRAY[1]', type: 'DINT' }]],
-        [102, [{ compositeKey: 'Main:MY_ARRAY[2]', type: 'DINT' }]],
-        [103, [{ compositeKey: 'Main:MY_ARRAY[3]', type: 'DINT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual(expect.arrayContaining([101, 102, 103]))
-    })
-
-    it('excludes array elements when array root is watched but NOT expanded', () => {
-      const pou = makePou('Main', 'program', [makeArrayVariable('MY_ARRAY', 'DINT', '1..3', true)])
-      const indexMap = new Map([
-        ['Main:MY_ARRAY', 100],
-        ['Main:MY_ARRAY[1]', 101],
-      ])
-      // No expanded nodes
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [101, [{ compositeKey: 'Main:MY_ARRAY[1]', type: 'DINT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).not.toContain(101)
-    })
-
-    // Arrays inside FBs / structs need both the FB and the array root
-    // expanded for elements to be polled.
-    it('includes array elements nested under a watched FB only when chain is fully expanded', () => {
-      const pou = makePou('Main', 'program', [makeDerivedVariable('FB', 'MY_FB', true)])
-      const indexMap = new Map([
-        ['Main:FB', 10],
-        ['Main:FB.ARR[1]', 21],
-        ['Main:FB.ARR[2]', 22],
-      ])
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [21, [{ compositeKey: 'Main:FB.ARR[1]', type: 'INT' }]],
-        [22, [{ compositeKey: 'Main:FB.ARR[2]', type: 'INT' }]],
-      ])
-
-      // Only FB expanded — array root is collapsed → elements stay hidden
-      let state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: new Map([['Main:FB', true]]),
-      })
-      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).not.toContain(21)
-
-      // Both FB and array root expanded → elements polled
-      state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: new Map([
-          ['Main:FB', true],
-          ['Main:FB.ARR', true],
-        ]),
-      })
-      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).toEqual(expect.arrayContaining([21, 22]))
-    })
-
-    // Array of complex elements (FBs / structs). Expanding the array
-    // surfaces the elements as nodes, but their inner fields stay hidden
-    // until the user expands the specific element they want to inspect.
-    // Polling must reflect this: only the expanded element's leaves run.
-    it('only polls the expanded element of an array-of-FBs', () => {
-      const pou = makePou('Main', 'program', [makeArrayVariable('FB_ARR', 'MY_FB', '1..3', true)])
-      const indexMap = new Map([
-        ['Main:FB_ARR', 50],
-        ['Main:FB_ARR[1].Q', 61],
-        ['Main:FB_ARR[1].ET', 62],
-        ['Main:FB_ARR[2].Q', 71],
-        ['Main:FB_ARR[2].ET', 72],
-        ['Main:FB_ARR[3].Q', 81],
-        ['Main:FB_ARR[3].ET', 82],
-      ])
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [61, [{ compositeKey: 'Main:FB_ARR[1].Q', type: 'BOOL' }]],
-        [62, [{ compositeKey: 'Main:FB_ARR[1].ET', type: 'TIME' }]],
-        [71, [{ compositeKey: 'Main:FB_ARR[2].Q', type: 'BOOL' }]],
-        [72, [{ compositeKey: 'Main:FB_ARR[2].ET', type: 'TIME' }]],
-        [81, [{ compositeKey: 'Main:FB_ARR[3].Q', type: 'BOOL' }]],
-        [82, [{ compositeKey: 'Main:FB_ARR[3].ET', type: 'TIME' }]],
-      ])
-
-      // Array expanded, only element [2] expanded → only [2]'s leaves poll
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: new Map([
-          ['Main:FB_ARR', true],
-          ['Main:FB_ARR[2]', true],
-        ]),
-      })
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toEqual(expect.arrayContaining([71, 72]))
-      expect(activeIndexes).not.toContain(61)
-      expect(activeIndexes).not.toContain(62)
-      expect(activeIndexes).not.toContain(81)
-      expect(activeIndexes).not.toContain(82)
-    })
-
-    it('polls all elements of a base-type array when root is expanded', () => {
-      const pou = makePou('Main', 'program', [makeArrayVariable('BOOLS', 'BOOL', '0..2', true)])
-      const indexMap = new Map([
-        ['Main:BOOLS', 90],
-        ['Main:BOOLS[0]', 91],
-        ['Main:BOOLS[1]', 92],
-        ['Main:BOOLS[2]', 93],
-      ])
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [91, [{ compositeKey: 'Main:BOOLS[0]', type: 'BOOL' }]],
-        [92, [{ compositeKey: 'Main:BOOLS[1]', type: 'BOOL' }]],
-        [93, [{ compositeKey: 'Main:BOOLS[2]', type: 'BOOL' }]],
-      ])
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: new Map([['Main:BOOLS', true]]),
-      })
-      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).toEqual(expect.arrayContaining([91, 92, 93]))
-    })
-
-    it('skips leaf without dot in variable part (not nested)', () => {
-      const pou = makePou('Main', 'program', [makeVariable('X', 'local', true)])
-      const indexMap = new Map([['Main:X', 1]])
-      const state = makeState({ pous: [pou], debugVariableIndexes: indexMap })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [1, [{ compositeKey: 'Main:X', type: 'INT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      // X is included because it's watched, not because it's a nested child
-      expect(activeIndexes).toEqual([1])
-    })
-
-    it('includes nested variable if it is in graphList', () => {
-      const state = makeState({
-        debugGraphList: ['Main:MyStruct.field1'],
-        debugVariableIndexes: new Map([['Main:MyStruct.field1', 11]]),
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [11, [{ compositeKey: 'Main:MyStruct.field1', type: 'INT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toContain(11)
-    })
-
-    it('returns false for deeply nested variable when no ancestor is watched', () => {
-      const state = makeState({
-        debugExpandedNodes: new Map([['Main:A', true]]),
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [20, [{ compositeKey: 'Main:A.B.C', type: 'INT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).not.toContain(20)
-    })
-
-    it('returns true for single-part nested variable (parts.length <= 1)', () => {
-      // This exercises the "parts.length <= 1 → return true" branch inside
-      // shouldPollNestedVariable when varName still contains a dot but splits into 1 part.
-      // In practice parts.length is always > 1 if varName includes '.', but we need to
-      // reach the branch where watchedAncestorIndex > -1 and all expansion checks pass.
-      const pou = makePou('Main', 'program', [makeDerivedVariable('FB0', 'SomeFB', true)])
-      const indexMap = new Map([
-        ['Main:FB0', 10],
-        ['Main:FB0.Q', 11],
-      ])
-      const expandedNodes = new Map([['Main:FB0', true]])
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: expandedNodes,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [11, [{ compositeKey: 'Main:FB0.Q', type: 'BOOL' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toContain(11)
     })
   })
 
@@ -599,9 +284,7 @@ describe('buildActiveIndexSet', () => {
 
   describe('index resolution', () => {
     it('resolves indexes from allLeaves when debugVariableIndexes does not have the key', () => {
-      const pou = makePou('Main', 'program', [makeVariable('A', 'local', true)])
-      // A is watched but NOT in debugVariableIndexes
-      const state = makeState({ pous: [pou] })
+      const state = makeState({ debugPanelVisibleKeys: ['Main:A'] })
       const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
         [42, [{ compositeKey: 'Main:A', type: 'INT' }]],
       ])
@@ -611,17 +294,12 @@ describe('buildActiveIndexSet', () => {
     })
 
     it('returns sorted indexes', () => {
-      const pou = makePou('Main', 'program', [
-        makeVariable('C', 'local', true),
-        makeVariable('A', 'local', true),
-        makeVariable('B', 'local', true),
-      ])
       const indexMap = new Map([
         ['Main:C', 30],
         ['Main:A', 10],
         ['Main:B', 20],
       ])
-      const state = makeState({ pous: [pou], debugVariableIndexes: indexMap })
+      const state = makeState({ debugPanelVisibleKeys: ['Main:C', 'Main:A', 'Main:B'], debugVariableIndexes: indexMap })
       const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -1258,52 +936,6 @@ describe('buildActiveIndexSet', () => {
       const { cacheResult } = buildActiveIndexSet(state, allLeaves, cached)
       expect(cacheResult).not.toBe(cached)
     })
-
-    it('handles deeply nested variable with multiple expansion levels', () => {
-      const pou = makePou('Main', 'program', [makeDerivedVariable('A', 'SomeType', true)])
-      const indexMap = new Map([
-        ['Main:A', 1],
-        ['Main:A.B.C', 2],
-      ])
-      const expandedNodes = new Map([
-        ['Main:A', true],
-        ['Main:A.B', true],
-      ])
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: expandedNodes,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [2, [{ compositeKey: 'Main:A.B.C', type: 'INT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toContain(2)
-    })
-
-    it('excludes deeply nested variable when middle expansion is missing', () => {
-      const pou = makePou('Main', 'program', [makeDerivedVariable('A', 'SomeType', true)])
-      const indexMap = new Map([
-        ['Main:A', 1],
-        ['Main:A.B.C', 2],
-      ])
-      const expandedNodes = new Map([
-        ['Main:A', true],
-        // Main:A.B is NOT expanded
-      ])
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: expandedNodes,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [2, [{ compositeKey: 'Main:A.B.C', type: 'INT' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).not.toContain(2)
-    })
   })
 
   describe('language branch coverage', () => {
@@ -1424,38 +1056,6 @@ describe('buildActiveIndexSet', () => {
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
-    })
-  })
-
-  describe('shouldPollNestedVariable parts.length <= 1 branch', () => {
-    it('returns true for a nested variable whose varName splits into a single part', () => {
-      // This exercises the `parts.length <= 1` early-return branch on line 230.
-      // Although varName always contains '.' to reach shouldPollNestedVariable,
-      // we can still verify behavior with a direct two-part split (parts.length === 2)
-      // where the ancestor is at index 1 (the leaf itself). The real unreachable
-      // `parts.length <= 1` is a defensive guard. We ensure the function handles it
-      // by constructing a deeply-nested leaf whose ancestor IS the root watched var.
-      // But to actually exercise line 230, we need a name that contains '.' and
-      // splits to exactly 1 part. Since '.' always gives >=2 parts via split,
-      // this branch is technically dead code. We cover it indirectly by maximizing
-      // branch paths: single-dot nested var where ancestor index === parts.length - 1.
-      const pou = makePou('Main', 'program', [makeDerivedVariable('FB0', 'SomeFB', true)])
-      const indexMap = new Map([
-        ['Main:FB0', 10],
-        ['Main:FB0.Q', 11],
-      ])
-      const expandedNodes = new Map([['Main:FB0', true]])
-      const state = makeState({
-        pous: [pou],
-        debugVariableIndexes: indexMap,
-        debugExpandedNodes: expandedNodes,
-      })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
-        [11, [{ compositeKey: 'Main:FB0.Q', type: 'BOOL' }]],
-      ])
-
-      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
-      expect(activeIndexes).toContain(11)
     })
   })
 

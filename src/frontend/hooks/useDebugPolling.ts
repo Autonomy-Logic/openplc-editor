@@ -92,7 +92,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
   const editorName = useOpenPLCStore(useCallback((s) => s.editor.meta.name, []))
   const debugForcedVariables = useOpenPLCStore(useCallback((s) => s.workspace.debugForcedVariables, []))
-  const debugExpandedNodes = useOpenPLCStore(useCallback((s) => s.workspace.debugExpandedNodes, []))
+  const debugPanelVisibleKeys = useOpenPLCStore(useCallback((s) => s.workspace.debugPanelVisibleKeys, []))
   const debugGraphList = useOpenPLCStore(useCallback((s) => s.workspace.debugGraphList, []))
   const fbSelectedInstance = useOpenPLCStore(useCallback((s) => s.workspace.fbSelectedInstance, []))
 
@@ -126,7 +126,11 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   useEffect(() => {
     activeIndexesRef.current = null
     visibleVarsCacheRef.current = null
-  }, [pous, editorName, debugForcedVariables, debugExpandedNodes, debugGraphList, fbSelectedInstance])
+  }, [pous, editorName, debugForcedVariables, debugGraphList, fbSelectedInstance])
+
+  useEffect(() => {
+    activeIndexesRef.current = null
+  }, [debugPanelVisibleKeys])
 
   /** Build the full leaf metadata map from all debug trees (once per session). */
   const getAllLeaves = useCallback(() => {

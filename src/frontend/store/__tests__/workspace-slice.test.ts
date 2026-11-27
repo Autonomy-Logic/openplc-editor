@@ -380,6 +380,20 @@ describe('createWorkspaceSlice', () => {
     expect(store.getState().workspace.debugExpandedNodes.get('missing-node')).toBe(true)
   })
 
+  it('setDebugPanelVisibleKeys stores the keys and keeps the same array when they do not change', () => {
+    store.getState().workspaceActions.setDebugPanelVisibleKeys(['Main:A', 'Main:B'])
+    const stored = store.getState().workspace.debugPanelVisibleKeys
+    store.getState().workspaceActions.setDebugPanelVisibleKeys(['Main:A', 'Main:B'])
+    expect(store.getState().workspace.debugPanelVisibleKeys).toBe(stored)
+    expect(stored).toEqual(['Main:A', 'Main:B'])
+  })
+
+  it('clearDebugState forgets the panel rows on screen', () => {
+    store.getState().workspaceActions.setDebugPanelVisibleKeys(['Main:A'])
+    store.getState().workspaceActions.clearDebugState()
+    expect(store.getState().workspace.debugPanelVisibleKeys).toEqual([])
+  })
+
   it('setFbDebugInstances', () => {
     const info: FbInstanceInfo = {
       fbTypeName: 'TON',

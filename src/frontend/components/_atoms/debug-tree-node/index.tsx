@@ -73,7 +73,7 @@ const TreeNode = ({
 
   return (
     <div {...rest}>
-      <div className='flex h-auto w-full items-center gap-2'>
+      <div className='flex h-5 w-full items-center gap-2'>
         <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
           {node.isComplex ? (
             <button
@@ -137,26 +137,6 @@ const TreeNode = ({
           </p>
         </div>
       </div>
-
-      {node.isComplex && node.isExpanded && node.children && (
-        <div>
-          {node.children.map((child) => (
-            <TreeNode
-              key={child.compositeKey}
-              node={child}
-              onToggleExpand={onToggleExpand}
-              onViewToggle={onViewToggle}
-              isViewing={isViewing}
-              getValue={getValue}
-              isForced={isForced}
-              getForcedValue={getForcedValue}
-              canForce={canForce}
-              onRowClick={onRowClick}
-              level={level + 1}
-            />
-          ))}
-        </div>
-      )}
     </div>
   )
 }
