@@ -1,0 +1,32 @@
+{
+  "deviceBoard": "AutomationDirect P1AM-200",
+  "communicationPort": "",
+  "runtimeIpAddress": "",
+  "selectedPlatformOptions": {},
+  "vendorScreenData": {
+    "network": {
+      "enabled": true,
+      "interface": "Ethernet",
+      "mac_address": "DE:AD:BE:EF:00:01",
+      "enable_dhcp": false,
+      "ip_address": "192.168.1.20",
+      "gateway": "192.168.1.1",
+      "subnet": "255.255.255.0",
+      "dns": "192.168.1.1"
+    }
+  },
+  "vendorScreenDataByBoard": {
+    "AutomationDirect P1AM-200": {
+      "network": {
+        "enabled": true,
+        "interface": "Ethernet",
+        "mac_address": "DE:AD:BE:EF:00:01",
+        "enable_dhcp": false,
+        "ip_address": "192.168.1.20",
+        "gateway": "192.168.1.1",
+        "subnet": "255.255.255.0",
+        "dns": "192.168.1.1"
+      }
+    }
+  }
+}

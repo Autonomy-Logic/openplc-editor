@@ -1,0 +1,138 @@
+{
+  "name": "Slave",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "tcp",
+    "host": "192.168.1.50",
+    "port": 502,
+    "reconnect": true,
+    "timeout": 500,
+    "slaveId": 1,
+    "ioGroups": [
+      {
+        "id": "g1",
+        "name": "g1",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 10,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "g1_0",
+            "name": "g1_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW0",
+            "alias": "MB_G1_0"
+          },
+          {
+            "id": "g1_1",
+            "name": "g1_1",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW1",
+            "alias": "MB_G1_1"
+          },
+          {
+            "id": "g1_2",
+            "name": "g1_2",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW2",
+            "alias": "MB_G1_2"
+          },
+          {
+            "id": "g1_3",
+            "name": "g1_3",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW3",
+            "alias": "MB_G1_3"
+          },
+          {
+            "id": "g1_4",
+            "name": "g1_4",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW4",
+            "alias": "MB_G1_4"
+          },
+          {
+            "id": "g1_5",
+            "name": "g1_5",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW5",
+            "alias": "MB_G1_5"
+          },
+          {
+            "id": "g1_6",
+            "name": "g1_6",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW6",
+            "alias": "MB_G1_6"
+          },
+          {
+            "id": "g1_7",
+            "name": "g1_7",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW7",
+            "alias": "MB_G1_7"
+          },
+          {
+            "id": "g1_8",
+            "name": "g1_8",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW8",
+            "alias": "MB_G1_8"
+          },
+          {
+            "id": "g1_9",
+            "name": "g1_9",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW9",
+            "alias": "MB_G1_9"
+          }
+        ]
+      },
+      {
+        "id": "g2",
+        "name": "g2",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "10",
+        "length": 2,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "g2_0",
+            "name": "g2_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW10",
+            "alias": "MB_G2_0"
+          },
+          {
+            "id": "g2_1",
+            "name": "g2_1",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW11",
+            "alias": "MB_G2_1"
+          }
+        ]
+      },
+      {
+        "id": "g3",
+        "name": "g3",
+        "functionCode": "3",
+        "cycleTime": 60000,
+        "offset": "20",
+        "length": 1,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "g3_0",
+            "name": "g3_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW12",
+            "alias": "MB_G3_0"
+          }
+        ]
+      }
+    ]
+  }
+}

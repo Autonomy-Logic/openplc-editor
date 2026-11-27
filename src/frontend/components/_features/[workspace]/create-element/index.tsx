@@ -2,7 +2,9 @@ import * as Popover from '@radix-ui/react-popover'
 import { useState } from 'react'
 
 import { projectCapabilities } from '../../../../../middleware/shared/ports/types'
+import { canHostModbusMaster } from '../../../../../middleware/shared/utils/modbus-master-profile'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
+import { useModbusMasterProfile } from '../../../../hooks/use-modbus-master-profile'
 import { useTargetCapabilities } from '../../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
@@ -35,12 +37,8 @@ const CreatePLCElement = () => {
   // gating happens here so a future new POU type doesn't have to be
   // wired up in two places.
   const projectCaps = projectCapabilities({ type: projectType })
-  // Remote devices are additionally gated on the TARGET: a board that hosts
-  // neither Modbus remote I/O nor EtherCAT cannot drive one, and creating it
-  // anyway yields I/O points no variable can reference (the location dropdown
-  // hides them behind this same predicate). Unlike the tree branch, which
-  // keeps already-configured devices visible, creation is refused outright.
   const targetCaps = useTargetCapabilities()
+  const masterProfile = useModbusMasterProfile()
   const CreatePLCElementTypes: CreatePLCElementType[] = (
     [
       'function',
@@ -60,7 +58,7 @@ const CreatePLCElement = () => {
       case 'server':
         return projectCaps.hasServers
       case 'remote-device':
-        return projectCaps.hasRemoteDevices && (targetCaps.modbusTcpRemote || targetCaps.ethercat)
+        return projectCaps.hasRemoteDevices && (canHostModbusMaster(masterProfile) || targetCaps.ethercat)
       case 'hmi-screen':
         return projectCaps.hasHmi
       case 'hmi-widget':

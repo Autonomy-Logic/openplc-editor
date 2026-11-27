@@ -14,7 +14,8 @@
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
-      "modbusTcpRemote": true,
+      "modbusTcpMaster": true,
+      "modbusRtuMaster": true,
       "ethercat": true,
       "modbusTcpServer": true,
       "opcuaServer": true,
@@ -49,7 +50,8 @@
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
-      "modbusTcpRemote": false,
+      "modbusTcpMaster": false,
+      "modbusRtuMaster": false,
       "ethercat": false,
       "modbusTcpServer": false,
       "opcuaServer": false,
@@ -92,7 +94,8 @@
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
-      "modbusTcpRemote": true,
+      "modbusTcpMaster": true,
+      "modbusRtuMaster": true,
       "ethercat": true,
       "modbusTcpServer": true,
       "opcuaServer": true,

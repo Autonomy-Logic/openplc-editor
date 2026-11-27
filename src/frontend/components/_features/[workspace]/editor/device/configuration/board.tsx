@@ -3,6 +3,12 @@ import { describeMissingVppPackage, type VppPackagePin } from '@root/backend/sha
 import type { RuntimeProvisioningOperation } from '@root/middleware/shared/ports/runtime-provisioning-port'
 import { useCapabilities, useDevice, usePackages } from '@root/middleware/shared/providers/platform-context'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
+import {
+  canHostModbusMaster,
+  devicesBaremetalCannotRun,
+  quotedList,
+  resolveModbusMasterProfile,
+} from '@root/middleware/shared/utils/modbus-master-profile'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -140,9 +146,14 @@ const Board = memo(function () {
   const [showPythonWarning, setShowPythonWarning] = useState(false)
   const [unsupportedBlocksLabel, setUnsupportedBlocksLabel] = useState('Python')
   const [showV4FeaturesWarning, setShowV4FeaturesWarning] = useState(false)
-  const [v4FeaturesAffected, setV4FeaturesAffected] = useState<{ hasServers: boolean; hasRemoteDevices: boolean }>({
+  const [v4FeaturesAffected, setV4FeaturesAffected] = useState<{
+    hasServers: boolean
+    hasRemoteDevices: boolean
+    refusedDevices: string[]
+  }>({
     hasServers: false,
     hasRemoteDevices: false,
+    refusedDevices: [],
   })
   const [pendingBoardChange, setPendingBoardChange] = useState<{ board: string; formattedBoard: string } | null>(null)
 
@@ -356,14 +367,18 @@ const Board = memo(function () {
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
       const targetCantHostServers = !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
-      const targetCantHostRemoteIo = !targetCaps.modbusTcpRemote && !targetCaps.ethercat
+      const targetMasterProfile = resolveModbusMasterProfile(targetBoardInfo, targetCaps)
+      const targetCantHostRemoteIo = !canHostModbusMaster(targetMasterProfile) && !targetCaps.ethercat
+      const refusedDevices = devicesBaremetalCannotRun(remoteDevices ?? [], targetMasterProfile, {
+        serialPorts: targetBoardInfo?.serialPorts,
+      })
 
       const losingServers = hasServers && targetCantHostServers
-      const losingRemoteIo = hasRemoteDevices && targetCantHostRemoteIo
+      const losingRemoteIo = hasRemoteDevices && targetCantHostRemoteIo && refusedDevices.length === 0
 
-      if (losingServers || losingRemoteIo) {
+      if (losingServers || losingRemoteIo || refusedDevices.length > 0) {
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
-        setV4FeaturesAffected({ hasServers: !!losingServers, hasRemoteDevices: !!losingRemoteIo })
+        setV4FeaturesAffected({ hasServers: !!losingServers, hasRemoteDevices: !!losingRemoteIo, refusedDevices })
         setShowV4FeaturesWarning(true)
         return
       }
@@ -892,38 +907,49 @@ const Board = memo(function () {
         <ModalContent className='h-fit w-[500px]'>
           <ModalHeader>
             <ModalTitle>
-              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
-                ? 'Modbus Server and Remote IO Not Supported'
-                : v4FeaturesAffected.hasServers
-                  ? 'Modbus Server Not Supported'
-                  : 'Remote IO Not Supported'}
+              {v4FeaturesAffected.refusedDevices.length > 0
+                ? v4FeaturesAffected.hasServers
+                  ? 'Modbus Server and Remote Devices Not Supported'
+                  : 'Remote Devices Not Supported'
+                : v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                  ? 'Modbus Server and Remote IO Not Supported'
+                  : v4FeaturesAffected.hasServers
+                    ? 'Modbus Server Not Supported'
+                    : 'Remote IO Not Supported'}
             </ModalTitle>
           </ModalHeader>
           <div className='flex flex-col gap-4'>
-            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-              The selected target ({pendingBoardChange?.formattedBoard}) does not support{' '}
-              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
-                ? 'Modbus Server and Remote IO configurations'
-                : v4FeaturesAffected.hasServers
-                  ? 'Modbus Server configuration'
-                  : 'Remote IO configuration'}
-              .
-            </p>
-            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-              Your project contains{' '}
-              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
-                ? 'Modbus Server and Remote IO configurations that will be disabled'
-                : v4FeaturesAffected.hasServers
-                  ? 'Modbus Server configurations that will be disabled'
-                  : 'Remote IO configurations that will be disabled'}{' '}
-              during compilation on this target.{' '}
-              {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
-                ? 'Modbus Server and Remote IO are'
-                : v4FeaturesAffected.hasServers
-                  ? 'Modbus Server is'
-                  : 'Remote IO is'}{' '}
-              only supported on OpenPLC Runtime v4.
-            </p>
+            {(v4FeaturesAffected.hasServers || v4FeaturesAffected.hasRemoteDevices) && (
+              <>
+                <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+                  The selected target ({pendingBoardChange?.formattedBoard}) does not support{' '}
+                  {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                    ? 'Modbus Server and Remote IO configurations'
+                    : v4FeaturesAffected.hasServers
+                      ? 'Modbus Server configuration'
+                      : 'Remote IO configuration'}
+                  .
+                </p>
+                <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+                  Your project contains{' '}
+                  {v4FeaturesAffected.hasServers && v4FeaturesAffected.hasRemoteDevices
+                    ? 'Modbus Server and Remote IO configurations that will be disabled'
+                    : v4FeaturesAffected.hasServers
+                      ? 'Modbus Server configurations that will be disabled'
+                      : 'Remote IO configurations that will be disabled'}{' '}
+                  during compilation on this target.
+                  {v4FeaturesAffected.hasServers ? ' Modbus Server is only supported on OpenPLC Runtime v4.' : null}
+                </p>
+              </>
+            )}
+            {v4FeaturesAffected.refusedDevices.length > 0 && (
+              <p className='text-sm text-neutral-700 dark:text-neutral-300'>
+                The selected target ({pendingBoardChange?.formattedBoard}) cannot run the remote{' '}
+                {v4FeaturesAffected.refusedDevices.length === 1 ? 'device' : 'devices'}{' '}
+                {quotedList(v4FeaturesAffected.refusedDevices)}. Remote devices the target cannot run stay in the
+                project, and the build will be refused until they are fixed or removed.
+              </p>
+            )}
           </div>
           <ModalFooter className='flex justify-end gap-2'>
             <button

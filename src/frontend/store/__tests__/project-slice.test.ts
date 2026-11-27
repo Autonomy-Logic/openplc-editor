@@ -288,10 +288,6 @@ function locVar(name: string, location: string, cls: PLCVariable['class'] = 'loc
   return { name, class: cls, type: { definition: 'base-type', value: 'BOOL' }, location, documentation: '' }
 }
 
-/** Seed a Runtime v4 target so the cap-gated address pool counts
- *  Modbus claims. Producer-edit actions (addIOGroup, updateIOGroup …)
- *  rely on `caps.modbusTcpRemote = true` to count sibling groups when
- *  allocating addresses. */
 /** Land the board catalogue WITHOUT selecting a board — the project-load moment
  *  where discovery finishes and target capabilities become resolvable. Split out
  *  of `seedRuntimeV4Board` so a test can land the catalogue while the project's
@@ -309,7 +305,7 @@ function landBoardCatalogue(store: ReturnType<typeof makeStore>) {
           capabilities: {
             pinMapping: false,
             vppIo: false,
-            modbusTcpRemote: true,
+            modbusTcpMaster: true,
             ethercat: true,
             modbusTcpServer: true,
             opcuaServer: true,
@@ -358,7 +354,7 @@ function seedVppBoard(store: ReturnType<typeof makeStore>) {
           capabilities: {
             pinMapping: true,
             vppIo: true,
-            modbusTcpRemote: true,
+            modbusTcpMaster: true,
             ethercat: true,
             modbusTcpServer: true,
             opcuaServer: true,
@@ -393,7 +389,8 @@ function seedRuntimeV3Board(store: ReturnType<typeof makeStore>) {
           capabilities: {
             pinMapping: false,
             vppIo: false,
-            modbusTcpRemote: false,
+            modbusTcpMaster: false,
+            modbusRtuMaster: false,
             ethercat: false,
             modbusTcpServer: false,
             opcuaServer: false,
@@ -2822,11 +2819,6 @@ describe('createProjectSlice', () => {
 
   describe('addIOGroup', () => {
     beforeEach(() => {
-      // Cap-gated pool needs a target with modbusTcpRemote capability,
-      // otherwise sibling Modbus groups don't count and consecutive
-      // addIOGroup calls collide on the same address space. In
-      // production the workspace screen seeds availableBoards before
-      // the user reaches the remote-device UI, so this mirrors reality.
       seedRuntimeV4Board(store)
     })
 

@@ -673,6 +673,7 @@ const ModbusTcpConfigSchema = z.object({
   // TCP-specific fields (optional when using RTU)
   host: z.string().optional(),
   port: z.number().optional(),
+  reconnect: z.boolean().optional(),
   // RTU-specific fields (optional when using TCP)
   serialPort: z.string().optional(),
   baudRate: z.number().optional(),

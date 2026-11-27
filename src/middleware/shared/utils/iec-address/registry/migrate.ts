@@ -17,6 +17,7 @@
  *      compact and alias-bound variables follow their moved addresses.
  */
 
+import { runsModbusMaster } from '../../target-capabilities/modbus-master'
 import type { AddressProducerCapabilities } from '../../target-capabilities/types'
 import type { PoolInputs } from '../address-pool'
 import { parseAddress } from './address-space'
@@ -53,7 +54,7 @@ export function activeKindsFor(caps: AddressProducerCapabilities): Set<string> {
   const kinds = new Set<string>()
   if (caps.pinMapping) kinds.add(PIN_MAPPING_KIND)
   if (caps.vppIo) kinds.add('vpp-io')
-  if (caps.modbusTcpRemote) kinds.add('modbus-tcp-remote')
+  if (runsModbusMaster(caps)) kinds.add('modbus-tcp-remote')
   if (caps.ethercat) kinds.add('ethercat')
   return kinds
 }

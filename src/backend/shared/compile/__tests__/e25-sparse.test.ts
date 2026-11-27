@@ -7,7 +7,7 @@
  */
 import { computeIoImage, IMAGE_AREAS_RUNTIME_V4 } from '../steps/compute-io-image'
 
-const ALL = { pinMapping: true, vppIo: true, modbusTcpRemote: true, ethercat: true }
+const ALL = { pinMapping: true, vppIo: true, modbusTcpMaster: true, modbusRtuMaster: true, ethercat: true }
 const SERVERS = { modbusTcpServer: true, opcuaServer: true, s7Server: true }
 
 const withChannels = (locs: string[]) =>

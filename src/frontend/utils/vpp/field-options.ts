@@ -71,3 +71,8 @@ export function resolveFieldOptions(
   }
   return field.options ?? []
 }
+
+/** The values of `resolveFieldOptions`, in order: a `{ value, label }` option gives its `value`. */
+export function resolveFieldOptionValues(field: FieldOptionSource, context: { board?: unknown }): string[] {
+  return resolveFieldOptions(field, context).map((option) => (typeof option === 'string' ? option : option.value))
+}

@@ -1,0 +1,39 @@
+{
+  "name": "Slave",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "tcp",
+    "host": "192.168.1.60",
+    "port": 502,
+    "reconnect": true,
+    "timeout": 500,
+    "slaveId": 1,
+    "ioGroups": [
+      {
+        "id": "g1",
+        "name": "g1",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 2,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "g1_0",
+            "name": "g1_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW0",
+            "alias": "MB_G1_0"
+          },
+          {
+            "id": "g1_1",
+            "name": "g1_1",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW1",
+            "alias": "MB_G1_1"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "deviceBoard": "Arduino Mega",
+  "communicationPort": "",
+  "runtimeIpAddress": "",
+  "selectedPlatformOptions": {},
+  "vendorScreenData": {},
+  "vendorScreenDataByBoard": {
+    "Arduino Mega": {}
+  }
+}

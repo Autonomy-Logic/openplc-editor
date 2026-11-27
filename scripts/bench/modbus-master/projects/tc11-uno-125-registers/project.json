@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "name": "tc11-uno-125-registers",
+    "type": "plc-project"
+  },
+  "data": {
+    "dataTypes": [],
+    "pous": [],
+    "configuration": {
+      "resource": {
+        "tasks": [
+          {
+            "name": "task0",
+            "triggering": "Cyclic",
+            "interval": "T#20ms",
+            "priority": 1
+          }
+        ],
+        "instances": [
+          {
+            "name": "instance0",
+            "program": "main",
+            "task": "task0"
+          }
+        ],
+        "globalVariables": []
+      }
+    },
+    "libraries": [],
+    "debugVariables": {
+      "global": [],
+      "pous": {
+        "main": [
+          "scan_toggle",
+          "big_0",
+          "big_1",
+          "big_60",
+          "big_61",
+          "big_62",
+          "big_123",
+          "big_124"
+        ]
+      }
+    }
+  }
+}

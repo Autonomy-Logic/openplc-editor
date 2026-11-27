@@ -191,6 +191,7 @@ import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
+import { readPackageFile } from '../package-manager/read-package-file'
 import { getDesktopWasmCompileService } from '../wasm-toolchain/desktop-wasm-toolchain'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
@@ -367,18 +368,20 @@ class CompilerModule {
    */
   async #createBoardInfoResolver(): Promise<BoardInfoResolver> {
     const halsContent = await readHalsFile<HalsFile>()
+    const resolvePackageRelativePath = (pkgPath: string, relPath: string): string => {
+      const root = pathResolve(pkgPath)
+      const candidate = pathResolve(root, relPath)
+      if (candidate !== root && !candidate.startsWith(root + pathSep)) {
+        throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
+      }
+      return candidate
+    }
     return new BoardInfoResolver({
       halsContent,
       packageManager: new PackageManagerModule(),
       resolveHalSourcePath: (rel) => join(this.sourceDirectoryPath, 'hal', rel),
-      resolvePackageRelativePath: (pkgPath, relPath) => {
-        const root = pathResolve(pkgPath)
-        const candidate = pathResolve(root, relPath)
-        if (candidate !== root && !candidate.startsWith(root + pathSep)) {
-          throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
-        }
-        return candidate
-      },
+      resolvePackageRelativePath,
+      readPackageFile,
     })
   }
 
@@ -1986,7 +1989,6 @@ class CompilerModule {
     _mainProcessPort.postMessage({ message: this.getHostHardwareInfo() })
 
     const hasServers = projectData.servers && projectData.servers.length > 0
-    const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
     // Baremetal serves Modbus too since 4.3.0, so the warning is for the targets
     // that genuinely ignore a server. `openplc-compiler` is the Runtime v3
     // toolchain, which ships no Modbus slave; the simulator has one but takes
@@ -1997,12 +1999,6 @@ class CompilerModule {
       _mainProcessPort.postMessage({
         logLevel: 'warning',
         message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. The server configurations will be ignored during compilation.`,
-      })
-    }
-    if (!isRuntimeV4 && hasRemoteDevices) {
-      _mainProcessPort.postMessage({
-        logLevel: 'warning',
-        message: `Warning: Your project contains Remote IO configurations, but the selected target (${boardTarget}) does not support this feature. Remote IO is only supported on OpenPLC Runtime v4. The remote device configurations will be ignored during compilation.`,
       })
     }
 

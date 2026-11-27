@@ -52,6 +52,26 @@ describe('vendor screen renderer allowlists', () => {
     expect(screen.getByText('Baud rate')).toBeTruthy()
   })
 
+  it('renders the uart-pin-map field type', () => {
+    store.getState().deviceActions.setAvailableOptions({
+      availableBoards: new Map([
+        [
+          'Mega',
+          { compiler: 'arduino-cli', core: 'arduino:avr', preview: '', specs: {}, serialPorts: ['Serial', 'Serial1'] },
+        ],
+      ]),
+    })
+    store.getState().deviceActions.setDeviceBoard('Mega')
+    store.getState().deviceActions.setVendorScreenData('sec', {})
+
+    renderSection({
+      layout: 'form',
+      fields: [{ id: 'rs485_en_pins', label: 'RS-485 EN Pin', type: 'uart-pin-map', optionsRef: 'board.serialPorts' }],
+    })
+
+    expect(screen.getAllByRole('textbox')).toHaveLength(2)
+  })
+
   it.each(['file', 'script', 'color', 'textarea', ''])('renders nothing for the unknown field type %j', (type) => {
     renderSection({
       layout: 'form',

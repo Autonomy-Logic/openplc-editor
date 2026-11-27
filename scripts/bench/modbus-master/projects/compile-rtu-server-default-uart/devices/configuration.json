@@ -1,0 +1,22 @@
+{
+  "deviceBoard": "Arduino Mega",
+  "communicationPort": "",
+  "runtimeIpAddress": "",
+  "selectedPlatformOptions": {},
+  "vendorScreenData": {
+    "serial": {
+      "baud_rate": "115200",
+      "enable_rs485_en_pin": true,
+      "rs485_en_pin": "7"
+    }
+  },
+  "vendorScreenDataByBoard": {
+    "Arduino Mega": {
+      "serial": {
+        "baud_rate": "115200",
+        "enable_rs485_en_pin": true,
+        "rs485_en_pin": "7"
+      }
+    }
+  }
+}

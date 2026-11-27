@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "name": "tc17-mkr-wifi-s7",
+    "type": "plc-project"
+  },
+  "data": {
+    "dataTypes": [],
+    "pous": [],
+    "configuration": {
+      "resource": {
+        "tasks": [
+          {
+            "name": "task0",
+            "triggering": "Cyclic",
+            "interval": "T#20ms",
+            "priority": 1
+          }
+        ],
+        "instances": [
+          {
+            "name": "instance0",
+            "program": "main",
+            "task": "task0"
+          }
+        ],
+        "globalVariables": []
+      }
+    },
+    "libraries": [],
+    "debugVariables": {
+      "global": [],
+      "pous": {
+        "main": [
+          "scan_toggle",
+          "g1_0",
+          "g1_1",
+          "s7_word"
+        ]
+      }
+    }
+  }
+}

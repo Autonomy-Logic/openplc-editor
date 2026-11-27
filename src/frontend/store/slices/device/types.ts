@@ -397,6 +397,7 @@ export type DeviceActions = {
   setPersistentStorage: (patch: Partial<PersistentStorageSettings>) => void
   /** Record (or clear, with `null`) the VPP package a board was authored against. */
   setVppPackagePin: (board: string, pin: VppPackagePin | null) => void
+  /** Write one screen section's state. A `serial` state carrying `rs485_en_pins` is stored without the legacy RS-485 pin pair. */
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Write an embedded configurator's archive, device setup and derived I/O mapping as one store update. */
   setConfiguratorSnapshot: (configuratorKey: string, snapshot: ConfiguratorSnapshotRecord) => void

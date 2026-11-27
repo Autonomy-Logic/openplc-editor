@@ -2073,7 +2073,7 @@ describe('createDeviceSlice', () => {
               capabilities: {
                 pinMapping: true,
                 vppIo: false,
-                modbusTcpRemote: true,
+                modbusTcpMaster: true,
                 ethercat: false,
                 modbusTcpServer: true,
                 opcuaServer: true,

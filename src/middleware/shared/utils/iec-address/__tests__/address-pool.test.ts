@@ -295,9 +295,19 @@ describe('target scoping releases claims when capabilities change', () => {
     ],
   }
 
-  it('Arduino target: only pin-mapping claims', () => {
+  it('Arduino target: pin-mapping and Modbus master claims, since the family can run an RTU master', () => {
     const pool = buildAddressPool(inputs, arduinoCaps)
+    expect(Array.from(pool.byAddress.keys()).sort()).toEqual(['%MW5', '%QX0.0'])
+  })
+
+  it('a target with neither Modbus master releases the remote-device claims', () => {
+    const pool = buildAddressPool(inputs, { ...arduinoCaps, modbusTcpMaster: false, modbusRtuMaster: false })
     expect(Array.from(pool.byAddress.keys()).sort()).toEqual(['%QX0.0'])
+  })
+
+  it('a target with only the TCP master keeps the remote-device claims', () => {
+    const pool = buildAddressPool(inputs, { ...arduinoCaps, modbusTcpMaster: true, modbusRtuMaster: false })
+    expect(Array.from(pool.byAddress.keys()).sort()).toEqual(['%MW5', '%QX0.0'])
   })
 
   it('Runtime v4 plain: VPP off, modbus-remote on', () => {

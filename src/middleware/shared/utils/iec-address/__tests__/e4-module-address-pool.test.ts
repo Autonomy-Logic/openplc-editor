@@ -16,7 +16,8 @@ type ModuleInput = NonNullable<NonNullable<DeviceInput>[number]['modules']>[numb
 const caps: Caps = {
   pinMapping: true,
   vppIo: true,
-  modbusTcpRemote: true,
+  modbusTcpMaster: true,
+  modbusRtuMaster: true,
   ethercat: true,
 }
 

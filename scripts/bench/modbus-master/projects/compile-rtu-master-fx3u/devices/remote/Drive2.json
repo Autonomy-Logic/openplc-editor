@@ -1,0 +1,33 @@
+{
+  "name": "Drive2",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "rtu",
+    "serialPort": "Serial3",
+    "baudRate": 19200,
+    "parity": "E",
+    "stopBits": 1,
+    "dataBits": 8,
+    "timeout": 200,
+    "slaveId": 2,
+    "ioGroups": [
+      {
+        "id": "second",
+        "name": "second",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 1,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "second_0",
+            "name": "second_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW6"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -187,8 +187,15 @@ export interface TargetCapabilities {
   /** VPP module slots (e.g. SLM-RP4 backplane modules). */
   vppIo: boolean
 
-  /** Modbus TCP slave remote devices. */
-  modbusTcpRemote: boolean
+  /** The target runs a Modbus TCP master, so a remote device can poll a slave
+   *  over the network. On baremetal a VPP manifest raises it. */
+  modbusTcpMaster: boolean
+
+  /** The target runs a Modbus RTU master over a UART. On baremetal the family
+   *  can; the master profile narrows it to boards with a UART besides the
+   *  debugger's. A VPP manifest cannot set it (the resolver ignores it on a VPP
+   *  board); built-in hals.json entries do. */
+  modbusRtuMaster: boolean
 
   /** EtherCAT slaves. */
   ethercat: boolean
@@ -220,6 +227,10 @@ export interface TargetCapabilities {
 
   opcuaServer: boolean
   s7Server: boolean
+
+  /** Sockets the baremetal network stack can hold open at once, as the VPP
+   *  manifest declares them; `null` where nothing declares a count. */
+  networkSockets: number | null
 
   /** Baremetal OPC-UA server dimensions. Meaningful only where `opcuaServer` is
    *  true and the target compiles the baremetal runtime. Optional so a VPP
@@ -326,17 +337,10 @@ export interface TargetCapabilities {
   isLicensable: boolean
 }
 
-/**
- * The four flags that decide which producers claim IEC addresses.
- *
- * Address-space code reads nothing else, so it takes this narrower type and a
- * full `TargetCapabilities` is assignable to it. The point of the narrowing is
- * that "which producers are active" can also be answered by something that is
- * NOT a target — see `ALL_ADDRESS_PRODUCERS_ACTIVE`.
- */
+/** The flags that decide which producers claim IEC addresses. */
 export type AddressProducerCapabilities = Pick<
   TargetCapabilities,
-  'pinMapping' | 'vppIo' | 'modbusTcpRemote' | 'ethercat'
+  'pinMapping' | 'vppIo' | 'modbusTcpMaster' | 'modbusRtuMaster' | 'ethercat'
 >
 
 /**

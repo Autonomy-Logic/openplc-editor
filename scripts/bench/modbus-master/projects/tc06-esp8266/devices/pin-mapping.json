@@ -1,0 +1,9 @@
+{
+  "ESP8266 NodeMCU": [
+    {
+      "pin": "D1",
+      "pinType": "digitalOutput",
+      "address": "%QX0.0"
+    }
+  ]
+}

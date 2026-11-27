@@ -40,6 +40,7 @@
  */
 
 import type { AddressProducerCapabilities } from '../target-capabilities'
+import { runsModbusMaster } from '../target-capabilities/modbus-master'
 
 /** Which kind of source attached this claim. */
 export type SourceKind = 'pin-mapping' | 'vpp-io' | 'modbus-tcp-remote' | 'ethercat'
@@ -242,7 +243,7 @@ export function buildAddressPool(
   }
 
   // 3. Modbus TCP slave remote-device I/O points.
-  if (caps.modbusTcpRemote && inputs.remoteDevices && ignore !== 'modbus-tcp-remote') {
+  if (runsModbusMaster(caps) && inputs.remoteDevices && ignore !== 'modbus-tcp-remote') {
     for (const dev of inputs.remoteDevices) {
       const devRef = dev.deviceName || dev.name || 'unknown-device'
       for (const group of dev.modbusTcpConfig?.ioGroups ?? []) {

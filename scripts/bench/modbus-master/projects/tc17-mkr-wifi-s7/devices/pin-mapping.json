@@ -1,0 +1,9 @@
+{
+  "Mkr WiFi": [
+    {
+      "pin": "7",
+      "pinType": "digitalOutput",
+      "address": "%QX0.0"
+    }
+  ]
+}

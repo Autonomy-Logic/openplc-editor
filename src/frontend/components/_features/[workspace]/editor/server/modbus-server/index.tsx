@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { useModbusServerConfig } from '../../../../../../hooks/use-modbus-server-config'
 import { useOpenPLCStore } from '../../../../../../store'
-import { CreateEditorObjectFromTab } from '../../../../../../store/slices/tabs/utils'
 import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
@@ -12,6 +11,8 @@ import { NavigationButton } from '../../../../../_atoms/navigation-button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import { FieldHelpIcon, TooltipProvider } from '../../../../../_atoms/tooltip'
 import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
+import { BoardScreenLink } from '../../device/_shared/board-screen-link'
+import { useOpenVppScreen } from '../../device/_shared/use-open-vpp-screen'
 import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 import { AddressMappingReference } from './address-mapping-reference'
 
@@ -107,23 +108,7 @@ const Group = ({
           {name}
         </span>
         {action ? (
-          <div className='flex items-center gap-1.5'>
-            {action.screen ? (
-              <NavigationButton
-                onClick={() => action.screen && action.onOpen(action.screen)}
-                className={groupActionStyles}
-              >
-                {action.label}
-                <span aria-hidden='true'>&#8599;</span>
-              </NavigationButton>
-            ) : (
-              <button type='button' disabled className={groupActionStyles}>
-                {action.label}
-                <span aria-hidden='true'>&#8599;</span>
-              </button>
-            )}
-            {action.screen ? null : <FieldHelpIcon text={action.reason} />}
-          </div>
+          <BoardScreenLink label={action.label} screen={action.screen} reason={action.reason} onOpen={action.onOpen} />
         ) : null}
       </div>
     ) : null}
@@ -262,11 +247,6 @@ const selectItemStyles = cn(
   'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
   'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
 )
-/** The way out to a board page, sitting in a group header. A link rather than a
- *  button: it navigates, it does not act on this screen. */
-const groupActionStyles =
-  'inline-flex items-center gap-1 font-caption text-xs font-medium text-brand-medium-dark hover:text-brand disabled:cursor-not-allowed disabled:text-neutral-600 disabled:hover:text-neutral-600 dark:text-brand-light dark:hover:text-brand dark:disabled:text-neutral-700'
-
 /** A value the board states, shown in place of the control the user would
  *  otherwise get, and doubling as the way to the page that sets it. */
 const boardValueStyles =
@@ -286,11 +266,7 @@ const TRANSPORT_CHOICES: { value: string; label: string; transports: ModbusServe
 
 const ModbusServerEditor = () => {
   const editor = useOpenPLCStore((s) => s.editor)
-  const updateTabs = useOpenPLCStore((s) => s.tabsActions.updateTabs)
-  const addModel = useOpenPLCStore((s) => s.editorActions.addModel)
-  const setEditor = useOpenPLCStore((s) => s.editorActions.setEditor)
-  const getEditorFromEditors = useOpenPLCStore((s) => s.editorActions.getEditorFromEditors)
-  const setSelectedTab = useOpenPLCStore((s) => s.tabsActions.setSelectedTab)
+  const openVppScreen = useOpenVppScreen()
 
   const serverName = editor.type === 'plc-server' ? editor.meta.name : ''
   const protocol = editor.type === 'plc-server' ? editor.meta.protocol : 'modbus-tcp'
@@ -360,25 +336,6 @@ const ModbusServerEditor = () => {
   useEffect(() => setSlaveIdText(String(slaveId)), [slaveId])
   useEffect(() => setPortText(String(port)), [port])
   useEffect(() => setCountText({}), [serverName])
-
-  const openVppScreen = useCallback(
-    (screenName: string) => {
-      const tab = {
-        name: screenName,
-        path: `/vendor-screen/${screenName}`,
-        elementType: { type: 'vendor-screen' as const, screenName },
-      }
-      updateTabs(tab)
-      const model = getEditorFromEditors(screenName) ?? CreateEditorObjectFromTab(tab)
-      addModel(model)
-      setEditor(model)
-      // `setEditor` swaps what renders; `setSelectedTab` moves the highlight in
-      // the tab strip. Doing only the first leaves the strip pointing at the
-      // tab you just left, which reads as "the button did nothing".
-      setSelectedTab(screenName)
-    },
-    [updateTabs, getEditorFromEditors, addModel, setEditor, setSelectedTab],
-  )
 
   const commitSlaveId = useCallback(() => {
     const parsed = Number.parseInt(slaveIdText, 10)

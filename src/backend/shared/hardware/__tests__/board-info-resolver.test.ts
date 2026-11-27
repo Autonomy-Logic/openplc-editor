@@ -694,3 +694,114 @@ describe('BoardInfoResolver', () => {
     })
   })
 })
+
+describe('BoardInfoResolver Serial screen and per-UART RS-485 pins', () => {
+  const SERIAL_SCREEN = 'screens/serial.json'
+  const PER_UART_SCREEN = JSON.stringify({
+    sections: [
+      { title: 'RS-485', fields: [{ id: 'rs485_en_pins', type: 'uart-pin-map', label: 'RS-485 enable pin' }] },
+    ],
+  })
+  const SINGLE_PIN_SCREEN = JSON.stringify({
+    sections: [{ title: 'RS-485', fields: [{ id: 'rs485_en_pin', type: 'text', label: 'RS-485 enable pin' }] }],
+  })
+
+  type ManifestDevice = PackageManifest['devices'][number]
+
+  const megaDevice = (over: Partial<ManifestDevice> = {}): ManifestDevice => ({
+    id: 'arduino-mega',
+    name: 'Arduino Mega',
+    preview: 'assets/boards/mega.png',
+    target: { type: 'arduino-cli', core: 'arduino:avr', platform: 'arduino:avr:mega' },
+    hal: { type: 'arduino-hal', source: 'hal/arduino/mega_due.cpp' },
+    serialPorts: ['Serial', 'Serial1', 'Serial2', 'Serial3'],
+    defaultSerial: 'Serial',
+    screens: { Serial: SERIAL_SCREEN },
+    ...over,
+  })
+
+  function packageFiles(files: Record<string, string>) {
+    const requested: string[] = []
+    const read = (pkg: InstalledPackage, relPath: string): string => {
+      requested.push(relPath)
+      const absolute = packageRelative(pkg.path, relPath)
+      const text = files[absolute]
+      if (text === undefined) throw new Error(`ENOENT: no such file or directory, open '${absolute}'`)
+      return text
+    }
+    return { read, requested }
+  }
+
+  function resolverFor(device: ManifestDevice, readPackageFile?: BoardInfoResolverConfig['readPackageFile']) {
+    const pkg = makePkg()
+    const pm = makePackageManager([pkg], { [pkg.packageId]: makeManifest({ devices: [device] }) })
+    return makeResolver({}, pm, readPackageFile ? { readPackageFile } : {})
+  }
+
+  function resolveError(resolver: BoardInfoResolver, board: string): string {
+    try {
+      resolver.resolve(board)
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+    throw new Error(`resolve("${board}") did not throw`)
+  }
+
+  it('marks a device whose Serial screen has a uart-pin-map field as per-UART aware', () => {
+    const files = packageFiles({ [join(PKG_PATH, SERIAL_SCREEN)]: PER_UART_SCREEN })
+    expect(resolverFor(megaDevice(), files.read).resolve('Arduino Mega').perUartAware).toBe(true)
+  })
+
+  it('marks a device whose Serial screen has no uart-pin-map field as not per-UART aware', () => {
+    const files = packageFiles({ [join(PKG_PATH, SERIAL_SCREEN)]: SINGLE_PIN_SCREEN })
+    expect(resolverFor(megaDevice(), files.read).resolve('Arduino Mega').perUartAware).toBe(false)
+  })
+
+  it('marks a device with fixed RS-485 pins as per-UART aware without reading its Serial screen', () => {
+    const files = packageFiles({})
+    const info = resolverFor(megaDevice({ rs485FixedPins: { Serial3: '22' } }), files.read).resolve('Arduino Mega')
+
+    expect(info.perUartAware).toBe(true)
+    expect(files.requested).toEqual([])
+  })
+
+  it('marks a device with no Serial screen as not per-UART aware without reading any file', () => {
+    const files = packageFiles({})
+    const info = resolverFor(megaDevice({ screens: { Network: 'screens/network.json' } }), files.read).resolve(
+      'Arduino Mega',
+    )
+
+    expect(info.perUartAware).toBe(false)
+    expect(files.requested).toEqual([])
+  })
+
+  it('marks a device as not per-UART aware when no package file reader is configured', () => {
+    expect(resolverFor(megaDevice()).resolve('Arduino Mega').perUartAware).toBe(false)
+  })
+
+  it('fails the resolution when the declared Serial screen is missing, naming the board, package, path and cause', () => {
+    const message = resolveError(resolverFor(megaDevice(), packageFiles({}).read), 'Arduino Mega')
+
+    expect(message).toContain('Arduino Mega')
+    expect(message).toContain('com.openplc.arduino')
+    expect(message).toContain(SERIAL_SCREEN)
+    expect(message).toContain('ENOENT')
+  })
+
+  it('fails the resolution when the declared Serial screen is not valid JSON', () => {
+    const files = packageFiles({ [join(PKG_PATH, SERIAL_SCREEN)]: '{ "sections": [' })
+    const message = resolveError(resolverFor(megaDevice(), files.read), 'Arduino Mega')
+
+    expect(message).toContain('com.openplc.arduino')
+    expect(message).toContain(SERIAL_SCREEN)
+  })
+
+  it('fails the resolution when the declared Serial screen path leaves the package', () => {
+    const device = megaDevice({ screens: { Serial: '../common/serial.json' } })
+    const message = resolveError(resolverFor(device, packageFiles({}).read), 'Arduino Mega')
+
+    expect(message).toContain('com.openplc.arduino')
+    expect(message).toContain('../common/serial.json')
+    expect(message).toContain('escapes package directory')
+  })
+})

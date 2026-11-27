@@ -46,6 +46,7 @@
 #include "opcua_server.h"
 #include "opcua_log.h"
 #include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
+#include "modbus_master.h"
 
 // HMI host on the board's panel, present when the build adds it to the library.
 #if defined(__has_include)
@@ -182,6 +183,30 @@ void setup()
     // Initialize hardware (HAL -- unchanged)
     hardwareInit();
 
+    #if MB_MASTER_RTU_ENABLED
+        for (uint16_t b = 0; b < MB_MASTER_BUS_COUNT; b++)
+        {
+            const int16_t pin = MB_MASTER_BUSES[b].rs485_pin;
+            if (pin == MB_MASTER_NO_PIN) continue;
+            for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
+            {
+                if (pinMask_DIN[i] == pin) pinMask_DIN[i] = 255;
+            }
+            for (int i = 0; i < NUM_ANALOG_INPUT; i++)
+            {
+                if (pinMask_AIN[i] == pin) pinMask_AIN[i] = 255;
+            }
+            for (int i = 0; i < NUM_DISCRETE_OUTPUT; i++)
+            {
+                if (pinMask_DOUT[i] == pin) pinMask_DOUT[i] = 255;
+            }
+            for (int i = 0; i < NUM_ANALOG_OUTPUT; i++)
+            {
+                if (pinMask_AOUT[i] == pin) pinMask_AOUT[i] = 255;
+            }
+        }
+    #endif
+
     // Establish the run/stop state. Must follow hardwareInit() so the HAL has
     // already configured its mode-switch pin: a board powered up with the
     // switch in STOP must never execute a scan. Boards with no mode switch
@@ -264,7 +289,7 @@ void setup()
     // Outside the transport branch above: the backing belongs to the image, so
     // whichever protocol addresses located variables needs it, not Modbus
     // specifically.
-    #if defined(MODBUS_ENABLED) || S7COMM_ENABLED
+    #if defined(MODBUS_ENABLED) || S7COMM_ENABLED || MB_MASTER_ENABLED
         mapEmptyBuffers();
     #endif
 
@@ -348,7 +373,7 @@ void setup()
 // Compiled when a protocol that addresses LOCATED variables is enabled. The
 // debugger reaches variables by symbol, so it can never name an unbound slot
 // and a debug-only build saves the SRAM.
-#if defined(MODBUS_ENABLED) || S7COMM_ENABLED
+#if defined(MODBUS_ENABLED) || S7COMM_ENABLED || MB_MASTER_ENABLED
 
 // Storage for slots the program declared no variable for -- the image is a
 // table of pointers into program variables, and those slots have none. Keeps
@@ -418,7 +443,7 @@ void mapEmptyBuffers()
     #endif
 }
 
-#endif // MODBUS_ENABLED || S7COMM_ENABLED
+#endif
 
 // =============================================================================
 // MODBUS TASK
@@ -448,7 +473,15 @@ static inline uint32_t cycle_slack_us()
 
 void scheduler()
 {
+    #if MB_MASTER_ENABLED
+        mb_master_commit_inputs();
+    #endif
+
     runtime_plc_cycle();
+
+    #if MB_MASTER_ENABLED
+        mb_master_sample_outputs();
+    #endif
 
     #ifdef USE_ARDUINO_SKETCH
         sketch_loop();
@@ -459,6 +492,10 @@ void scheduler()
     #elif defined(DEBUGGER_ENABLED)
         // Debug-only: poll the serial transport for debugger requests.
         mbtask();
+    #endif
+
+    #if MB_MASTER_ENABLED
+        mb_master_task();
     #endif
 
     // OPC-UA and S7Comm get the tail of the cycle, after the PLC logic and
@@ -537,6 +574,10 @@ void loop()
     #endif
     #if HMI_ENABLED
         hmi_bm_task(cycle_slack_us());
+    #endif
+
+    #if MB_MASTER_ENABLED
+        mb_master_task();
     #endif
 
     // Same repair as in scheduler(): the inter-cycle service writes raw too.

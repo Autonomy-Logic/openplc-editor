@@ -1,25 +1,4 @@
-/**
- * Resolve the user's selected board to the canonical pipeline inputs
- * (`boardEntry`, `boardRuntime`, plus the three mutually-exclusive
- * runtime-classification flags) the shared `runCompilePipeline`
- * branches on.
- *
- * Both platforms used to do this lookup + adapt inline at the entry
- * to `compileProgram`, duplicated almost character-for-character.
- * Centralising the editor's `BoardInfoResolver`-backed flow here
- * means a future tweak (new runtime kind, new VPP-side capability)
- * lands once and the editor + web compile entrypoints stay in lockstep.
- *
- * Pure dispatch — no I/O.  Caller wires the resolver with its own
- * `hals.json` source (editor: filesystem; web: bundled via Vite's
- * `import.meta.glob`) and `PackageManagerPort` (editor: the real
- * module; web: a no-op stub until the VPP catalog lands there).
- *
- * Returns either the resolved selection or an `error` discriminator
- * with a human-readable message the renderer can surface verbatim.
- */
-
-import type { BoardInfoResolver } from '../../hardware/board-info-resolver'
+import { type BoardInfoResolver, BoardNotFoundError } from '../../hardware/board-info-resolver'
 import type { BoardHalsBuildEntry } from '../pipeline'
 
 export type ResolvedBoardSelection =
@@ -73,6 +52,8 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       ...(boardInfo.serialPorts ? { serialPorts: boardInfo.serialPorts } : {}),
       ...(boardInfo.defaultSerial ? { defaultSerial: boardInfo.defaultSerial } : {}),
       ...(boardInfo.networkInterfaces ? { networkInterfaces: boardInfo.networkInterfaces } : {}),
+      ...(boardInfo.rs485FixedPins ? { rs485FixedPins: boardInfo.rs485FixedPins } : {}),
+      perUartAware: boardInfo.perUartAware,
       ...(boardInfo.pinPull ? { pinPull: boardInfo.pinPull } : {}),
       ...(boardInfo.source === 'vpp' ? { vpp: true } : {}),
       ...(boardInfo.capabilities ? { capabilities: boardInfo.capabilities } : {}),
@@ -86,7 +67,10 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       isRuntimeV4: boardInfo.isRuntimeV4,
       isRuntimeV3: boardInfo.isRuntimeV3,
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof BoardNotFoundError)) {
+      return { ok: false, error: error.message }
+    }
     return {
       ok: false,
       error: `Board "${boardTarget}" not found in hals.json or installed VPP packages.`,

@@ -10,6 +10,7 @@ export {
   type ResolvedHmiPanel,
   resolveHmiPanel,
 } from './hmi-panel'
+export { runsModbusMaster } from './modbus-master'
 export {
   ALL_ADDRESS_PRODUCERS_ACTIVE,
   ARDUINO_CLI_CAPABILITIES,

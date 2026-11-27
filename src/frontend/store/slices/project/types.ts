@@ -409,6 +409,7 @@ export type ProjectActions = {
       transport?: 'tcp' | 'rtu'
       host?: string
       port?: number
+      reconnect?: boolean
       serialPort?: string
       baudRate?: number
       parity?: 'N' | 'E' | 'O'

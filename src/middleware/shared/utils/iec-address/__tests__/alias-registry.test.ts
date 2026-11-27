@@ -66,7 +66,7 @@ describe('buildAliasRegistry', () => {
           },
         ],
       },
-      { ...arduino, modbusTcpRemote: true },
+      { ...arduino, modbusTcpMaster: true },
     )
     const reg = buildAliasRegistry(pool)
     // Pool's reservation pass runs pin-mapping first; that's who wins.

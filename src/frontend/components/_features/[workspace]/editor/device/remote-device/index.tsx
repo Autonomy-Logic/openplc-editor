@@ -2,13 +2,19 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Pencil1Icon, TrashIcon } from '@radix-ui/react-icons'
 import type { ModbusIOGroup, ModbusIOPoint } from '@root/middleware/shared/ports/types'
 import { useRuntime } from '@root/middleware/shared/providers/platform-context'
+import {
+  firstBoardRtuPort,
+  type ModbusMasterTransport,
+  resolveReconnect,
+} from '@root/middleware/shared/utils/modbus-master-profile'
 import { Download, Upload } from 'lucide-react'
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChangeEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { useIsEditingLocked } from '../../../../../../hooks/use-editing-lock'
+import { useModbusMasterProfile } from '../../../../../../hooks/use-modbus-master-profile'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
@@ -32,6 +38,7 @@ import {
   serializeIOGroupsToCsv,
   serializeIOGroupsToJson,
 } from '../../../../../../utils/modbus/io-group-transfer'
+import { Checkbox } from '../../../../../_atoms/checkbox'
 import { GenericComboboxCell } from '../../../../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
@@ -42,21 +49,33 @@ import { TruncatedText } from '../../../../../_atoms/truncated-text'
 import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { toast } from '../../../../[app]/toast/use-toast'
+import { BoardScreenLink } from '../_shared/board-screen-link'
+import { useOpenVppScreen } from '../_shared/use-open-vpp-screen'
 import { ImportIOGroupsModal, type IOGroupImportMode, type IOGroupImportPreview } from './import-io-groups-modal'
 
 const FUNCTION_CODE_OPTIONS = IO_GROUP_FUNCTION_CODE_OPTIONS
 const ERROR_HANDLING_OPTIONS = IO_GROUP_ERROR_HANDLING_OPTIONS
 
 // Modbus transport type options
-const TRANSPORT_OPTIONS = [
+const TRANSPORT_OPTIONS: { value: ModbusMasterTransport; label: string }[] = [
   { value: 'tcp', label: 'TCP/IP' },
   { value: 'rtu', label: 'RTU (Serial)' },
 ]
 
-// Default serial port for RTU devices.  Pre-filled as a real value (not
-// just the combobox placeholder) so it is persisted to the device config
-// and reaches the compiler — an empty serial port makes the runtime drop
-// the Modbus master plugin entirely.
+/** Inline help below the Reconnect checkbox. */
+const RECONNECT_HELP =
+  'When unchecked, the device is given up after a failed first connection or a lost connection, including a brief network fault or a reset sent by another host, and is not contacted again until Stop then Start or a reset of the controller. Check Reconnect for production devices: the master then retries after 2 s, growing x1.5 up to 30 s.'
+
+/** Inline help below the timeout on a baremetal board. */
+const BAREMETAL_TIMEOUT_HELP = 'On a microcontroller, each connection attempt can hold the scan for up to this time.'
+
+/** Reason shown beside a disabled board settings link. */
+const noBoardPage = (what: 'network' | 'serial'): string => `This board's package has no ${what} settings page.`
+
+const HINT_STYLES = 'font-caption text-xs text-neutral-500 dark:text-neutral-400'
+
+/** Serial port an RTU device gets off baremetal, where a board uses its first spare UART. Persisted
+ *  when none is stored, since a device without a port is dropped from the master config. */
 const DEFAULT_SERIAL_PORT = '/dev/ttyUSB0'
 
 // RTU configuration options
@@ -101,6 +120,9 @@ type SerialPortComboboxProps = {
   options: SerialPortOption[]
   isLoading?: boolean
   placeholder?: string
+  /** Accept a typed device path besides the listed ports. */
+  allowCustom?: boolean
+  emptyMessage?: string
 }
 
 // Field-style trigger (bordered, chevron) matching the other RTU config fields.
@@ -108,12 +130,12 @@ const SERIAL_PORT_TRIGGER_CLASS =
   'flex h-[30px] w-full max-w-[200px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-normal text-neutral-700 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-100'
 
 /**
- * Editable serial-port picker for RTU devices.
+ * Serial-port picker for RTU devices.
  *
  * A thin wrapper over the shared GenericComboboxCell — the single combobox in the
- * app. Runtime-discovered ports populate the list (filterable, case-insensitive),
- * and the user can still type a custom device path (`canAddACustomOption`) that
- * propagates verbatim through onValueChange to the device config.
+ * app. The listed ports are filterable, case-insensitive; with `allowCustom` the
+ * user can also type a device path that propagates verbatim through
+ * onValueChange to the device config.
  */
 const SerialPortCombobox = ({
   value,
@@ -121,6 +143,8 @@ const SerialPortCombobox = ({
   options,
   isLoading = false,
   placeholder = '/dev/ttyUSB0',
+  allowCustom = true,
+  emptyMessage = 'No ports available. Type a custom value.',
 }: SerialPortComboboxProps) => {
   // Map runtime ports to options. The device path is the value that propagates;
   // the human description (when distinct) is appended to the visible label.
@@ -142,13 +166,13 @@ const SerialPortCombobox = ({
       onValueChange={onValueChange}
       selectValues={selectValues}
       displayLabel={value || placeholder}
-      canAddACustomOption
+      canAddACustomOption={allowCustom}
       showClearOption={false}
       showChevron
       triggerClassName={SERIAL_PORT_TRIGGER_CLASS}
       placeholder={placeholder}
       customValueLabel='Use custom port'
-      emptyMessage={isLoading ? 'Loading ports...' : 'No ports available. Type a custom value.'}
+      emptyMessage={isLoading ? 'Loading ports...' : emptyMessage}
     />
   )
 }
@@ -562,6 +586,11 @@ const RemoteDeviceEditor = () => {
     useOpenPLCStore()
   const runtime = useRuntime()
   const isEditingLocked = useIsEditingLocked()
+  const profile = useModbusMasterProfile()
+  const openVppScreen = useOpenVppScreen()
+  const reconnectId = useId()
+  const reconnectHelpId = useId()
+  const timeoutHelpId = useId()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
   const protocol = editor.type === 'plc-remote-device' ? editor.meta.protocol : ''
@@ -574,12 +603,23 @@ const RemoteDeviceEditor = () => {
   const { connectionStatus, jwtToken } = runtimeConnection
   const isConnectedToRuntime = connectionStatus === 'connected' && jwtToken !== null
 
+  const isBaremetal = profile.showBoardLinks
+  const boardRtuPorts = profile.rtuPorts.source === 'board' ? profile.rtuPorts.ports : null
+  const defaultSerialPort = boardRtuPorts ? (firstBoardRtuPort(profile) ?? '') : DEFAULT_SERIAL_PORT
+  const transportOptions = TRANSPORT_OPTIONS.filter((option) => profile.transports.includes(option.value))
+  const boardSerialPortOptions = useMemo<SerialPortOption[]>(
+    () => (boardRtuPorts ?? []).map((boardPort) => ({ value: boardPort, label: boardPort })),
+    [boardRtuPorts],
+  )
+  const reconnect = remoteDevice?.modbusTcpConfig ? resolveReconnect(remoteDevice.modbusTcpConfig) : false
+
   // Serial port options state
   const [serialPortOptions, setSerialPortOptions] = useState<SerialPortOption[]>([])
   const [isLoadingSerialPorts, setIsLoadingSerialPorts] = useState(false)
 
   // Transport type state
   const [transport, setTransport] = useState<'tcp' | 'rtu'>('tcp')
+  const showTimeoutHelp = isBaremetal && transport === 'tcp'
 
   // TCP-specific state
   const [host, setHost] = useState('')
@@ -613,7 +653,7 @@ const RemoteDeviceEditor = () => {
       setPort((config.port ?? 502).toString())
       // RTU fields — show the default serial port as a real value when
       // none is stored (the self-heal effect below persists it).
-      setSerialPort(config.serialPort || DEFAULT_SERIAL_PORT)
+      setSerialPort(config.serialPort || defaultSerialPort)
       setBaudRate((config.baudRate ?? 9600).toString())
       setParity(config.parity ?? 'N')
       setStopBits((config.stopBits ?? 1).toString())
@@ -625,7 +665,7 @@ const RemoteDeviceEditor = () => {
       setTransport('tcp')
       setHost('127.0.0.1')
       setPort('502')
-      setSerialPort(DEFAULT_SERIAL_PORT)
+      setSerialPort(defaultSerialPort)
       setBaudRate('9600')
       setParity('N')
       setStopBits('1')
@@ -633,21 +673,16 @@ const RemoteDeviceEditor = () => {
       setTimeout('1000')
       setSlaveId('1')
     }
-  }, [remoteDevice])
+  }, [remoteDevice, defaultSerialPort])
 
-  // Self-heal: an RTU device must carry a concrete serial port, otherwise
-  // the compiler silently drops it from the Modbus master config.  The UI
-  // shows DEFAULT_SERIAL_PORT as a real value, so persist it whenever the
-  // stored config has none — keeping disk in sync with what's displayed
-  // and fixing projects saved before the serial port was pre-filled.
   useEffect(() => {
-    if (isEditingLocked) return
+    if (isEditingLocked || !defaultSerialPort) return
     const config = remoteDevice?.modbusTcpConfig
     if (config && (config.transport ?? 'tcp') === 'rtu' && !config.serialPort) {
-      projectActions.updateRemoteDeviceConfig(deviceName, { serialPort: DEFAULT_SERIAL_PORT })
+      projectActions.updateRemoteDeviceConfig(deviceName, { serialPort: defaultSerialPort })
       sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     }
-  }, [remoteDevice, deviceName, projectActions, sharedWorkspaceActions, isEditingLocked])
+  }, [remoteDevice, deviceName, defaultSerialPort, projectActions, sharedWorkspaceActions, isEditingLocked])
 
   const ioGroups = useMemo(
     () => remoteDevice?.modbusTcpConfig?.ioGroups || [],
@@ -691,10 +726,10 @@ const RemoteDeviceEditor = () => {
 
   // Fetch serial ports when transport changes to RTU or when runtime connection changes
   useEffect(() => {
-    if (transport === 'rtu') {
+    if (transport === 'rtu' && profile.rtuPorts.source === 'runtime') {
       void fetchSerialPorts()
     }
-  }, [transport, isConnectedToRuntime, fetchSerialPorts])
+  }, [transport, isConnectedToRuntime, fetchSerialPorts, profile.rtuPorts.source])
 
   const handleHostBlur = useCallback(() => {
     if (host !== remoteDevice?.modbusTcpConfig?.host) {
@@ -734,9 +769,17 @@ const RemoteDeviceEditor = () => {
     }
   }, [slaveId, transport, deviceName, remoteDevice?.modbusTcpConfig?.slaveId, projectActions, sharedWorkspaceActions])
 
+  const handleReconnectChange = useCallback(
+    (checked: boolean) => {
+      projectActions.updateRemoteDeviceConfig(deviceName, { reconnect: checked })
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
+    },
+    [deviceName, projectActions, sharedWorkspaceActions],
+  )
+
   // Transport type handler
   const handleTransportChange = useCallback(
-    (newTransport: 'tcp' | 'rtu') => {
+    (newTransport: ModbusMasterTransport) => {
       setTransport(newTransport)
       projectActions.updateRemoteDeviceConfig(deviceName, { transport: newTransport })
       sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
@@ -957,7 +1000,10 @@ const RemoteDeviceEditor = () => {
   )
 
   return (
-    <div aria-label='Remote device content container' className='flex h-full w-full flex-col overflow-hidden p-4'>
+    <div
+      aria-label='Remote device content container'
+      className='flex h-full w-full flex-col overflow-y-auto overflow-x-hidden p-4'
+    >
       <div className='mb-4'>
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>Remote Device: {deviceName}</h2>
         <p className='text-sm text-neutral-600 dark:text-neutral-400'>
@@ -970,10 +1016,21 @@ const RemoteDeviceEditor = () => {
           {/* Transport Type Selector */}
           <div className='flex items-center gap-2'>
             <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Transport</Label>
-            <Select value={transport} onValueChange={(v) => handleTransportChange(v as 'tcp' | 'rtu')}>
-              <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
+            <Select
+              value={transport}
+              onValueChange={(v) => {
+                const option = transportOptions.find((entry) => entry.value === v)
+                if (option) handleTransportChange(option.value)
+              }}
+            >
+              <SelectTrigger
+                withIndicator
+                placeholder='Select transport'
+                className={selectTriggerStyles}
+                data-testid='remote-device-transport-select'
+              />
               <SelectContent className={selectContentStyles}>
-                {TRANSPORT_OPTIONS.map((option) => (
+                {transportOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
                     <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
                       {option.label}
@@ -995,6 +1052,7 @@ const RemoteDeviceEditor = () => {
                   onBlur={handleHostBlur}
                   placeholder='127.0.0.1'
                   className={inputStyles}
+                  data-testid='remote-device-host-input'
                 />
               </div>
               <div className='flex items-center gap-2'>
@@ -1006,23 +1064,63 @@ const RemoteDeviceEditor = () => {
                   onBlur={handlePortBlur}
                   placeholder='502'
                   className={inputStyles}
+                  data-testid='remote-device-port-input'
                 />
               </div>
+              <div className='flex max-w-[420px] flex-col gap-1'>
+                <div className='flex items-center gap-2'>
+                  <Label htmlFor={reconnectId} className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                    Reconnect
+                  </Label>
+                  <Checkbox
+                    id={reconnectId}
+                    checked={reconnect}
+                    onCheckedChange={(checked) => handleReconnectChange(checked === true)}
+                    aria-describedby={reconnectHelpId}
+                    data-testid='remote-device-reconnect-checkbox'
+                  />
+                </div>
+                <p id={reconnectHelpId} data-testid='remote-device-reconnect-help' className={HINT_STYLES}>
+                  {RECONNECT_HELP}
+                </p>
+              </div>
+              {profile.showBoardLinks && (
+                <TooltipProvider>
+                  <BoardScreenLink
+                    label='Board network settings'
+                    screen={profile.vppScreens.network}
+                    reason={noBoardPage('network')}
+                    onOpen={openVppScreen}
+                    testId='remote-device-board-network-link'
+                  />
+                </TooltipProvider>
+              )}
             </>
           )}
 
           {/* RTU-specific fields */}
           {transport === 'rtu' && (
             <>
-              <div className='flex items-center gap-2'>
+              <div className='flex items-center gap-2' data-testid='remote-device-serial-port-select'>
                 <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Serial Port</Label>
-                <SerialPortCombobox
-                  value={serialPort}
-                  onValueChange={handleSerialPortChange}
-                  options={serialPortOptions}
-                  isLoading={isLoadingSerialPorts}
-                  placeholder='/dev/ttyUSB0'
-                />
+                {boardRtuPorts ? (
+                  <SerialPortCombobox
+                    value={serialPort}
+                    onValueChange={handleSerialPortChange}
+                    options={boardSerialPortOptions}
+                    placeholder={defaultSerialPort}
+                    allowCustom={false}
+                    emptyMessage='This board has no UART for Modbus RTU.'
+                  />
+                ) : (
+                  <SerialPortCombobox
+                    value={serialPort}
+                    onValueChange={handleSerialPortChange}
+                    options={serialPortOptions}
+                    isLoading={isLoadingSerialPorts}
+                    placeholder='/dev/ttyUSB0'
+                  />
+                )}
               </div>
               <div className='flex items-center gap-2'>
                 <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Baud Rate</Label>
@@ -1084,20 +1182,40 @@ const RemoteDeviceEditor = () => {
                   </SelectContent>
                 </Select>
               </div>
+              {profile.showBoardLinks && (
+                <TooltipProvider>
+                  <BoardScreenLink
+                    label='Board serial settings'
+                    screen={profile.vppScreens.serial}
+                    reason={noBoardPage('serial')}
+                    onOpen={openVppScreen}
+                    testId='remote-device-board-serial-link'
+                  />
+                </TooltipProvider>
+              )}
             </>
           )}
 
           {/* Common fields - Timeout and Slave ID */}
-          <div className='flex items-center gap-2'>
-            <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Timeout (ms)</Label>
-            <InputWithRef
-              type='number'
-              value={timeout}
-              onChange={(e) => setTimeout(e.target.value)}
-              onBlur={handleTimeoutBlur}
-              placeholder='1000'
-              className={inputStyles}
-            />
+          <div className='flex max-w-[420px] flex-col gap-1'>
+            <div className='flex items-center gap-2'>
+              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Timeout (ms)</Label>
+              <InputWithRef
+                type='number'
+                value={timeout}
+                onChange={(e) => setTimeout(e.target.value)}
+                onBlur={handleTimeoutBlur}
+                placeholder='1000'
+                className={inputStyles}
+                aria-describedby={showTimeoutHelp ? timeoutHelpId : undefined}
+                data-testid='remote-device-timeout-input'
+              />
+            </div>
+            {showTimeoutHelp && (
+              <p id={timeoutHelpId} data-testid='remote-device-timeout-help' className={HINT_STYLES}>
+                {BAREMETAL_TIMEOUT_HELP}
+              </p>
+            )}
           </div>
           <div className='flex items-center gap-2'>
             <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Slave ID</Label>
@@ -1110,12 +1228,13 @@ const RemoteDeviceEditor = () => {
               min={transport === 'rtu' ? SLAVE_ID_RTU_MIN : SLAVE_ID_TCP_MIN}
               max={transport === 'rtu' ? SLAVE_ID_RTU_MAX : SLAVE_ID_TCP_MAX}
               className={inputStyles}
+              data-testid='remote-device-slave-id-input'
             />
           </div>
         </div>
       </EditingLockBoundary>
 
-      <div className='flex flex-1 flex-col overflow-hidden'>
+      <div data-testid='remote-device-io-mapping' className='flex min-h-[200px] flex-1 flex-col overflow-hidden'>
         <div className='mb-2 flex items-center justify-between'>
           <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>IO Tag Mapping</h3>
           <div className='flex items-center gap-1'>

@@ -5,8 +5,10 @@ import { FieldHelpIcon, TooltipProvider } from '@root/frontend/components/_atoms
 import { useOpenPLCStore } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { resolveFieldOptions } from '@root/frontend/utils/vpp/field-options'
+import { UART_PIN_MAP_FIELD_TYPE } from '@root/middleware/shared/utils/modbus-master-profile'
 import { useEffect } from 'react'
 
+import { UartPinMapField } from '../components/uart-pin-map-field'
 import type { ScreenSection } from '../index'
 import { useSectionStorage } from '../use-section-storage'
 
@@ -62,7 +64,16 @@ const TEXT_INPUT_CLASS =
  * behaviour — falling back to a text input — meant an unrecognised type still
  * produced a value the device would be configured with.
  */
-const SUPPORTED_FIELD_TYPES = new Set(['boolean', 'number', 'select', 'password', 'ip-address', 'mac-address', 'text'])
+const SUPPORTED_FIELD_TYPES = new Set([
+  'boolean',
+  'number',
+  'select',
+  'password',
+  'ip-address',
+  'mac-address',
+  'text',
+  UART_PIN_MAP_FIELD_TYPE,
+])
 
 // Anchor-less HTML5 patterns for the formatted text types. The schema's
 // per-field `validation` (when present) is more specific and wins via the
@@ -97,12 +108,13 @@ function FormLayout({ section, disabled = false }: FormLayoutProps) {
   // Reads route through `persistAs ?? id`.
   const values: Record<string, string | number | boolean> = {}
   for (const field of fields) {
+    if (field.type === UART_PIN_MAP_FIELD_TYPE) continue
     const storageKey = storageKeyFor(field)
     const stored = storage.values[storageKey] as string | number | boolean | undefined
     values[field.id] = stored ?? (field.default as string | number | boolean) ?? ''
   }
 
-  const updateField = (id: string, value: string | number | boolean) => {
+  const updateField = (id: string, value: string | number | boolean | Record<string, string>) => {
     if (storage.readonly || disabled) return
     const field = fields.find((f) => f.id === id)
     if (!field) return
@@ -116,10 +128,10 @@ function FormLayout({ section, disabled = false }: FormLayoutProps) {
     // already making in this section, so nothing is written behind their
     // back, and evaluated against the post-edit values so flipping a
     // section's switch on seeds the fields it reveals.
-    const next = { ...values, [id]: value }
-    const patch: Record<string, string | number | boolean> = { [storageKeyFor(field)]: value }
+    const next = typeof value === 'object' ? values : { ...values, [id]: value }
+    const patch: Record<string, string | number | boolean | Record<string, string>> = { [storageKeyFor(field)]: value }
     for (const other of fields) {
-      if (other.id === id || other.default === undefined) continue
+      if (other.id === id || other.default === undefined || other.type === UART_PIN_MAP_FIELD_TYPE) continue
       const otherKey = storageKeyFor(other)
       if (storage.values[otherKey] !== undefined) continue
       if (!evalVisible(other.visible, next)) continue
@@ -141,7 +153,7 @@ function FormLayout({ section, disabled = false }: FormLayoutProps) {
     if (storage.readonly) return
     const patch: Record<string, string | number | boolean> = {}
     for (const field of fields) {
-      if (field.default === undefined) continue
+      if (field.default === undefined || field.type === UART_PIN_MAP_FIELD_TYPE) continue
       const storageKey = storageKeyFor(field)
       if (storage.values[storageKey] !== undefined) continue
       if (!evalVisible(field.visible, values)) continue
@@ -167,6 +179,20 @@ function FormLayout({ section, disabled = false }: FormLayoutProps) {
           // `enabled` field). Scope by section.id so a label's `htmlFor`
           // can't target a same-named control in another section.
           const fieldDomId = `vendor-field-${section.id}-${field.id}`
+          if (field.type === UART_PIN_MAP_FIELD_TYPE) {
+            return (
+              <UartPinMapField
+                key={field.id}
+                sectionId={section.id}
+                field={field}
+                storedValues={storage.values}
+                storageKey={storageKeyFor(field)}
+                disabled={disabled}
+                inputClassName={TEXT_INPUT_CLASS}
+                onCommit={(pins) => updateField(field.id, pins)}
+              />
+            )
+          }
           return (
             <div key={field.id} className='flex items-center gap-4'>
               {field.type === 'boolean' ? (

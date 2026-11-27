@@ -106,7 +106,7 @@ const boardManagerUrl = z.string().refine(
  * compares them, while openplc-packages' `scripts/validate.ts` owns the authoring rules), `runtimeLicense` (read by the
  * licence status; an unknown value is refused here), and per device `target.boardManagerUrl`, `target.uploadMethod`
  * (constrained because it picks the upload path downstream, so a misspelt value is refused rather than taking the
- * serial path), `capabilities.hmi` and `capabilities.hmiDataWidgets`.
+ * serial path), `rs485FixedPins`, `capabilities.hmi` and `capabilities.hmiDataWidgets`.
  */
 export const PackageManifestSchema = z
   .object({
@@ -132,6 +132,7 @@ export const PackageManifestSchema = z
               })
               .passthrough()
               .optional(),
+            rs485FixedPins: z.record(z.string(), z.string()).optional(),
             capabilities: z
               .object({ hmi: hmiPanelCapabilitySchema.nullable().optional(), hmiDataWidgets: z.boolean().optional() })
               .passthrough()

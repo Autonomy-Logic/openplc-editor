@@ -1,0 +1,31 @@
+{
+  "name": "Second",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "tcp",
+    "host": "192.168.1.51",
+    "port": 502,
+    "reconnect": false,
+    "timeout": 500,
+    "slaveId": 1,
+    "ioGroups": [
+      {
+        "id": "second",
+        "name": "second",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 1,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "second_0",
+            "name": "second_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW8"
+          }
+        ]
+      }
+    ]
+  }
+}

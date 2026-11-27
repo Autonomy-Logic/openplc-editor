@@ -30,6 +30,8 @@ import type {
   PinPullSpec,
   PlatformOption,
 } from '../../../middleware/shared/ports/types'
+import { boardHardwareFromManifestDevice } from '../../../middleware/shared/utils/board-hardware/from-manifest-device'
+import { findSerialScreenName, isRs485PerUartAware } from '../../../middleware/shared/utils/modbus-master-profile'
 import { classifyBoardRuntime } from '../../../middleware/shared/utils/target-capabilities/runtime-kind'
 import type { TargetCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
 import { findVppDeviceByBoardName } from './find-vpp-device'
@@ -112,6 +114,9 @@ export interface BoardInfoResolverConfig {
    *  lands on web, at which point its adapter overrides with
    *  whatever its package-storage scheme requires. */
   resolvePackageRelativePath: (packagePath: string, relPath: string) => string
+  /** Text of a file inside an installed package, at a package-relative path; throws when it cannot be read.
+   *  Absent → no package screen is read, so a device is per-UART aware only through `rs485FixedPins`. */
+  readPackageFile?: (pkg: InstalledPackage, relPath: string) => string
 }
 
 /**
@@ -233,6 +238,10 @@ export interface BoardBuildInfo {
   defaultSerial?: string
   /** TCP carriers the board can bring up, from `networkInterfaces`. */
   networkInterfaces?: string[]
+  /** RS-485 enable pin the package fixes per UART, from `rs485FixedPins`. */
+  rs485FixedPins?: Record<string, string>
+  /** True when the device's Serial screen has a `uart-pin-map` field or the device declares `rs485FixedPins`. */
+  perUartAware: boolean
   /** Per-pin pull-up/pull-down rules, from `defaults.pins.pull`. */
   pinPull?: PinPullSpec
 
@@ -248,14 +257,22 @@ export interface BoardBuildInfo {
 // Resolver
 // ---------------------------------------------------------------------------
 
+/** Thrown by `BoardInfoResolver.resolve` when neither hals.json nor an installed VPP package has the board. */
+export class BoardNotFoundError extends Error {
+  constructor(readonly boardName: string) {
+    super(`Board "${boardName}" not found in hals.json or any installed VPP package`)
+    this.name = 'BoardNotFoundError'
+  }
+}
+
 export class BoardInfoResolver {
   constructor(private readonly config: BoardInfoResolverConfig) {}
 
   /**
    * Resolve a board name to its uniform build-info shape.  Throws
-   * when the board isn't found in either catalog — callers expecting
-   * a missing board to be a soft failure should `try/catch` and
-   * fall back to their own error handling.
+   * `BoardNotFoundError` when the board isn't found in either catalog,
+   * and an `Error` naming the board, package and file when a Serial
+   * screen the VPP device declares cannot be read or parsed.
    */
   resolve(boardName: string): BoardBuildInfo {
     const fromHals = this.#tryHalsLookup(boardName)
@@ -264,7 +281,7 @@ export class BoardInfoResolver {
     const fromVpp = this.#tryVppLookup(boardName)
     if (fromVpp) return this.#withFlags(boardName, fromVpp)
 
-    throw new Error(`Board "${boardName}" not found in hals.json or any installed VPP package`)
+    throw new BoardNotFoundError(boardName)
   }
 
   #tryHalsLookup(
@@ -281,6 +298,7 @@ export class BoardInfoResolver {
     const info: Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> = {
       source: 'hals',
       compiler: entry.compiler,
+      perUartAware: false,
     }
     if (entry.core) info.core = entry.core
     if (entry.platform) info.platform = entry.platform
@@ -300,20 +318,27 @@ export class BoardInfoResolver {
     boardName: string,
   ): Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> | null {
     const match = findVppDeviceByBoardName(this.config.packageManager, boardName)
-    return match ? this.#fromVppDevice(match.device, match.pkg, match.manifest) : null
+    return match ? this.#fromVppDevice(boardName, match.device, match.pkg, match.manifest) : null
   }
 
   #fromVppDevice(
+    boardName: string,
     device: PackageManifest['devices'][number],
     pkg: InstalledPackage,
     manifest: PackageManifest,
   ): Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> {
+    const hardware = boardHardwareFromManifestDevice(device)
     const info: Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> = {
       source: 'vpp',
       compiler: this.#mapTargetTypeToCompiler(device.target.type),
       vppPackageId: manifest.package.id,
       vppDeviceId: device.id,
       vppPackagePath: pkg.path,
+      ...hardware,
+      perUartAware: isRs485PerUartAware({
+        rs485FixedPins: hardware.rs485FixedPins,
+        serialScreen: hardware.rs485FixedPins ? undefined : this.#readSerialScreen(boardName, device, pkg),
+      }),
     }
     if (device.target.core) info.core = device.target.core
     if (device.target.platform) info.platform = device.target.platform
@@ -329,9 +354,6 @@ export class BoardInfoResolver {
     // compile side never received them, so the emitter had no way to know what
     // the board can actually serve over.
     if (device.screens) info.vppScreenNames = Object.keys(device.screens)
-    if (device.serialPorts) info.serialPorts = device.serialPorts
-    if (device.defaultSerial) info.defaultSerial = device.defaultSerial
-    if (device.networkInterfaces) info.networkInterfaces = device.networkInterfaces
     if (device.defaults?.pins?.pull) info.pinPull = device.defaults.pins.pull
 
     const resolveRel = this.config.resolvePackageRelativePath
@@ -368,6 +390,27 @@ export class BoardInfoResolver {
     }
     if (device.debug) info.debug = device.debug
     return info
+  }
+
+  /**
+   * Parsed Serial screen definition of `device`, or `undefined` when no reader is configured or the device
+   * declares no Serial screen.
+   * @throws Error naming the board, the package and the screen's path when the screen cannot be read or parsed.
+   */
+  #readSerialScreen(boardName: string, device: PackageManifest['devices'][number], pkg: InstalledPackage): unknown {
+    const read = this.config.readPackageFile
+    const screenName = findSerialScreenName(device.screens)
+    if (!read || !device.screens || screenName === undefined) return undefined
+    const relPath = device.screens[screenName]
+    try {
+      const screen: unknown = JSON.parse(read(pkg, relPath))
+      return screen
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `Board "${boardName}": cannot read the Serial screen "${relPath}" of package ${pkg.packageId}: ${cause}`,
+      )
+    }
   }
 
   /** Add runtime-classification flags + `boardRuntime` mirror on

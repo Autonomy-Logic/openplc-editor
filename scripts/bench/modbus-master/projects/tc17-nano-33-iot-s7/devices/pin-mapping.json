@@ -1,0 +1,9 @@
+{
+  "Nano 33 IoT": [
+    {
+      "pin": "7",
+      "pinType": "digitalOutput",
+      "address": "%QX0.0"
+    }
+  ]
+}

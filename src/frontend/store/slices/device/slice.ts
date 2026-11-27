@@ -3,6 +3,10 @@ import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { DEFAULT_RETAIN_FLUSH_SECONDS } from '../../../../middleware/shared/ports/types'
+import {
+  SERIAL_SCREEN_STATE_KEY,
+  withoutLegacyRs485Pin,
+} from '../../../../middleware/shared/utils/modbus-master-profile'
 import { DEVICE_SETUP_KEY, IO_MAPPING_KEY, MODULE_CONFIGURATION_KEY } from '../../../utils/vpp/persistence-keys'
 import { defaultDeviceConfiguration } from './data/types'
 import type { DeviceLicenseInfo, DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
@@ -876,7 +880,8 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           if (!deviceDefinitions.configuration.vendorScreenData) {
             deviceDefinitions.configuration.vendorScreenData = {}
           }
-          deviceDefinitions.configuration.vendorScreenData[persistenceKey] = data
+          deviceDefinitions.configuration.vendorScreenData[persistenceKey] =
+            persistenceKey === SERIAL_SCREEN_STATE_KEY ? withoutLegacyRs485Pin(data) : data
           syncActiveBoardVendorBucket(deviceDefinitions.configuration)
         }),
       )

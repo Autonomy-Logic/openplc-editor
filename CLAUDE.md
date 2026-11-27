@@ -76,6 +76,7 @@ npm run test:hmi-baremetal # HMI baremetal host in simulated time and the readou
 npm run test:hmi-client  # Runtime v4 HMI artefact: hmi.wasm driven as the browser does, same pixels as a native build
 
 npm run validate:arch    # Architecture layer dependency validation
+npm run bench:hostile-slave -- --scenario <name> ...   # Scripted Modbus slave for bench runs (scripts/bench/modbus-hostile-slave/README.md)
 ```
 
 ## Verify before pushing (CI parity)
@@ -170,13 +171,14 @@ This is a recorded exception, not a precedent: see `docs/release-hardening.md`.
 
 `ci-e2e-debug-lock.yml` runs the `debug-*` specs on every pull request; every other
 spec is a local check. `e2e/` drives the real Electron app through `_electron.launch`,
-and three things bite before any assertion:
+and these things bite before any assertion:
 
 ```bash
 npm run setup:python                                   # the Python runtime the simulator runs, if not installed
 OPENPLC_E2E_DEBUG_SEAM=1 npm run build                 # main + renderer
 mkdir -p release/app/configs/dll
 cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
+mkdir -p release/app/dist/main/node_modules && ln -sfn "$PWD/node_modules/strucpp" release/app/dist/main/node_modules/strucpp
 npx playwright test e2e/<spec>.ts --workers=1
 ```
 
@@ -189,6 +191,10 @@ and closes a debug session with no PLC attached. Any other build drops the branc
   looks under `release/app/configs/dll/` - a path `npm run build` never writes. Without
   it the window renders blank and the only clue is `Cannot read properties of undefined
   (reading 'onSimulatorStopped')` in the renderer console.
+- **The STruC++ link is required for a spec that builds a project.** The build reads the
+  STruC++ runtime headers and libraries from `<app path>/node_modules/strucpp`. For a suite
+  launching `release/app/dist/main/main.js` that path is under `release/app/dist/main/`, which
+  `npm run build` never writes, so without the link the build fails for want of the headers.
 - **Do not set `NODE_ENV=development`.** `resolveHtmlPath` would point the window at the
   webpack dev server on `localhost:1212`, which is not running against a built app.
 - **`firstWindow()` returns the splash**, which then closes. Poll `app.windows()` for the
@@ -483,6 +489,21 @@ exactly one slave, so `selectModbusServer` refuses a build with more than one
 enabled server. `DEBUG_BAUD` comes from `screens.serial.baud_rate` and
 `DEBUG_SLAVE` is the constant 1.
 
+The RS-485 enable pin is per UART. `resolveRs485Pins`
+(`src/middleware/shared/utils/modbus-master-profile/rs485-pins.ts`) is the one source for the Serial
+screen and for `MBSERIAL_TXPIN` (the pin of the RTU server's UART): on a per-UART aware board
+(`BoardBuildInfo.perUartAware`: its Serial screen has a `uart-pin-map` field or the device declares
+`rs485FixedPins`; a declared Serial screen that cannot be read or parsed fails the board's resolution, naming the
+board, the package and the file) the package's fixed pins win, then `serial.rs485_en_pins`, then a 4.3.x project's
+`rs485_en_pin` on the RTU server's UART until `rs485_en_pins` is first written, when the store drops the
+legacy pair; a legacy board puts `rs485_en_pin` on the RTU server's UART. Only pins matching
+`^[A-Z]{0,2}\d{1,3}$` reach `defines.h` and `vpp_config.h`; a 4.3.x project's `rs485_en_pin` is trimmed before
+that check, while `rs485_en_pins` entries are checked as entered. The pre-build check reads the stored pin of each
+UART an RTU remote device uses (`storedRs485Pins`), before the pattern filter, so a stored pin that fails the
+pattern refuses a baremetal build, naming the UART. Board hardware fields (`serialPorts`,
+`defaultSerial`, `networkInterfaces`, `rs485FixedPins`) come from `boardHardwareFromManifestDevice`
+(`src/middleware/shared/utils/board-hardware/from-manifest-device.ts`) on both platforms.
+
 With one UART for both (no `MBSERIAL_ON_SECONDARY`), the firmware answers two ids on it, routed by
 function code (`handle_serial_port` in `resources/sources/Baremetal/modbus_serial.cpp`): the editor's id
 (`MB_EDITOR_SLAVE`, equal to `DEBUG_SLAVE`) carries only the editor function codes 0x41-0x4E, board ID
@@ -494,6 +515,25 @@ both, and a build without the debugger (`MB_EDITOR_SLAVE` undefined) uses the se
 With `MBSERIAL_ON_SECONDARY`, the default UART answers only `DEBUG_SLAVE` and the secondary UART only
 `MBSERIAL_SLAVE`.
 
+The Modbus master (remote devices) reaches baremetal firmware as `src/modbus_master_config.h`, never
+through `defines.h`. `generateModbusMasterHeader` (`src/frontend/utils/modbus-master/generate-modbus-master-header.ts`)
+writes `static const` endpoint, bus, device, group and point tables against the record types of
+`resources/sources/arduino/modbus_master_types.h`: one endpoint per `endpointKey` (IPv4 octets and port,
+smallest timeout, the devices' common Reconnect), one bus per board UART (smallest timeout, the RS-485 pin from
+`resolveRs485Pins`). It validates every value itself with `modbus-master-profile/fields.ts` and returns issues
+instead of a header; device and group names appear only inside comments. The pipeline generates it only on
+baremetal for a project with Modbus remote devices; every other build keeps the skeleton stub
+`resources/sources/arduino/modbus_master_config.h` (`MB_MASTER_ENABLED 0`).
+
+The firmware's master is `resources/sources/Baremetal/modbus_master.{h,cpp}` (run state, scheduling, group
+splitting, response validation, error handling, once-per-scan commit before `runtime_plc_cycle()`),
+`modbus_master_tcp.{h,cpp}` (MBAP over `bm_net::Connection`, Reconnect) and `modbus_master_rtu.{h,cpp}` (one
+request in flight per UART, transmit handed to the UART without waiting, frames checked byte by byte and accepted
+after 3.5 characters of silence); `baremetal_net` is still the only file that names a network class, and its master
+slots sit outside the listeners' pool. `modbus_rs485.{h,cpp}` drives the RS-485 enable pin and the CONTROLLINO
+transceivers for both the RTU master and the Modbus RTU server. Layering, the never-block rules and the per-core
+connect and UART mechanisms are in `resources/sources/Baremetal/ARCHITECTURE.md`.
+
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 **Pre-build gates.** `evaluateVppBackplaneGate`
@@ -503,6 +543,17 @@ host whose vPLCs provide the vendor boards; the vPLC reports `backplaneAccess: f
 is `null` or differs from the board's. In `src/frontend/components/_organisms/workspace-activity-bar/default.tsx`,
 `handleBuild` runs it before `evaluatePreBuildPlcGate`, and `handleMd5Verification` runs it before offering an upload.
 It is inert in the editor (no orchestrator devices) and kept so the shared surface stays byte-identical with openplc-web.
+
+`checkModbusMaster` (`src/middleware/shared/utils/modbus-master-profile/checks.ts`) runs in the pipeline's
+`validate` stage on every build, GUI and CLI alike: its errors stop the build, its warnings go to the console.
+Runtime v3 only warns that remote devices are ignored. The Simulator refuses devices on one endpoint that disagree
+on Reconnect and devices on one serial port that disagree on line settings, and warns that it ignores remote
+devices. Runtime v4 also refuses a transport it does not offer. Baremetal also refuses an RTU device on the
+debugger's or the Modbus RTU server's UART, a host that is not IPv4, a UART the board lacks, TCP without the
+network (`OPLC_NET_ENABLED`, `isBuildNetworkEnabled`), a field out of range and a bad RS-485 pin, and warns when
+the TCP endpoints exceed the board's `networkSockets`. A remote device that is not a Modbus device (EtherCAT) gets
+a baremetal warning naming it, and the build ignores it and continues. Switching to a baremetal board that cannot run a device
+opens a dialog saying it stays in the project and the build is refused until it is fixed or removed.
 
 ### WebAssembly toolchain
 
@@ -888,8 +939,9 @@ openplc-web). Pure functions, no IPC, no electron coupling.
 
 - **Address pool** (`address-pool.ts`): producer-only, target-scoped
   view of every claimed IEC address. Producers = pin mapping, VPP
-  module slots, Modbus TCP remote IO points, EtherCAT channel
-  mappings. Capability scoping comes from `target-capabilities` —
+  module slots, Modbus remote-device IO points (active when the target
+  runs the TCP or the RTU master), EtherCAT channel mappings.
+  Capability scoping comes from `target-capabilities` —
   switching targets activates / deactivates entire producers.
   - Reservation pass: pin-mapping (Arduino-style fixed addresses).
   - Allocation pass: every other producer in deterministic order.

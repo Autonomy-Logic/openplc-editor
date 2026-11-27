@@ -10,7 +10,9 @@ const caps = (over: Partial<TargetCapabilities> = {}): TargetCapabilities =>
   ({
     pinMapping: false,
     vppIo: false,
-    modbusTcpRemote: false,
+    modbusTcpMaster: false,
+    modbusRtuMaster: false,
+    networkSockets: null,
     ethercat: false,
     modbusTcpServer: false,
     opcuaServer: false,

@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
+#ifndef MODBUS_MASTER_CONFIG_H
+#define MODBUS_MASTER_CONFIG_H
+
+#define MB_MASTER_ENABLED 0
+#define MB_MASTER_TCP_ENABLED 0
+#define MB_MASTER_RTU_ENABLED 0
+#define MB_MASTER_ENDPOINT_COUNT 0
+#define MB_MASTER_BUS_COUNT 0
+#define MB_MASTER_DEVICE_COUNT 0
+#define MB_MASTER_GROUP_COUNT 0
+#define MB_MASTER_POINT_COUNT 0
+
+#endif

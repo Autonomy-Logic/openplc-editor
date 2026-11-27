@@ -111,6 +111,9 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
             }
         #endif
         WiFi.begin(MBTCP_SSID, MBTCP_PWD);
+        #if defined(BOARD_ESP32)
+            WiFi.setSleep(false);
+        #endif
         int num_tries = 0;
         while (WiFi.status() != WL_CONNECTED)
         {

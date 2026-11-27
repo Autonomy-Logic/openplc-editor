@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "name": "tc28-shared-timeout",
+    "type": "plc-project"
+  },
+  "data": {
+    "dataTypes": [],
+    "pous": [],
+    "configuration": {
+      "resource": {
+        "tasks": [
+          {
+            "name": "task0",
+            "triggering": "Cyclic",
+            "interval": "T#20ms",
+            "priority": 1
+          }
+        ],
+        "instances": [
+          {
+            "name": "instance0",
+            "program": "main",
+            "task": "task0"
+          }
+        ],
+        "globalVariables": []
+      }
+    },
+    "libraries": [],
+    "debugVariables": {
+      "global": [],
+      "pous": {
+        "main": [
+          "scan_toggle",
+          "a_0",
+          "a_1",
+          "b_0",
+          "b_1"
+        ]
+      }
+    }
+  }
+}

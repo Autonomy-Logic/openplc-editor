@@ -1,0 +1,41 @@
+{
+  "name": "Present",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "rtu",
+    "serialPort": "Serial1",
+    "baudRate": 19200,
+    "parity": "N",
+    "stopBits": 1,
+    "dataBits": 8,
+    "timeout": 200,
+    "slaveId": 1,
+    "ioGroups": [
+      {
+        "id": "present",
+        "name": "present",
+        "functionCode": "3",
+        "cycleTime": 1000,
+        "offset": "0",
+        "length": 2,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "present_0",
+            "name": "present_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW1",
+            "alias": "MB_PRESENT_0"
+          },
+          {
+            "id": "present_1",
+            "name": "present_1",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW2",
+            "alias": "MB_PRESENT_1"
+          }
+        ]
+      }
+    ]
+  }
+}

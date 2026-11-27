@@ -1,4 +1,9 @@
 import type { ModbusIOGroup, PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
+import {
+  DEFAULT_REMOTE_DEVICE_HOST,
+  DEFAULT_REMOTE_DEVICE_PORT,
+  resolveReconnect,
+} from '../../../../middleware/shared/utils/modbus-master-profile'
 
 interface ModbusMasterIOPoint {
   fc: number
@@ -28,6 +33,8 @@ interface ModbusMasterTcpDeviceConfig extends ModbusMasterDeviceConfigBase {
   transport: 'tcp'
   host: string
   port: number
+  /** Retry a failed or lost connection instead of giving the device up. */
+  reconnect: boolean
 }
 
 // RTU-specific config
@@ -154,8 +161,9 @@ const convertRemoteDeviceToModbusMaster = (
       config: {
         type: 'SLAVE',
         transport: 'tcp',
-        host: modbusTcpConfig.host ?? '127.0.0.1',
-        port: modbusTcpConfig.port ?? 502,
+        host: modbusTcpConfig.host ?? DEFAULT_REMOTE_DEVICE_HOST,
+        port: modbusTcpConfig.port ?? DEFAULT_REMOTE_DEVICE_PORT,
+        reconnect: resolveReconnect(modbusTcpConfig),
         timeout_ms: modbusTcpConfig.timeout,
         slave_id: modbusTcpConfig.slaveId ?? 1,
         io_points: ioPoints,
