@@ -33,7 +33,7 @@ import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
 import { pickContentForSave } from '../utils/version-control-content'
 import { serializeOwnedSlice } from '../utils/vpp/owned-slice'
-import { collectLinkedScreenKeys, linkedScreenNames } from '../utils/vpp/persistence-keys'
+import { collectLinkedScreenKeys, IO_MAPPING_KEY, linkedScreenNames } from '../utils/vpp/persistence-keys'
 import { isSaveBlockedByEndedSession, resumeSaveAfterEdgeSignIn } from './resume-save-after-sign-in'
 import { executeSaveProjectAs } from './save-project-as'
 
@@ -499,6 +499,7 @@ export async function executeSaveProject(
 
       state.projectActions.clearPendingDeletions()
       state.projectActions.setDataTypesNeedMigration(false)
+      state.projectActions.clearMovedAddressFiles()
       setEditingState(staleFlows.length > 0 ? 'unsaved' : 'saved')
       setAllToSaved()
       markAllSaved(staleFlows)
@@ -605,6 +606,76 @@ async function migrateDataTypesToFiles(
   const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), indexSpec.content)
   if (res.success) written.push(indexSpec)
   return { ...res, written }
+}
+
+/** File types whose save writes producer IEC addresses. */
+const ADDRESS_FILE_TYPES: ReadonlySet<string> = new Set(['remote-device', 'ethercat-device', 'vendor-screen', 'device'])
+
+/** Vendor screens of the active board whose save writes the VPP I/O mapping. */
+function vendorIoMappingScreenNames(state: RootState): string[] {
+  const screens = boardScreens(state) ?? {}
+  return Object.keys(screens).filter((name) => vendorScreenOwnedKeysFor(state, name).includes(IO_MAPPING_KEY))
+}
+
+/**
+ * Writes the files whose addresses a recompute moved (`movedAddressFiles`), beside `fileName` that was just
+ * written, and marks them saved. Saving one of them alone would leave the others on disk at their old addresses.
+ */
+async function saveMovedAddressFiles(
+  store: OpenPLCStore,
+  projectPort: ProjectPort,
+  fileName: string,
+  file: { type: string | null; filePath: string },
+): Promise<SaveResult & { written: ProjectFileSpec[] }> {
+  const state = store.getState()
+  const { remoteDevices, vendorIoMapping } = state.movedAddressFiles
+  const projectPath = state.project.meta.path
+  const written: ProjectFileSpec[] = []
+  const justWritten = file.type === 'ethercat-device' ? file.filePath : file.type === 'remote-device' ? fileName : null
+
+  const writtenDevices: string[] = []
+  for (const name of remoteDevices) {
+    if (name === justWritten) continue
+    const [spec] = serializeProjectFile(name, { type: 'remote-device', filePath: name }, state)
+    if (!spec) continue
+    const res = await projectPort.saveFile(joinPath(projectPath, spec.path), spec.content)
+    if (!res.success) return { ...res, written }
+    written.push(spec)
+    writtenDevices.push(name)
+  }
+
+  const ioScreens = vendorIoMappingScreenNames(state)
+  const savedMapping =
+    file.type === 'device' ||
+    (file.type === 'vendor-screen' && vendorScreenOwnedKeysFor(state, fileName).includes(IO_MAPPING_KEY))
+  if (vendorIoMapping && !savedMapping) {
+    const keys =
+      ioScreens.length > 0
+        ? Array.from(new Set(ioScreens.flatMap((name) => vendorScreenOwnedKeysFor(state, name))))
+        : [IO_MAPPING_KEY]
+    const res = await saveVendorKeysOnly(projectPath, projectPort, state, keys)
+    if (!res.success) return { ...res, written }
+  }
+
+  const { updateFile, getFile } = state.fileActions
+  for (const [name, entry] of Object.entries(state.files)) {
+    const busWritten =
+      writtenDevices.includes(name) || (entry.type === 'ethercat-device' && writtenDevices.includes(entry.filePath))
+    if (busWritten) updateFile({ name, saved: true, isNew: false })
+  }
+  if (vendorIoMapping && !savedMapping) {
+    for (const name of ioScreens) {
+      if (!getFile({ name }).file) continue
+      updateFile({
+        name,
+        saved: true,
+        isNew: false,
+        cleanState: serializeVendorScreenSlice(state, vendorScreenOwnedKeysFor(state, name)),
+      })
+    }
+  }
+  state.projectActions.clearMovedAddressFiles()
+  return { success: true, written }
 }
 
 export async function executeSaveFile(
@@ -779,6 +850,12 @@ export async function executeSaveFile(
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), spec.content)
       if (!res.success) return failedWrite(res)
+    }
+
+    if (ADDRESS_FILE_TYPES.has(file.type ?? '')) {
+      const coupled = await saveMovedAddressFiles(store, projectPort, fileName, file)
+      if (!coupled.success) return failedWrite(coupled)
+      recordedSpecs = [...recordedSpecs, ...coupled.written]
     }
 
     if (recordedSpecs.length > 0) {
@@ -1069,8 +1146,17 @@ async function saveVendorScreenOnly(
   state: RootState,
   screenName: string,
 ): Promise<{ success: boolean; error?: string }> {
+  return saveVendorKeysOnly(projectPath, projectPort, state, vendorScreenOwnedKeysFor(state, screenName))
+}
+
+/** Writes only `ownedKeys` of `vendorScreenData` into `devices/configuration.json`, keeping the rest of the file on disk. */
+async function saveVendorKeysOnly(
+  projectPath: string,
+  projectPort: ProjectPort,
+  state: RootState,
+  ownedKeys: string[],
+): Promise<{ success: boolean; error?: string }> {
   const fullPath = joinPath(projectPath, 'devices/configuration.json')
-  const ownedKeys = vendorScreenOwnedKeysFor(state, screenName)
   if (ownedKeys.length === 0) {
     // Nothing to write — treat as success so the tab still closes.
     return { success: true }
@@ -1142,6 +1228,7 @@ function reloadVendorScreenFromCleanState(store: OpenPLCStore, fileName: string)
     const definitionKeys = vendorScreenOwnedKeysFor(state, fileName)
     const ownedKeys = Array.from(new Set([...Object.keys(snapshot), ...definitionKeys]))
     state.deviceActions.restoreVendorScreenSlice(ownedKeys, snapshot)
+    if (ownedKeys.includes(IO_MAPPING_KEY)) store.getState().projectActions.recalculateIecAddresses()
     return { success: true }
   } catch {
     return { success: false }

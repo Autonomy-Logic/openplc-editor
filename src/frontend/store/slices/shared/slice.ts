@@ -1194,6 +1194,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().consoleActions.addLog({ level: 'warning', message: describeAliasRename(repair) })
       }
 
+      const addressRepair = getState().projectActions.repairIecAddressConflicts()
+
       {
         const reclassState = getState()
         const {
@@ -1377,6 +1379,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       if (aliasRepairs.length > 0) {
         getState().fileActions.setAllToUnsaved()
+      }
+      if (addressRepair.conflicts.length > 0) {
+        const { remoteDevices, vendorIoMapping } = getState().movedAddressFiles
+        for (const name of [...remoteDevices, ...(vendorIoMapping ? ['Configuration'] : [])]) {
+          getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+        }
       }
 
       if (data.meta.type === 'plc-library') {

@@ -20,6 +20,8 @@ import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice } from '../slices/device'
 import { createEditorSlice } from '../slices/editor'
 import { createLibrarySlice } from '../slices/library'
+import { createFileSlice } from '../slices/file'
+import { createWorkspaceSlice } from '../slices/workspace'
 import { createProjectSlice } from '../slices/project/slice'
 import type { ProjectSliceRoot } from '../slices/project/types'
 
@@ -30,6 +32,8 @@ const makeStore = () =>
     ...createConsoleSlice(...a),
     ...createEditorSlice(...a),
     ...createLibrarySlice(...a),
+    ...createFileSlice(...a),
+    ...createWorkspaceSlice(...a),
   }))
 
 const seedServer = (s: ReturnType<typeof makeStore>) => {

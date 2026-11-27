@@ -13,6 +13,8 @@ import { createConsoleSlice } from '../../../../frontend/store/slices/console'
 import { createDeviceSlice } from '../../../../frontend/store/slices/device'
 import { createEditorSlice } from '../../../../frontend/store/slices/editor'
 import { createLibrarySlice } from '../../../../frontend/store/slices/library'
+import { createFileSlice } from '../../../../frontend/store/slices/file'
+import { createWorkspaceSlice } from '../../../../frontend/store/slices/workspace'
 import { createProjectSlice } from '../../../../frontend/store/slices/project/slice'
 import type { ProjectSliceRoot } from '../../../../frontend/store/slices/project/types'
 import { computeIoImage, IMAGE_AREAS_RUNTIME_V4 } from '../steps/compute-io-image'
@@ -25,6 +27,8 @@ const makeStore = () =>
     ...createConsoleSlice(...a),
     ...createEditorSlice(...a),
     ...createLibrarySlice(...a),
+    ...createFileSlice(...a),
+    ...createWorkspaceSlice(...a),
   }))
 
 const RUNTIME_V4: BoardInfo = {

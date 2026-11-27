@@ -26,6 +26,8 @@ import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice } from '../slices/device'
 import { createEditorSlice } from '../slices/editor'
 import { createLibrarySlice } from '../slices/library'
+import { createFileSlice } from '../slices/file'
+import { createWorkspaceSlice } from '../slices/workspace'
 import { createProjectSlice } from '../slices/project/slice'
 import type { ProjectSliceRoot, ProjectState } from '../slices/project/types'
 
@@ -41,6 +43,8 @@ function makeStore() {
     ...createConsoleSlice(...args),
     ...createEditorSlice(...args),
     ...createLibrarySlice(...args),
+    ...createFileSlice(...args),
+    ...createWorkspaceSlice(...args),
   }))
 }
 

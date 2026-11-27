@@ -30,6 +30,7 @@ import type {
 } from '../../../../middleware/shared/ports/types'
 import type { HmiElementKind } from '../../../../middleware/shared/utils/hmi/references'
 import type { HmiSettings } from '../../../../middleware/shared/utils/hmi/settings'
+import type { ConflictReport } from '../../../../middleware/shared/utils/iec-address'
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -211,6 +212,10 @@ export type ProjectActions = {
   /** Repair aliases saved before they had to be IEC identifiers; returns what it changed. */
   normalizeProjectAliases: () => { repairs: Array<{ from: string; to: string; reason: string }> }
   recalculateIecAddresses: () => ProjectResponse
+  /** Reassigns the producers when two of them claim the same address; returns the claims it found doubled. */
+  repairIecAddressConflicts: () => { conflicts: readonly ConflictReport[] }
+  /** Forgets the files `movedAddressFiles` lists, once they are written. */
+  clearMovedAddressFiles: () => void
 
   /**
    * Record (or clear, when `alias` is empty) an alias in the session memory
@@ -461,8 +466,13 @@ export type ProjectSlice = {
    * on project load; only current addresses/aliases are saved to disk.
    */
   iecAliasMemory: Record<string, string>
+  /** Files whose IEC addresses a recompute moved since they were last written. */
+  movedAddressFiles: MovedAddressFiles
   projectActions: ProjectActions
 }
+
+/** Files holding producer addresses: remote device files by name, and the VPP I/O mapping of the device configuration. */
+export type MovedAddressFiles = { remoteDevices: string[]; vendorIoMapping: boolean }
 
 /**
  * Cross-slice root-state view the project slice needs at runtime —
@@ -479,6 +489,14 @@ export type ProjectSlice = {
 import type { ConsoleSlice } from '../console'
 import type { DeviceSlice } from '../device'
 import type { EditorSlice } from '../editor/types'
+import type { FileSlice } from '../file/types'
 import type { LibrarySlice } from '../library/types'
+import type { WorkspaceSlice } from '../workspace/types'
 
-export type ProjectSliceRoot = ProjectSlice & DeviceSlice & ConsoleSlice & EditorSlice & LibrarySlice
+export type ProjectSliceRoot = ProjectSlice &
+  DeviceSlice &
+  ConsoleSlice &
+  EditorSlice &
+  LibrarySlice &
+  FileSlice &
+  WorkspaceSlice

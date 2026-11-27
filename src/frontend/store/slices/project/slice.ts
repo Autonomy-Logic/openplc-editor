@@ -22,6 +22,7 @@ import {
   describeAliasRejection,
   nextFreeAddress,
   resolveProjectAliases,
+  type SourceRef,
   validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
 import { planAliasNormalization } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
@@ -56,6 +57,7 @@ import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-varia
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import { parseVariableDeclarations } from '../../../utils/PLC/variable-declarations'
 import { applyVariablesToText } from '../../../utils/variable-text-edits'
+import { collectScreenPersistenceKeys, IO_MAPPING_KEY } from '../../../utils/vpp/persistence-keys'
 import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
@@ -472,6 +474,49 @@ function buildIecRegistry(live: ProjectSliceRoot): IecAddressRegistry {
   const activeKinds = activeKindsForAllocation(live)
   const unpinned = unpinAllocatableChannels(restored, ALLOCATED_KINDS)
   return recalculateRegistry(unpinned, activeKinds ? { activeKinds } : {}).registry
+}
+
+/** Key of the VPP I/O mapping in `producerAddressesByFile`; remote devices are keyed by their name. */
+const VENDOR_IO_MAPPING_FILE = '\u0000vendor-io-mapping'
+
+/** Every producer address, joined per file that stores it: a remote device by name, the VPP I/O mapping by `VENDOR_IO_MAPPING_FILE`. */
+function producerAddressesByFile(live: ProjectSliceRoot): Map<string, string> {
+  const byFile = new Map<string, string>()
+  byFile.set(
+    VENDOR_IO_MAPPING_FILE,
+    readVppEntries(live)
+      .map((entry) => entry.iecAddress)
+      .join(','),
+  )
+  for (const device of live.project.data.remoteDevices ?? []) {
+    const addresses: string[] = []
+    for (const group of device.modbusTcpConfig?.ioGroups ?? []) {
+      for (const point of group.ioPoints ?? []) addresses.push(point.iecLocation)
+    }
+    for (const slave of device.ethercatConfig?.devices ?? []) {
+      for (const mapping of slave.channelMappings ?? []) addresses.push(mapping.iecLocation)
+      for (const module of slave.modules ?? []) {
+        for (const mapping of module.channelMappings ?? []) addresses.push(mapping.iecLocation)
+      }
+    }
+    byFile.set(device.name, addresses.join(','))
+  }
+  return byFile
+}
+
+/** Names of the board's vendor screens whose save writes the VPP I/O mapping. */
+function vendorIoMappingScreens(live: ProjectSliceRoot): string[] {
+  const board = live.deviceAvailableOptions.availableBoards.get(live.deviceDefinitions.configuration.deviceBoard ?? '')
+  const screens: Record<string, unknown> = board?.vpp?.screens ?? {}
+  return Object.keys(screens).filter((name) => collectScreenPersistenceKeys(screens[name]).includes(IO_MAPPING_KEY))
+}
+
+/** Human-readable owner of a pool claim, for the load-time collision warning. */
+function describeClaimSource(source: SourceRef): string {
+  if (source.kind === 'vpp-io') return `I/O module ${source.ref.split(':')[0].replace('slot-', 'slot ')}`
+  if (source.kind === 'pin-mapping') return `pin ${source.ref}`
+  if (source.kind === 'ethercat') return source.ref.split(':')[0]
+  return source.ref.slice(0, source.ref.lastIndexOf(':'))
 }
 
 /**
@@ -1004,6 +1049,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
   unparsedDataTypeFiles: [],
   dataTypesNeedMigration: false,
   iecAliasMemory: {},
+  movedAddressFiles: { remoteDevices: [], vendorIoMapping: false },
 
   projectActions: {
     // -----------------------------------------------------------------------
@@ -1043,6 +1089,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           // Session alias-memory is per-project; drop it on a fresh slate so
           // one project's remembered aliases can't leak into the next.
           slice.iecAliasMemory = {}
+          slice.movedAddressFiles = { remoteDevices: [], vendorIoMapping: false }
         }),
       )
     },
@@ -2642,6 +2689,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // `renameAlias`, called by the alias editors.
       const live = getState()
       warnIfTargetUnresolved(live)
+      const before = producerAddressesByFile(live)
       const registry = buildIecRegistry(live)
       const index = indexRegistry(registry)
 
@@ -2665,7 +2713,64 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           applyEthercatAddresses(slice.project.data.remoteDevices, index)
         }),
       )
+
+      const after = producerAddressesByFile(getState())
+      const moved = [...after].filter(([file, addresses]) => before.has(file) && before.get(file) !== addresses)
+      if (moved.length > 0) {
+        const vendorIoMapping = moved.some(([file]) => file === VENDOR_IO_MAPPING_FILE)
+        const remoteDevices = moved.map(([file]) => file).filter((file) => file !== VENDOR_IO_MAPPING_FILE)
+        setState(
+          produce((slice: ProjectSlice) => {
+            for (const name of remoteDevices) {
+              if (!slice.movedAddressFiles.remoteDevices.includes(name))
+                slice.movedAddressFiles.remoteDevices.push(name)
+            }
+            if (vendorIoMapping) slice.movedAddressFiles.vendorIoMapping = true
+          }),
+        )
+        const { fileActions, workspaceActions } = getState()
+        const openScreens = vendorIoMappingScreens(getState()).filter((name) => fileActions.getFile({ name }).file)
+        const unsaved = [
+          ...remoteDevices,
+          ...(vendorIoMapping ? (openScreens.length > 0 ? openScreens : ['Configuration']) : []),
+        ]
+        for (const name of unsaved) {
+          if (fileActions.getFile({ name }).file?.saved) fileActions.updateFile({ name, saved: false })
+        }
+        workspaceActions.setEditingState('unsaved')
+      }
       return ok()
+    },
+    repairIecAddressConflicts: () => {
+      const { conflicts } = buildModbusProducerPool(getState())
+      if (conflicts.length === 0) return { conflicts: [] }
+
+      const byOwners = new Map<string, string[]>()
+      for (const conflict of conflicts) {
+        const [first, ...others] = conflict.sources.map(describeClaimSource)
+        for (const other of others) {
+          const key = JSON.stringify([first, other])
+          byOwners.set(key, [...(byOwners.get(key) ?? []), conflict.address])
+        }
+      }
+      getState().projectActions.recalculateIecAddresses()
+      for (const [key, addresses] of byOwners) {
+        const [first, other] = JSON.parse(key) as [string, string]
+        getState().consoleActions.addLog({
+          level: 'warning',
+          message:
+            `${other} and ${first} were saved on the same I/O address (${addresses.join(', ')}). ` +
+            'The I/O addresses were reassigned so each is used once; save the project to keep them.',
+        })
+      }
+      return { conflicts }
+    },
+    clearMovedAddressFiles: () => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.movedAddressFiles = { remoteDevices: [], vendorIoMapping: false }
+        }),
+      )
     },
     rememberChannelAlias: (memoryKey, alias) => {
       // Record (or clear) an alias in the session memory keyed by the
