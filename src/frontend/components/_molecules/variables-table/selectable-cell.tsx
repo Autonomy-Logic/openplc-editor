@@ -3,7 +3,6 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { baseTypeEnum } from '../../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
@@ -13,11 +12,12 @@ import { TypeChangeValidationResult, validateTypeChange } from '../../../store/s
 import { cn } from '../../../utils/cn'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { PYTHON_UNSUPPORTED_CLASSES } from '../../../utils/python/block-interface'
-import { hasStringName, safeUpper } from '../../../utils/safe-upper'
+import { safeUpper } from '../../../utils/safe-upper'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import { TypeChangeModal } from '../type-change-modal'
 import { ArrayModal } from './elements/array-modal'
+import { buildTypePickerOptions, CLOSED_TYPE_PICKER_OPTIONS } from './type-picker-options'
 
 type ISelectableCellProps = CellContext<PLCVariable, unknown> & { selected?: boolean }
 
@@ -65,55 +65,6 @@ const SelectableTypeCell = ({
   } = useOpenPLCStore()
   const isDebuggerVisible = useIsEditingLocked()
 
-  const VariableTypes = [
-    {
-      definition: 'base-type',
-      values: baseTypeEnum.options,
-    },
-    {
-      definition: 'user-data-type',
-      values: dataTypes.filter(hasStringName).map((dataType) => dataType.name),
-    },
-  ]
-
-  const LibraryTypes = [
-    {
-      definition: 'system',
-      values: sliceLibraries.system.flatMap((library) =>
-        (library.pous ?? [])
-          .filter((pou) => pou?.type === 'function-block')
-          .filter(hasStringName)
-          .map((pou) => pou.name.toUpperCase()),
-      ),
-    },
-    {
-      definition: 'user',
-      values: sliceLibraries.user
-        .filter(hasStringName)
-        .filter((userLibrary) => userLibrary.name !== editor.meta.name)
-        .flatMap((userLibrary) => {
-          const pous = (userLibrary as { pous?: { type?: string; name?: string }[] }).pous
-          if (Array.isArray(pous)) {
-            return pous
-              .filter((pou) => pou?.type === 'function-block')
-              .filter(hasStringName)
-              .map((pou) => pou.name.toUpperCase())
-          }
-          return userLibrary.type === 'function-block' ? [userLibrary.name.toUpperCase()] : []
-        }),
-    },
-  ]
-
-  // Every language offers the same types. Python and C++ blocks used to be
-  // held to base types only, minus TIME/DATE/TOD/DT, because their bridges
-  // could not carry anything else. Both now reach IEC parity — the time and
-  // calendar types travel as 64-bit counts, arrays and user-defined types are
-  // marshalled leaf by leaf, and a variable may be a function block instance —
-  // so the table no longer has a reason to offer them less than the text
-  // editor already accepts.
-  const availableVariableTypes = VariableTypes
-  const availableLibraryTypes = LibraryTypes
-
   const { value, definition } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
@@ -134,25 +85,16 @@ const SelectableTypeCell = ({
   })
   const [libraryFilter, setLibraryFilter] = useState('')
 
-  const filteredBaseTypes =
-    availableVariableTypes
-      .find((v) => v.definition === 'base-type')
-      ?.values.filter((val) => safeUpper(val).includes(safeUpper(variableFilters['base-type']))) || []
+  // Built only while the picker is open: a closed cell in a large table must not hold the library lists.
+  const { variableTypes: availableVariableTypes, libraryTypes: availableLibraryTypes } = poppoverIsOpen
+    ? buildTypePickerOptions({ dataTypes, libraries: sliceLibraries, excludeUserLibrary: editor.meta.name })
+    : CLOSED_TYPE_PICKER_OPTIONS
 
-  const filteredUserDataTypes =
-    availableVariableTypes
-      .find((v) => v.definition === 'user-data-type')
-      ?.values.filter((val) => safeUpper(val).includes(safeUpper(variableFilters['user-data-type']))) || []
-
-  const filteredSystemLibraries =
-    availableLibraryTypes
-      .find((l) => l.definition === 'system')
-      ?.values.filter((val) => safeUpper(val).includes(safeUpper(libraryFilter))) || []
-
-  const filteredUserLibraries =
-    availableLibraryTypes
-      .find((l) => l.definition === 'user')
-      ?.values.filter((val) => safeUpper(val).includes(safeUpper(libraryFilter))) || []
+  const matches = (filter: string) => (val: string) => safeUpper(val).includes(safeUpper(filter))
+  const filteredBaseTypes = availableVariableTypes[0].values.filter(matches(variableFilters['base-type']))
+  const filteredUserDataTypes = availableVariableTypes[1].values.filter(matches(variableFilters['user-data-type']))
+  const filteredSystemLibraries = availableLibraryTypes[0].values.filter(matches(libraryFilter))
+  const filteredUserLibraries = availableLibraryTypes[1].values.filter(matches(libraryFilter))
 
   const applyTypeChange = (definition: PLCVariable['type']['definition'], value: PLCVariable['type']['value']) => {
     const language = 'language' in editor.meta ? editor.meta.language : undefined
@@ -255,13 +197,15 @@ const SelectableTypeCell = ({
             />
           )
         })()}
-      <ArrayModal
-        variableName={variableName}
-        VariableRow={index}
-        arrayModalIsOpen={arrayModalIsOpen}
-        setArrayModalIsOpen={setArrayModalIsOpen}
-        closeContainer={() => setPoppoverIsOpen(false)}
-      />
+      {arrayModalIsOpen && (
+        <ArrayModal
+          variableName={variableName}
+          VariableRow={index}
+          arrayModalIsOpen={arrayModalIsOpen}
+          setArrayModalIsOpen={setArrayModalIsOpen}
+          closeContainer={() => setPoppoverIsOpen(false)}
+        />
+      )}
       <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
         <PrimitiveDropdown.Trigger asChild disabled={isDebuggerVisible}>
           <div
@@ -280,136 +224,138 @@ const SelectableTypeCell = ({
             </span>
           </div>
         </PrimitiveDropdown.Trigger>
-        <PrimitiveDropdown.Portal>
-          <PrimitiveDropdown.Content
-            side='bottom'
-            sideOffset={-20}
-            className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-          >
-            {availableVariableTypes.map((scope) => {
-              const filterText = variableFilters[scope.definition] || ''
-              const filteredValues = scope.definition === 'base-type' ? filteredBaseTypes : filteredUserDataTypes
-              return (
-                <PrimitiveDropdown.Sub
-                  key={scope.definition}
-                  onOpenChange={() => setVariableFilters((prev) => ({ ...prev, [scope.definition]: '' }))}
-                >
-                  <PrimitiveDropdown.SubTrigger asChild>
-                    <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'>
-                      <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                        {_.startCase(scope.definition)}
-                      </span>
-                      <ArrowIcon size='md' direction='right' className='absolute right-1' />
-                    </div>
-                  </PrimitiveDropdown.SubTrigger>
-                  <PrimitiveDropdown.Portal>
-                    <PrimitiveDropdown.SubContent
-                      sideOffset={5}
-                      className='box h-fit max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
-                    >
-                      <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
-                        <InputWithRef
-                          type='text'
-                          placeholder='Search...'
-                          className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
-                          value={filterText}
-                          onChange={(e) =>
-                            setVariableFilters((prev) => ({
-                              ...prev,
-                              [scope.definition]: e.target.value,
-                            }))
-                          }
-                          onKeyDown={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      {filteredValues.length > 0 ? (
-                        filteredValues.map((value) => (
-                          <PrimitiveDropdown.Item
-                            key={value}
-                            onSelect={() => onSelect(scope.definition as PLCVariable['type']['definition'], value)}
-                            className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                          >
-                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                              {_.upperCase(value)}
-                            </span>
-                          </PrimitiveDropdown.Item>
-                        ))
-                      ) : (
-                        <div className='flex h-8 w-full items-center justify-center py-1'>
-                          <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                            No {_.startCase(scope.definition)} found
-                          </span>
-                        </div>
-                      )}
-                    </PrimitiveDropdown.SubContent>
-                  </PrimitiveDropdown.Portal>
-                </PrimitiveDropdown.Sub>
-              )
-            })}
-
-            <PrimitiveDropdown.Item
-              onSelect={() => {
-                setArrayModalIsOpen(true)
-                setPoppoverIsOpen(false)
-              }}
-              className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
+        {poppoverIsOpen && (
+          <PrimitiveDropdown.Portal>
+            <PrimitiveDropdown.Content
+              side='bottom'
+              sideOffset={-20}
+              className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
             >
-              <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
-            </PrimitiveDropdown.Item>
-
-            {availableLibraryTypes.map((scope) => {
-              const filteredValues = scope.definition === 'system' ? filteredSystemLibraries : filteredUserLibraries
-              return (
-                <PrimitiveDropdown.Sub key={scope.definition} onOpenChange={() => setLibraryFilter('')}>
-                  <PrimitiveDropdown.SubTrigger asChild>
-                    <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'>
-                      <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                        {_.startCase(scope.definition)}
-                      </span>
-                      <ArrowIcon size='md' direction='right' className='absolute right-1' />
-                    </div>
-                  </PrimitiveDropdown.SubTrigger>
-                  <PrimitiveDropdown.Portal>
-                    <PrimitiveDropdown.SubContent
-                      sideOffset={5}
-                      className='box h-fit max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
-                    >
-                      <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
-                        <InputWithRef
-                          type='text'
-                          placeholder='Search...'
-                          className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
-                          value={libraryFilter}
-                          onChange={(e) => setLibraryFilter(e.target.value)}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        />
+              {availableVariableTypes.map((scope) => {
+                const filterText = variableFilters[scope.definition] || ''
+                const filteredValues = scope.definition === 'base-type' ? filteredBaseTypes : filteredUserDataTypes
+                return (
+                  <PrimitiveDropdown.Sub
+                    key={scope.definition}
+                    onOpenChange={() => setVariableFilters((prev) => ({ ...prev, [scope.definition]: '' }))}
+                  >
+                    <PrimitiveDropdown.SubTrigger asChild>
+                      <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'>
+                        <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                          {_.startCase(scope.definition)}
+                        </span>
+                        <ArrowIcon size='md' direction='right' className='absolute right-1' />
                       </div>
-                      {filteredValues.length > 0 ? (
-                        filteredValues.map((value) => (
-                          <PrimitiveDropdown.Item
-                            key={value}
-                            onSelect={() => onSelect('derived', value)}
-                            className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                          >
-                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                              {_.upperCase(value)}
-                            </span>
-                          </PrimitiveDropdown.Item>
-                        ))
-                      ) : (
-                        <div className='flex h-8 w-full items-center justify-center py-1'>
-                          <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                            No {_.startCase(scope.definition)} found
-                          </span>
+                    </PrimitiveDropdown.SubTrigger>
+                    <PrimitiveDropdown.Portal>
+                      <PrimitiveDropdown.SubContent
+                        sideOffset={5}
+                        className='box h-fit max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
+                      >
+                        <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
+                          <InputWithRef
+                            type='text'
+                            placeholder='Search...'
+                            className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
+                            value={filterText}
+                            onChange={(e) =>
+                              setVariableFilters((prev) => ({
+                                ...prev,
+                                [scope.definition]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
                         </div>
-                      )}
-                    </PrimitiveDropdown.SubContent>
-                  </PrimitiveDropdown.Portal>
-                </PrimitiveDropdown.Sub>
-              )
-            })}
-          </PrimitiveDropdown.Content>
-        </PrimitiveDropdown.Portal>
+                        {filteredValues.length > 0 ? (
+                          filteredValues.map((value) => (
+                            <PrimitiveDropdown.Item
+                              key={value}
+                              onSelect={() => onSelect(scope.definition as PLCVariable['type']['definition'], value)}
+                              className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                            >
+                              <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                                {_.upperCase(value)}
+                              </span>
+                            </PrimitiveDropdown.Item>
+                          ))
+                        ) : (
+                          <div className='flex h-8 w-full items-center justify-center py-1'>
+                            <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                              No {_.startCase(scope.definition)} found
+                            </span>
+                          </div>
+                        )}
+                      </PrimitiveDropdown.SubContent>
+                    </PrimitiveDropdown.Portal>
+                  </PrimitiveDropdown.Sub>
+                )
+              })}
+
+              <PrimitiveDropdown.Item
+                onSelect={() => {
+                  setArrayModalIsOpen(true)
+                  setPoppoverIsOpen(false)
+                }}
+                className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
+              >
+                <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
+              </PrimitiveDropdown.Item>
+
+              {availableLibraryTypes.map((scope) => {
+                const filteredValues = scope.definition === 'system' ? filteredSystemLibraries : filteredUserLibraries
+                return (
+                  <PrimitiveDropdown.Sub key={scope.definition} onOpenChange={() => setLibraryFilter('')}>
+                    <PrimitiveDropdown.SubTrigger asChild>
+                      <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'>
+                        <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                          {_.startCase(scope.definition)}
+                        </span>
+                        <ArrowIcon size='md' direction='right' className='absolute right-1' />
+                      </div>
+                    </PrimitiveDropdown.SubTrigger>
+                    <PrimitiveDropdown.Portal>
+                      <PrimitiveDropdown.SubContent
+                        sideOffset={5}
+                        className='box h-fit max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
+                      >
+                        <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
+                          <InputWithRef
+                            type='text'
+                            placeholder='Search...'
+                            className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
+                            value={libraryFilter}
+                            onChange={(e) => setLibraryFilter(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        {filteredValues.length > 0 ? (
+                          filteredValues.map((value) => (
+                            <PrimitiveDropdown.Item
+                              key={value}
+                              onSelect={() => onSelect('derived', value)}
+                              className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                            >
+                              <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                                {_.upperCase(value)}
+                              </span>
+                            </PrimitiveDropdown.Item>
+                          ))
+                        ) : (
+                          <div className='flex h-8 w-full items-center justify-center py-1'>
+                            <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                              No {_.startCase(scope.definition)} found
+                            </span>
+                          </div>
+                        )}
+                      </PrimitiveDropdown.SubContent>
+                    </PrimitiveDropdown.Portal>
+                  </PrimitiveDropdown.Sub>
+                )
+              })}
+            </PrimitiveDropdown.Content>
+          </PrimitiveDropdown.Portal>
+        )}
       </PrimitiveDropdown.Root>
     </>
   )
