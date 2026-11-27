@@ -275,6 +275,7 @@ const VariablesTable = ({
         return result
       }}
       tableContext='Variables'
+      virtualization={{}}
       columnFilters={columnFilters}
       setColumnFilters={setColumnFilters}
       filterValue={filterValue}

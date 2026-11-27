@@ -7,11 +7,31 @@ import {
   OnChangeFn,
   useReactTable,
 } from '@tanstack/react-table'
-import { type MouseEvent, type ReactNode, useEffect, useRef } from 'react'
+import { type MouseEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
+import { useVirtualRows } from '../../../hooks/use-virtual-rows'
 import type { ProjectResponse } from '../../../store/slices/project'
 import { cn } from '../../../utils/cn'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../table'
+
+/** Row height assumed until a data row is measured; virtualization treats every data row as one height. */
+const DEFAULT_ROW_HEIGHT = 32
+const VIRTUAL_OVERSCAN = 20
+const DEFAULT_VIRTUAL_THRESHOLD = 200
+
+type GenericTableVirtualization = {
+  /** Row count above which only the rows near the viewport mount. */
+  threshold?: number
+}
+
+/** The nearest ancestor of `element` that scrolls vertically, or null. */
+const findScrollParent = (element: HTMLElement | null): HTMLElement | null => {
+  for (let node = element?.parentElement ?? null; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node)
+    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') return node
+  }
+  return null
+}
 
 type GenericTableProps<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -29,6 +49,8 @@ type GenericTableProps<T> = {
   /** A row drawn after the data rows, given the number of visible columns. */
   trailingRow?: (columnCount: number) => ReactNode
   onRowContextMenu?: (rowIndex: number, event: MouseEvent<HTMLTableRowElement>) => void
+  /** Mounts only the rows near the viewport once the table has more rows than the threshold. */
+  virtualization?: GenericTableVirtualization
 }
 
 function GenericTable<T>({
@@ -44,6 +66,7 @@ function GenericTable<T>({
   leadingRow,
   trailingRow,
   onRowContextMenu,
+  virtualization,
 }: GenericTableProps<T>) {
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
@@ -92,18 +115,6 @@ function GenericTable<T>({
     )
   }
 
-  useEffect(() => {
-    resetBorders()
-    setBorders()
-  }, [selectedRow])
-
-  useEffect(() => {
-    resetBorders()
-    if (tableBodyRowRef.current) {
-      setBorders()
-    }
-  }, [filterValue])
-
   const table = useReactTable<T>({
     columns,
     data: tableData,
@@ -124,6 +135,65 @@ function GenericTable<T>({
     },
     debugTable: true,
   })
+
+  const rows = table.getRowModel().rows
+  const virtualized =
+    virtualization !== undefined && rows.length > (virtualization.threshold ?? DEFAULT_VIRTUAL_THRESHOLD)
+  const scrollElement = useRef<HTMLElement | null>(null)
+  const [rowHeight, setRowHeight] = useState(DEFAULT_ROW_HEIGHT)
+
+  useLayoutEffect(() => {
+    scrollElement.current = virtualized ? findScrollParent(tableBodyRef.current) : null
+  }, [virtualized])
+
+  const getOffsetTop = useCallback(() => {
+    const element = scrollElement.current
+    const firstRow = tableBodyRef.current?.querySelector<HTMLTableRowElement>('tr[data-row-position]')
+    if (!element || !firstRow) return 0
+    const position = Number(firstRow.dataset.rowPosition)
+    return (
+      firstRow.getBoundingClientRect().top -
+      element.getBoundingClientRect().top +
+      element.scrollTop -
+      position * rowHeight
+    )
+  }, [rowHeight, scrollElement])
+
+  const { start, end, paddingTop, paddingBottom, scrollToIndex } = useVirtualRows({
+    count: rows.length,
+    rowHeight,
+    overscan: VIRTUAL_OVERSCAN,
+    scrollElement,
+    getOffsetTop,
+    enabled: virtualized,
+  })
+
+  useLayoutEffect(() => {
+    if (!virtualized) return
+    const measured = tableBodyRef.current
+      ?.querySelector<HTMLTableRowElement>('tr[data-row-position]')
+      ?.getBoundingClientRect().height
+    if (measured && Math.abs(measured - rowHeight) > 0.5) setRowHeight(measured)
+  }, [virtualized, rowHeight, start, end])
+
+  useEffect(() => {
+    if (!virtualized) return
+    const position = rows.findIndex((row) => parseInt(row.id) === selectedRow)
+    if (position >= 0) scrollToIndex(position)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRow, virtualized])
+
+  useEffect(() => {
+    resetBorders()
+    setBorders()
+  }, [selectedRow, start, end])
+
+  useEffect(() => {
+    resetBorders()
+    if (tableBodyRowRef.current) {
+      setBorders()
+    }
+  }, [filterValue])
 
   return (
     <Table context={tableContext} className='mr-1 w-full'>
@@ -150,10 +220,12 @@ function GenericTable<T>({
       </TableHeader>
       <TableBody ref={tableBodyRef}>
         {leadingRow?.(table.getVisibleLeafColumns().map((column) => column.id))}
-        {table.getRowModel().rows.map((row) => (
+        {paddingTop > 0 && <tr aria-hidden='true' style={{ height: paddingTop }} />}
+        {rows.slice(start, end).map((row, offset) => (
           <TableRow
             id={row.id}
             key={row.id}
+            data-row-position={start + offset}
             className='h-8 cursor-pointer'
             onClick={(e) => handleRowClick(e.currentTarget)}
             onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(parseInt(row.id), e) : undefined}
@@ -179,10 +251,12 @@ function GenericTable<T>({
             ))}
           </TableRow>
         ))}
+        {paddingBottom > 0 && <tr aria-hidden='true' style={{ height: paddingBottom }} />}
         {trailingRow?.(table.getVisibleLeafColumns().length)}
       </TableBody>
     </Table>
   )
 }
 
+export type { GenericTableVirtualization }
 export { GenericTable }

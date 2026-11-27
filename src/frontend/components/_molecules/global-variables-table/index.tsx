@@ -136,6 +136,7 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
         return result
       }}
       tableContext='Variables'
+      virtualization={{}}
     />
   )
 }
@@ -171,6 +172,7 @@ const GlobalVariableListTable = ({
         return result
       }}
       tableContext='Variables'
+      virtualization={{}}
     />
   )
 }
