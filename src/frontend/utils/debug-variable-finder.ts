@@ -125,8 +125,29 @@ export function buildVariableDebugPath(isGlobal: boolean, instanceName: string, 
   return isGlobal ? buildGlobalDebugPath(variableName) : buildDebugPath(instanceName, variableName)
 }
 
+interface DebugVariableIndex {
+  length: number
+  byPath: Map<string, DebugVariableEntry>
+}
+
+/** Uppercased path → first entry with that path, per entry list; rebuilt when the list's length changes. */
+const debugVariableIndexes = new WeakMap<DebugVariableEntry[], DebugVariableIndex>()
+
+function indexDebugVariables(debugVariables: DebugVariableEntry[]): Map<string, DebugVariableEntry> {
+  const cached = debugVariableIndexes.get(debugVariables)
+  if (cached && cached.length === debugVariables.length) return cached.byPath
+  const byPath = new Map<string, DebugVariableEntry>()
+  for (const entry of debugVariables) {
+    const key = entry.name.toUpperCase()
+    if (!byPath.has(key)) byPath.set(key, entry)
+  }
+  debugVariableIndexes.set(debugVariables, { length: debugVariables.length, byPath })
+  return byPath
+}
+
 /**
- * Find a debug variable by its expected path (case-insensitive).
+ * Find a debug variable by its expected path (case-insensitive). The first call on a list indexes it,
+ * so a walk over every leaf costs one pass over the list.
  *
  * @param debugVariables - Parsed debug variables from debug.c
  * @param expectedPath - The expected debug path
@@ -136,8 +157,7 @@ export function findDebugVariable(
   debugVariables: DebugVariableEntry[],
   expectedPath: string,
 ): DebugVariableEntry | null {
-  const upperPath = expectedPath.toUpperCase()
-  return debugVariables.find((dv) => dv.name.toUpperCase() === upperPath) || null
+  return indexDebugVariables(debugVariables).get(expectedPath.toUpperCase()) ?? null
 }
 
 /**
