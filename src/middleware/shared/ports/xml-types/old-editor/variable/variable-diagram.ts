@@ -1,10 +1,11 @@
-import { baseTypes } from '@root/frontend/utils/plc-constants/types'
 import { z } from 'zod'
+
+import { baseTypeTagsSchema } from '../base-type-tags'
 
 const variableXMLSchema = z.object({
   '@name': z.string(),
   '@address': z.string().optional(),
-  type: z.object(baseTypes.reduce((acc, type) => ({ ...acc, [type]: z.string().optional() }), {})).optional(),
+  type: baseTypeTagsSchema.optional(),
   initialValue: z
     .object({
       simpleValue: z.object({

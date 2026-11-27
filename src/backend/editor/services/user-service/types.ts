@@ -25,7 +25,7 @@ const PlatformSchema = z.object({
   website: z.string(),
   email: z.string(),
   indexed: z.boolean(),
-  releases: z.record(ReleaseSchema),
+  releases: z.record(z.string(), ReleaseSchema),
   installed_version: z.string(),
   latest_version: z.string(),
 })
@@ -67,12 +67,12 @@ const LibrarySchema = z.object({
   source_dir: z.string(),
   version: z.string(),
   license: z.string(),
-  properties: z.record(z.unknown()),
+  properties: z.record(z.string(), z.unknown()),
   location: z.string(),
   layout: z.string(),
   examples: z.array(z.string()),
   provides_includes: z.array(z.string()),
-  compatible_with: z.record(z.unknown()), // An object with unknown keys/values
+  compatible_with: z.record(z.string(), z.unknown()), // An object with unknown keys/values
 })
 
 /**

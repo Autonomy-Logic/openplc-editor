@@ -163,7 +163,7 @@ export function toEditSessionBeat(status: number, body: unknown): EditSessionBea
   }
 }
 
-const EnvelopeSchema = z.object({ data: z.unknown() })
+const EnvelopeSchema = z.object({ data: z.unknown().optional() })
 
 function unwrapData(body: unknown): unknown {
   const envelope = EnvelopeSchema.safeParse(body)

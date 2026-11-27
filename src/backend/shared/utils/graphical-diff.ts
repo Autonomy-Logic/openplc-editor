@@ -75,7 +75,7 @@ const EdgeSchema = z.custom<Edge>(
 )
 
 /** An array that drops elements it can't validate rather than failing whole — a partial diff beats none. */
-const arrayOfValid = <T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>) =>
+const arrayOfValid = <T>(schema: z.ZodType<T, unknown>) =>
   z.array(z.unknown()).transform((items) =>
     items.flatMap((item) => {
       const parsed = schema.safeParse(item)

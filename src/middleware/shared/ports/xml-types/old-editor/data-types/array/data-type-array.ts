@@ -1,5 +1,6 @@
-import { baseTypes } from '@root/frontend/utils/plc-constants/types'
 import { z } from 'zod'
+
+import { baseTypeTagsSchema } from '../../base-type-tags'
 
 const dataTypeArraySchema = z.object({
   dimension: z.array(
@@ -8,7 +9,7 @@ const dataTypeArraySchema = z.object({
       '@upper': z.string(),
     }),
   ),
-  baseType: z.object(baseTypes.reduce((acc, type) => ({ ...acc, [type]: z.string().optional() }), {})),
+  baseType: baseTypeTagsSchema,
 })
 
 export { dataTypeArraySchema }

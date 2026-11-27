@@ -44,6 +44,12 @@ class MemoryStore implements WasmObjectStore {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
+/** Waits for a write-through to land instead of for one turn of the event loop, which a loaded runner outlasts. */
+const settleUntil = async (ready: () => boolean): Promise<void> => {
+  const deadline = Date.now() + 5000
+  while (!ready() && Date.now() < deadline) await settle()
+}
+
 describe('object records', () => {
   it('round-trips an entry and its key for the toolchain that wrote it, and nothing else', async () => {
     const record = await encodeObjectRecord('clang-a', 'unit', entry([1, 2, 3]))
@@ -90,7 +96,7 @@ describe('PersistentWasmObjectCache', () => {
     await cache.load('clang-a')
     cache.set('library', entry([1], 'with-plc-constants.hpp'))
     cache.set('library', entry([2], 'without.hpp'))
-    await settle()
+    await settleUntil(() => store.records.size === 2)
     expect(store.records.size).toBe(2)
     const restarted = new PersistentWasmObjectCache(new BoundedWasmObjectCache(1 << 20), store, 1 << 20)
     await restarted.load('clang-a')
@@ -105,12 +111,12 @@ describe('PersistentWasmObjectCache', () => {
     await cache.load('clang-a')
     const [one, two, three] = [entry([1, 2, 3, 4]), entry([1, 2, 3, 4], 'b.c'), entry([1, 2, 3, 4], 'c.c')]
     cache.set('one', one)
-    await settle()
+    await settleUntil(() => store.records.has(one.digest))
     cache.set('two', two)
-    await settle()
+    await settleUntil(() => store.records.has(two.digest))
     expect([...store.records.keys()].sort()).toEqual([one.digest, two.digest].sort())
     cache.set('three', three)
-    await settle()
+    await settleUntil(() => store.records.has(three.digest))
     expect([...store.records.keys()].sort()).toEqual([three.digest, two.digest].sort())
     const huge = entry(new Array(record.length * 3).fill(7))
     cache.set('huge', huge)
@@ -126,7 +132,7 @@ describe('PersistentWasmObjectCache', () => {
     await cache.load('clang-a')
     store.failWrites = true
     cache.set('k', entry([1]))
-    await settle()
+    await settleUntil(() => errors.length > 0)
     expect(errors).toEqual(['disk full'])
     expect(cache.variants('k')).toEqual([entry([1])])
   })
@@ -144,7 +150,7 @@ describe('compile service with a store', () => {
     const first = createWasmCompileService(new FakeRunner(), { store, identity: 'clang 1' })
     await first.prepare()
     expect((await first.compile(request())).stats.cached).toBe(0)
-    await settle()
+    await settleUntil(() => store.records.size === 2)
     expect(store.records.size).toBe(2)
 
     const runner = new FakeRunner()

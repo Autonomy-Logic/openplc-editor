@@ -73,7 +73,7 @@ afterAll(async () => {
 function ladderRungFor(pou: string): RungLadderState {
   const json: unknown = JSON.parse(JSON.stringify(ctudRung).replace(UUID, (id) => `${id}-${pou}`))
   const rung = zodRungLadderStateSchema.parse(json)
-  return { ...rung, nodes: rung.nodes.map((node) => ({ ...node, data: node.data })), selectedNodes: [] }
+  return { ...rung, nodes: rung.nodes.map((node) => ({ ...node, data: node.data ?? {} })), selectedNodes: [] }
 }
 
 /** A TON block from the seeded system libraries, placed with the production builder. */

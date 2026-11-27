@@ -11,3 +11,8 @@
 # id = "GHSA-xxxx-xxxx-xxxx"
 # ignoreUntil = "2027-03-01T00:00:00Z"
 # reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: <why> — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-w5hq-g745-h8pq"
+ignoreUntil = "2027-02-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: the flaw is a missing buffer bounds check in uuid v3, v5 and v6 when a buf argument is passed. The only copy at 8.3.2 sits under sockjs, reached solely from webpack-dev-server, and sockjs calls uuid.v4() with no buffer (lib/transport.js). That copy is dev-only in package-lock.json, so it is not in the packaged app either [uuid]. AI-TRIAGED [unreviewed]"

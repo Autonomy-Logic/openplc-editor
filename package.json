@@ -74,7 +74,7 @@
     "@tanstack/react-table": "^8.21.2",
     "@xyflow/react": "^12.11.2",
     "auto-zustand-selectors-hook": "^2.0.0",
-    "axios": "^1.13.6",
+    "axios": "^1.20.0",
     "browser-basedpyright": "^1.39.6",
     "clsx": "^2.1.1",
     "cva": "npm:class-variance-authority@^0.7.0",
@@ -89,7 +89,7 @@
     "i18next": "^24.2.2",
     "immer": "^10.1.1",
     "jszip": "^3.10.1",
-    "lodash": "^4.17.21",
+    "lodash": "^4.18.0",
     "lucide-react": "^0.563.0",
     "monaco-editor": "^0.54.0",
     "monaco-editor-webpack-plugin": "^7.1.0",
@@ -109,22 +109,22 @@
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^2.1.0",
     "url": "^0.11.3",
-    "uuid": "^11.1.0",
+    "uuid": "^11.1.1",
     "vscode-jsonrpc": "^8.2.0",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-protocol": "^3.17.5",
     "winston": "^3.17.0",
     "xmlbuilder2": "^3.1.1",
     "yaml": "^2.8.1",
-    "zod": "^3.25.67",
+    "zod": "^4.6.7",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@electron/notarize": "^2.1.0",
-    "@electron/rebuild": "^3.3.0",
+    "@electron/rebuild": "^4.2.1",
     "@eslint/js": "^9.20.0",
-    "@faker-js/faker": "^9.8.0",
-    "@playwright/test": "^1.52.0",
+    "@faker-js/faker": "^10.6.0",
+    "@playwright/test": "^1.55.1",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.11",
     "@svgr/webpack": "^8.1.0",
     "@teamsupercell/typings-for-css-modules-loader": "^2.5.2",
@@ -152,10 +152,10 @@
     "core-js": "^3.32.2",
     "cross-env": "^7.0.3",
     "css-loader": "^6.8.1",
-    "css-minimizer-webpack-plugin": "^5.0.1",
+    "css-minimizer-webpack-plugin": "^8.0.0",
     "detect-port": "^1.5.1",
-    "electron": "^37.10.3",
-    "electron-builder": "^26.0.12",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
     "electron-devtools-installer": "^3.2.0",
     "electronmon": "^2.0.2",
     "eslint": "^9.20.1",
@@ -173,7 +173,7 @@
     "jest-environment-jsdom": "^30.0.5",
     "lint-staged": "^15.5.2",
     "mini-css-extract-plugin": "^2.7.6",
-    "postcss": "^8.4.31",
+    "postcss": "^8.5.18",
     "postcss-loader": "^7.3.3",
     "prettier": "3.4.2",
     "prettier-plugin-tailwindcss": "^0.5.14",
@@ -187,7 +187,7 @@
     "style-loader": "^3.3.3",
     "tailwind-scrollbar": "^3.1.0",
     "tailwindcss": "^3.4.19",
-    "terser-webpack-plugin": "^5.3.9",
+    "terser-webpack-plugin": "^5.6.1",
     "ts-jest": "^29.4.0",
     "ts-loader": "^9.4.4",
     "ts-node": "^10.9.1",
@@ -200,6 +200,61 @@
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.2",
     "webpack-merge": "^6.0.1"
+  },
+  "overrides": {
+    "@babel/plugin-transform-modules-systemjs": "^7.29.4",
+    "@electron/asar": {
+      "glob": "^7.2.3"
+    },
+    "@isaacs/brace-expansion": "^5.0.1",
+    "@svgr/plugin-svgo": {
+      "svgo": "^3.3.5"
+    },
+    "@xmldom/xmldom@0": "^0.8.15",
+    "body-parser": "^1.20.9",
+    "brace-expansion@1": "^1.1.20",
+    "brace-expansion@2": "^2.1.6",
+    "browserslist": "^4.28.7",
+    "compression": "^1.8.2",
+    "fast-xml-builder": "^1.1.7",
+    "flatted": "^3.4.2",
+    "form-data": "^4.0.6",
+    "glob": "^10.5.0",
+    "immutable": "^4.3.9",
+    "js-yaml@3": "^3.15.2",
+    "js-yaml@4": "^4.3.2",
+    "launch-editor": "^2.14.2",
+    "minimatch@10": "^10.2.3",
+    "minimatch@3": "^3.1.4",
+    "minimatch@5": "^5.1.8",
+    "minimatch@9": "^9.0.7",
+    "nanoid": "^3.3.18",
+    "node-forge": "^1.4.1",
+    "node-gyp-build": "^4.8.4",
+    "path-to-regexp": "^0.1.13",
+    "picomatch@2": "^2.3.2",
+    "picomatch@4": "^4.0.4",
+    "postcss-svgo": {
+      "svgo": "^4.1.0"
+    },
+    "proxy-addr": "^2.0.8",
+    "rimraf@2": {
+      "glob": "^7.2.3"
+    },
+    "rimraf@3": {
+      "glob": "^7.2.3"
+    },
+    "shell-quote": "^1.9.0",
+    "socket.io-parser": "^4.2.7",
+    "source-map-js": "^1.2.2",
+    "test-exclude": {
+      "glob": "^7.2.3"
+    },
+    "tmp": "^0.2.6",
+    "webpack-dev-middleware": "^7.4.6",
+    "websocket-driver": "^0.7.5",
+    "ws@7": "^7.5.11",
+    "ws@8": "^8.21.0"
   },
   "engines": {
     "node": "^22",
@@ -219,8 +274,5 @@
       "cross-env NODE_ENV=development eslint --fix",
       "prettier --write"
     ]
-  },
-  "overrides": {
-    "node-gyp-build": "^4.8.4"
   }
 }

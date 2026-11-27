@@ -219,7 +219,7 @@ const RawProjectFilesSchema = z.object({
       canEdit: z.boolean().optional(),
       readme: z.string().nullish(),
       pendingPlcopenSource: z.string().optional(),
-      rawLoadedFiles: z.record(z.string()).optional(),
+      rawLoadedFiles: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
   error: z.object({ title: z.string(), description: z.string(), status: z.number().optional() }).optional(),

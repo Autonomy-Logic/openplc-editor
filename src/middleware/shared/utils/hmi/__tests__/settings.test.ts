@@ -114,7 +114,7 @@ describe('HMI settings', () => {
   })
 
   it('reports an error without a path for a value that is not an object', () => {
-    expect(errorsOf('nope')).toEqual(['Expected object, received string'])
+    expect(errorsOf('nope')).toEqual(['Invalid input: expected object, received string'])
   })
 })
 

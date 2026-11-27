@@ -44,7 +44,7 @@ describe('getDefaultSchemaValues', () => {
   })
 
   it('returns an empty object for a ZodRecord schema', () => {
-    const schema = z.record(z.string())
+    const schema = z.record(z.string(), z.string())
     expect(getDefaultSchemaValues(schema)).toEqual({})
   })
 

@@ -30,7 +30,7 @@ const FailureBodySchema = z.object({ message: z.union([z.string(), z.array(z.str
 const SubscriptionStatusSchema = z.enum(['trialing', 'active', 'past_due', 'paused', 'canceled', 'expired'])
 
 // `.catch(false)` per flag: one unreadable flag must not take the whole entitlements read down.
-const PlanFeaturesSchema = z.record(z.boolean().catch(false))
+const PlanFeaturesSchema = z.record(z.string(), z.boolean().catch(false))
 
 const EntitlementSourceSchema = z.object({
   subscriptionId: z.string(),
@@ -153,7 +153,7 @@ const BillingPayloadSchema = z.object({
 })
 
 /** Edge's `GlobalExceptionFilter` nests the thrown body under `error`; the bare shape also occurs. */
-const WrappedFailureSchema = z.object({ error: z.record(z.unknown()) })
+const WrappedFailureSchema = z.object({ error: z.record(z.string(), z.unknown()) })
 
 function parseBillingPayload(body: string): BillingErrorPayload | null {
   const root = parseJsonBody(body)
@@ -252,7 +252,7 @@ async function beacon(path: string, json?: unknown): Promise<void> {
 /** Every `/ai/chat` and `/ai/complete` frame. Validated: an object `delta` would render as `[object Object]`. */
 const SseEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('content_block_delta'), delta: z.string() }),
-  z.object({ type: z.literal('tool_use'), id: z.string(), name: z.string(), input: z.unknown() }),
+  z.object({ type: z.literal('tool_use'), id: z.string(), name: z.string(), input: z.unknown().optional() }),
   z.object({ type: z.literal('message_stop'), stopReason: z.string().optional() }),
   z.object({ type: z.literal('error'), error: z.string() }),
   z.object({ type: z.literal('conversation_started'), conversationId: z.string(), conversationTitle: z.string() }),

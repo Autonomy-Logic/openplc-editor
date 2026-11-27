@@ -148,7 +148,7 @@ export const VersionControlFailureSchema = z.discriminatedUnion('kind', [
 
 /** No `satisfies z.ZodType<...>` here: a zod key admitting `undefined` is inferred optional, so `data: unknown` would mismatch `data?: unknown`. */
 export const VersionControlResultSchema = z.union([
-  z.object({ ok: z.literal(true), data: z.unknown() }),
+  z.object({ ok: z.literal(true), data: z.unknown().optional() }),
   z.object({ ok: z.literal(false), failure: VersionControlFailureSchema }),
 ])
 
