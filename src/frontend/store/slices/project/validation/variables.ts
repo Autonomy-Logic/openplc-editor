@@ -112,6 +112,61 @@ const checkIfLocationExists = (variables: PLCVariable[], location: string, slots
   })
 }
 
+/** Slot ranges wider than this are kept as ranges instead of expanded slot by slot. */
+const WIDE_RANGE_SLOTS = 1024
+
+type ClaimedRange = { first: number; last: number }
+
+/** Storage claimed by located variables, per address class, for overlap checks in one pass. */
+type LocationClaims = {
+  aliases: Set<string>
+  slots: Map<string, Set<number>>
+  wide: Map<string, ClaimedRange[]>
+}
+
+const createLocationClaims = (): LocationClaims => ({ aliases: new Set(), slots: new Map(), wide: new Map() })
+
+const classKey = (parsed: ParsedAddress): string => `${parsed.cls.direction}${parsed.cls.size}`
+
+/** Same verdict as `checkIfLocationExists` against every variable already claimed. */
+const collidesWithClaims = (claims: LocationClaims, location: string, slots: number): boolean => {
+  const parsed = parseAddress(location)
+  if (parsed === null) return claims.aliases.has(location)
+
+  const key = classKey(parsed)
+  const first = parsed.linear
+  const last = parsed.linear + Math.max(1, slots) - 1
+  if ((claims.wide.get(key) ?? []).some((range) => first <= range.last && range.first <= last)) return true
+
+  const claimed = claims.slots.get(key)
+  if (!claimed) return false
+  if (last - first < WIDE_RANGE_SLOTS) {
+    for (let slot = first; slot <= last; slot++) if (claimed.has(slot)) return true
+    return false
+  }
+  for (const slot of claimed) if (slot >= first && slot <= last) return true
+  return false
+}
+
+/** Records the storage `variable` holds, whatever its own validation verdict. */
+const claimLocation = (claims: LocationClaims, variable: PLCVariable): void => {
+  if (!variable.location) return
+  claims.aliases.add(variable.location)
+  const parsed = parseAddress(variable.location)
+  if (parsed === null) return
+
+  const key = classKey(parsed)
+  const first = parsed.linear
+  const last = parsed.linear + Math.max(1, slotsClaimedBy(variable)) - 1
+  if (last - first >= WIDE_RANGE_SLOTS) {
+    claims.wide.set(key, [...(claims.wide.get(key) ?? []), { first, last }])
+    return
+  }
+  const claimed = claims.slots.get(key) ?? new Set<number>()
+  for (let slot = first; slot <= last; slot++) claimed.add(slot)
+  claims.slots.set(key, claimed)
+}
+
 /**
  * This is a validation to check if the variable name is correct.
  * CamelCase, PascalCase or SnakeCase and can not be empty.
@@ -628,6 +683,42 @@ export type VariableSetValidation = { ok: true } | { ok: false; errors: Variable
 const validateVariableSet = (variables: PLCVariable[]): VariableSetValidation => {
   const errors: VariableSetError[] = []
   const seenNames = new Set<string>()
+  const claims = createLocationClaims()
+
+  /** The location problems of `variable`, checked against the storage of the variables before it. */
+  const checkLocation = (variable: PLCVariable, fail: (title: string, message: string) => void): void => {
+    // A variable with no class is a global-scope declaration (the resource
+    // globals and a GVL both omit it), and a location is legal there.
+    const variableClass = variable.class
+    if (variableClass && DISALLOWED_LOCATION_CLASSES.includes(variableClass)) {
+      fail(
+        'Location is not allowed.',
+        `Variables of class "${variableClass.toUpperCase()}" cannot have a physical location ("AT"). Use class LOCAL for located variables.`,
+      )
+      return
+    }
+
+    if (hasUnlocatableShape(variable.type)) {
+      fail('Location is not allowed.', UNLOCATABLE_SHAPE_MESSAGE)
+      return
+    }
+
+    const addressClass = addressClassTypeOf(variable.type)
+    if (!variableLocationValidation(variable.location, addressClass)) {
+      fail(
+        'Location is invalid.',
+        `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(addressClass, variable.location)}`,
+      )
+      return
+    }
+
+    // Collision is checked against the variables BEFORE this one only, so a
+    // clashing pair is reported once, on the second of the two — the same
+    // place the table reports it when the user types it.
+    if (collidesWithClaims(claims, variable.location, slotsClaimedBy(variable))) {
+      fail('Location already exists', 'Please make sure that the location is unique.')
+    }
+  }
 
   variables.forEach((variable, index) => {
     const fail = (title: string, message: string): void => {
@@ -666,39 +757,8 @@ const validateVariableSet = (variables: PLCVariable[]): VariableSetValidation =>
 
     // ---- location ----
     if (!variable.location) return
-
-    // A variable with no class is a global-scope declaration (the resource
-    // globals and a GVL both omit it), and a location is legal there.
-    const variableClass = variable.class
-    if (variableClass && DISALLOWED_LOCATION_CLASSES.includes(variableClass)) {
-      fail(
-        'Location is not allowed.',
-        `Variables of class "${variableClass.toUpperCase()}" cannot have a physical location ("AT"). Use class LOCAL for located variables.`,
-      )
-      return
-    }
-
-    if (hasUnlocatableShape(variable.type)) {
-      fail('Location is not allowed.', UNLOCATABLE_SHAPE_MESSAGE)
-      return
-    }
-
-    const addressClass = addressClassTypeOf(variable.type)
-    if (!variableLocationValidation(variable.location, addressClass)) {
-      fail(
-        'Location is invalid.',
-        `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(addressClass, variable.location)}`,
-      )
-      return
-    }
-
-    // Collision is checked against the variables BEFORE this one only, so a
-    // clashing pair is reported once, on the second of the two — the same
-    // place the table reports it when the user types it.
-    const earlier = variables.slice(0, index)
-    if (checkIfLocationExists(earlier, variable.location, slotsClaimedBy(variable))) {
-      fail('Location already exists', 'Please make sure that the location is unique.')
-    }
+    checkLocation(variable, fail)
+    claimLocation(claims, variable)
   })
 
   return errors.length === 0 ? { ok: true } : { ok: false, errors }

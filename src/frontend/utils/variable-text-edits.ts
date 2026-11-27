@@ -158,6 +158,33 @@ function renderDeclaration(variable: PLCVariable, indent: string): string {
   return line
 }
 
+/** A cursor over declarations sharing a key, in document order. */
+type DeclarationQueue = { items: ParsedDeclaration[]; next: number }
+
+/** Groups `declarations` by `key`, keeping document order within each group. */
+function groupInOrder(
+  declarations: ParsedDeclaration[],
+  key: (declaration: ParsedDeclaration) => string,
+): Map<string, DeclarationQueue> {
+  const groups = new Map<string, DeclarationQueue>()
+  for (const declaration of declarations) {
+    const group = groups.get(key(declaration))
+    if (group) group.items.push(declaration)
+    else groups.set(key(declaration), { items: [declaration], next: 0 })
+  }
+  return groups
+}
+
+/** The first declaration of `queue` not in `taken`; the cursor skips the taken ones for good. */
+function firstUntaken(
+  queue: DeclarationQueue | undefined,
+  taken: Set<ParsedDeclaration>,
+): ParsedDeclaration | undefined {
+  if (!queue) return undefined
+  while (queue.next < queue.items.length && taken.has(queue.items[queue.next])) queue.next += 1
+  return queue.items[queue.next]
+}
+
 /**
  * Pair each incoming variable with the declaration it came from.
  *
@@ -194,14 +221,13 @@ function matchDeclarations(
   // only — nothing moved the line out of the block it was sitting in, so the
   // class silently reverted on reload while the table went on showing the new
   // one.
+  const byBlockAndName = groupInOrder(
+    declarations,
+    (d) => `${blockKey(d.variable)}\u0000${d.variable.name.toLowerCase()}`,
+  )
   nextVariables.forEach((variable, index) => {
     if (matched.has(index)) return
-    claim(
-      index,
-      declarations.find(
-        (d) => !taken.has(d) && sameName(d.variable.name, variable.name) && blockKey(d.variable) === blockKey(variable),
-      ),
-    )
+    claim(index, firstUntaken(byBlockAndName.get(`${blockKey(variable)}\u0000${variable.name.toLowerCase()}`), taken))
   })
 
   // Positional pass, pairing the leftovers in order: this is the rename case.
@@ -215,13 +241,13 @@ function matchDeclarations(
   // model: hand alignment gone, and a `//` comment rewritten as `(* … *)`.
   // Taking the first unclaimed candidate from the same block cannot do that, and
   // leftovers are in document order, so it pairs positionally as before.
-  const leftoverDeclarations = declarations.filter((d) => !taken.has(d))
+  const leftoversByBlock = groupInOrder(
+    declarations.filter((d) => !taken.has(d)),
+    (d) => blockKey(d.variable),
+  )
   nextVariables.forEach((variable, index) => {
     if (matched.has(index)) return
-    claim(
-      index,
-      leftoverDeclarations.find((d) => !taken.has(d) && blockKey(d.variable) === blockKey(variable)),
-    )
+    claim(index, firstUntaken(leftoversByBlock.get(blockKey(variable)), taken))
   })
 
   return matched
@@ -506,16 +532,18 @@ function reorderDeclarations(
     // Deletion has already removed the ones that went away, so anything still
     // unmatched here means the two views disagree, and the order is not ours
     // to guess.
-    if (current.some((name) => !wanted.includes(name))) continue
+    const wantedIndex = new Map(wanted.map((name, index) => [name, index]))
+    if (current.some((name) => !wantedIndex.has(name))) continue
 
-    const target = [...current].sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b))
+    const target = [...current].sort((a, b) => (wantedIndex.get(a) ?? 0) - (wantedIndex.get(b) ?? 0))
     if (current.every((name, index) => name === target[index])) continue
 
     const lines = block.declarations.map((declaration) =>
       text.slice(declaration.lineSpan.start, declaration.lineSpan.end),
     )
+    const currentIndex = new Map(current.map((name, index) => [name, index]))
     target.forEach((name, index) => {
-      const from = current.indexOf(name)
+      const from = currentIndex.get(name) ?? index
       if (from === index) return
       edits.push({ span: block.declarations[index].lineSpan, replacement: lines[from] })
     })
