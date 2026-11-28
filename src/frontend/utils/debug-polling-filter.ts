@@ -8,11 +8,11 @@
  * 2. Forced variables (currently forced, must stay polled)
  * 3. Graph-listed variables (being plotted in real-time charts)
  * 4. Diagram-visible variables (LD/FBD contacts, coils, variable nodes, block outputs)
- * 5. Source-visible variables (ST/IL — regex-matched against source text)
+ * 5. Source-visible variables (ST/IL — regex-matched against the lines on screen)
  *
- * Diagram/source scan results are cached per {pouName, language, fbContext}
+ * Diagram/source scan results are cached per {pouName, language, fbContext, viewKey}
  * since the editor is read-only during debug — no recomputation needed
- * unless the user switches tabs or FB instance selection.
+ * unless the user switches tabs, FB instance selection or scrolls/resizes the editor.
  */
 
 import type { FbInstanceInfo, PLCPou } from '../../middleware/shared/ports/types'
@@ -28,6 +28,7 @@ export interface DebugPollingState {
     debugVariableIndexes: Map<string, number>
     debugForcedVariables: Map<string, unknown>
     debugPanelVisibleKeys: string[]
+    debugEditorViewport: { pouName: string; lines: Array<[number, number]> } | null
     debugGraphList: string[]
     fbSelectedInstance: Map<string, string>
     fbDebugInstances: Map<string, FbInstanceInfo[]>
@@ -54,6 +55,7 @@ export type VisibleVarsCache = {
   pouName: string
   language: string
   fbContextKey: string
+  viewKey: string
   keys: Set<string>
 } | null
 
@@ -115,17 +117,27 @@ export function buildActiveIndexSet(
     const fbCtxKey =
       currentPou.pouType === 'function-block' ? (fbSelectedInstance.get(currentPou.name.toUpperCase()) ?? '') : ''
 
+    const visibleLines = sourceVisibleLines(state, currentPou)
+    const viewKey = visibleLines ? visibleLines.map(([from, to]) => `${from}-${to}`).join(',') : ''
+
     // Check if cache is still valid
     if (
       cachedResult &&
       cachedResult.pouName === editorName &&
       cachedResult.language === editorLanguage &&
-      cachedResult.fbContextKey === fbCtxKey
+      cachedResult.fbContextKey === fbCtxKey &&
+      cachedResult.viewKey === viewKey
     ) {
       for (const k of cachedResult.keys) activeKeys.add(k)
     } else {
-      const visibleKeys = computeVisibleVariableKeys(state, currentPou, allLeaves)
-      cachedResult = { pouName: editorName, language: editorLanguage, fbContextKey: fbCtxKey, keys: visibleKeys }
+      const visibleKeys = computeVisibleVariableKeys(state, currentPou, allLeaves, visibleLines)
+      cachedResult = {
+        pouName: editorName,
+        language: editorLanguage,
+        fbContextKey: fbCtxKey,
+        viewKey,
+        keys: visibleKeys,
+      }
       for (const k of visibleKeys) activeKeys.add(k)
     }
   }
@@ -164,6 +176,14 @@ function resolveFbInstance(
   return instances.find((inst) => inst.key === selectedKey) ?? null
 }
 
+/** Line ranges the active ST/IL editor reports on screen for this POU; null scans the whole body. */
+function sourceVisibleLines(state: DebugPollingState, currentPou: PLCPou): Array<[number, number]> | null {
+  const language = currentPou.body.language
+  if (language !== 'st' && language !== 'il') return null
+  const viewport = state.workspace.debugEditorViewport
+  return viewport && viewport.pouName === currentPou.name ? viewport.lines : null
+}
+
 /** Composite key → debug indexes of the leaves carrying it, built once per leaf map. */
 const leafIndexCache = new WeakMap<Map<number, { compositeKey: string }[]>, Map<string, number[]>>()
 
@@ -190,6 +210,7 @@ function computeVisibleVariableKeys(
   state: DebugPollingState,
   currentPou: PLCPou,
   allLeaves: Map<number, { compositeKey: string; type: string }[]>,
+  visibleLines: Array<[number, number]> | null,
 ): Set<string> {
   const keys = new Set<string>()
   const language = currentPou.body.language
@@ -223,7 +244,7 @@ function computeVisibleVariableKeys(
   } else if (language === 'fbd') {
     collectFbdVisibleKeys(state, makeKey, addLeavesWithPrefix, keys)
   } else if (language === 'st' || language === 'il') {
-    collectStIlVisibleKeys(currentPou, makeKey, addLeavesWithPrefix, keys)
+    collectStIlVisibleKeys(currentPou, visibleLines, makeKey, addLeavesWithPrefix, keys)
   }
 
   return keys
@@ -336,17 +357,20 @@ function collectBlockOutputKeys(
 /**
  * Collect composite keys for variables referenced in ST/IL source text.
  *
- * Regex-matches each declared variable name against the source body.
+ * Regex-matches each declared variable name against the visible lines of the
+ * source body, or the whole body when no line ranges are given.
  * Also includes FB instance sub-variables when the instance name appears
  * in the source text.
  */
 function collectStIlVisibleKeys(
   currentPou: PLCPou,
+  visibleLines: Array<[number, number]> | null,
   makeKey: (name: string) => string | null,
   addLeavesWithPrefix: (prefix: string) => void,
   keys: Set<string>,
 ): void {
-  const sourceText = typeof currentPou.body.value === 'string' ? currentPou.body.value : ''
+  const body = typeof currentPou.body.value === 'string' ? currentPou.body.value : ''
+  const sourceText = visibleLines ? sliceLines(body, visibleLines) : body
   if (!sourceText) return
 
   const variables = currentPou.interface?.variables ?? []
@@ -370,4 +394,14 @@ function collectStIlVisibleKeys(
       }
     }
   }
+}
+
+/** Text of the given 1-based inclusive line ranges, one line per row. */
+function sliceLines(text: string, ranges: Array<[number, number]>): string {
+  const lines = text.split(/\r\n|\r|\n/)
+  const picked: string[] = []
+  for (const [from, to] of ranges) {
+    for (let line = Math.max(1, from); line <= Math.min(lines.length, to); line++) picked.push(lines[line - 1])
+  }
+  return picked.join('\n')
 }

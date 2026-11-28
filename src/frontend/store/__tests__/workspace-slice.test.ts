@@ -388,6 +388,21 @@ describe('createWorkspaceSlice', () => {
     expect(stored).toEqual(['Main:A', 'Main:B'])
   })
 
+  it('setDebugEditorViewport stores the viewport and keeps the same object when it does not change', () => {
+    store.getState().workspaceActions.setDebugEditorViewport({ pouName: 'Main', lines: [[1, 30]] })
+    const first = store.getState().workspace.debugEditorViewport
+    store.getState().workspaceActions.setDebugEditorViewport({ pouName: 'Main', lines: [[1, 30]] })
+    expect(store.getState().workspace.debugEditorViewport).toBe(first)
+    store.getState().workspaceActions.setDebugEditorViewport({ pouName: 'Main', lines: [[11, 40]] })
+    expect(store.getState().workspace.debugEditorViewport).toEqual({ pouName: 'Main', lines: [[11, 40]] })
+  })
+
+  it('clearDebugState forgets the editor viewport', () => {
+    store.getState().workspaceActions.setDebugEditorViewport({ pouName: 'Main', lines: [[1, 30]] })
+    store.getState().workspaceActions.clearDebugState()
+    expect(store.getState().workspace.debugEditorViewport).toBeNull()
+  })
+
   it('clearDebugState forgets the panel rows on screen', () => {
     store.getState().workspaceActions.setDebugPanelVisibleKeys(['Main:A'])
     store.getState().workspaceActions.clearDebugState()

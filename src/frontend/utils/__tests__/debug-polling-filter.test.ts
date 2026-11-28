@@ -60,6 +60,7 @@ function makeState(overrides: {
   debugVariableIndexes?: Map<string, number>
   debugForcedVariables?: Map<string, unknown>
   debugPanelVisibleKeys?: string[]
+  debugEditorViewport?: { pouName: string; lines: Array<[number, number]> } | null
   debugGraphList?: string[]
   fbSelectedInstance?: Map<string, string>
   fbDebugInstances?: Map<
@@ -81,6 +82,7 @@ function makeState(overrides: {
       debugVariableIndexes: overrides.debugVariableIndexes ?? new Map(),
       debugForcedVariables: overrides.debugForcedVariables ?? new Map(),
       debugPanelVisibleKeys: overrides.debugPanelVisibleKeys ?? [],
+      debugEditorViewport: overrides.debugEditorViewport ?? null,
       debugGraphList: overrides.debugGraphList ?? [],
       fbSelectedInstance: overrides.fbSelectedInstance ?? new Map(),
       fbDebugInstances: overrides.fbDebugInstances ?? new Map(),
@@ -198,6 +200,7 @@ describe('buildActiveIndexSet', () => {
         pouName: 'Main',
         language: 'st',
         fbContextKey: '',
+        viewKey: '',
         keys: cachedKeys,
       }
       const indexMap = new Map([['Main:CACHED_VAR', 99]])
@@ -220,6 +223,7 @@ describe('buildActiveIndexSet', () => {
         pouName: 'OtherPou',
         language: 'st',
         fbContextKey: '',
+        viewKey: '',
         keys: new Set(['OtherPou:OLD']),
       }
       const state = makeState({
@@ -265,6 +269,7 @@ describe('buildActiveIndexSet', () => {
         pouName: 'MyFB',
         language: 'st',
         fbContextKey: 'Main:fb0',
+        viewKey: '',
         keys: new Set(),
       }
       const state = makeState({
@@ -901,6 +906,7 @@ describe('buildActiveIndexSet', () => {
         pouName: 'Main',
         language: 'st', // was ST, now LD
         fbContextKey: '',
+        viewKey: '',
         keys: new Set(['Main:OLD_KEY']),
       }
       const state = makeState({
@@ -922,6 +928,7 @@ describe('buildActiveIndexSet', () => {
         pouName: 'MyFB',
         language: 'st',
         fbContextKey: 'OLD_KEY',
+        viewKey: '',
         keys: new Set(),
       }
       const fbSelected = new Map([['MYFB', 'Main:fb1']])
@@ -1294,5 +1301,72 @@ describe('buildActiveIndexSet', () => {
       // The unrelated leaf shouldn't be picked up
       expect(activeIndexes).not.toContain(99)
     })
+  })
+})
+
+describe('ST/IL lines on screen', () => {
+  const source = ['A := 1;', 'B := 2;', 'C := 3;', 'TMR(IN := TRUE);'].join('\r\n')
+  const pou: PLCPou = {
+    name: 'Main',
+    pouType: 'program',
+    interface: {
+      variables: [makeVariable('A'), makeVariable('B'), makeVariable('C'), makeDerivedVariable('TMR', 'TON')],
+    },
+    body: { language: 'st', value: source },
+  }
+  const indexes = new Map([
+    ['Main:A', 1],
+    ['Main:B', 2],
+    ['Main:C', 3],
+  ])
+  const leaves = new Map([
+    [10, [{ compositeKey: 'Main:TMR.Q', type: 'BOOL' }]],
+    [11, [{ compositeKey: 'Main:TMR.ET', type: 'TIME' }]],
+  ])
+  const poll = (debugEditorViewport: { pouName: string; lines: Array<[number, number]> } | null, cache = null) =>
+    buildActiveIndexSet(
+      makeState({
+        pous: [pou],
+        editorName: 'Main',
+        editorLanguage: 'st',
+        debugVariableIndexes: indexes,
+        debugEditorViewport,
+      }),
+      leaves,
+      cache,
+    )
+
+  it('polls only the variables on the lines the editor shows', () => {
+    expect(poll({ pouName: 'Main', lines: [[2, 2]] }).activeIndexes).toEqual([2])
+  })
+
+  it('polls the variables of every visible range, including FB instance members', () => {
+    expect(
+      poll({
+        pouName: 'Main',
+        lines: [
+          [1, 1],
+          [4, 4],
+        ],
+      }).activeIndexes,
+    ).toEqual([1, 10, 11])
+  })
+
+  it('scans the whole body while the editor has not reported this POU', () => {
+    expect(poll({ pouName: 'Other', lines: [[2, 2]] }).activeIndexes).toEqual([1, 2, 3, 10, 11])
+    expect(poll(null).activeIndexes).toEqual([1, 2, 3, 10, 11])
+  })
+
+  it('polls nothing from the source while the editor shows no lines', () => {
+    expect(poll({ pouName: 'Main', lines: [] }).activeIndexes).toEqual([])
+  })
+
+  it('rescans when the visible lines change and reuses the scan while they do not', () => {
+    const first = poll({ pouName: 'Main', lines: [[1, 2]] })
+    const same = poll({ pouName: 'Main', lines: [[1, 2]] }, first.cacheResult as never)
+    expect(same.cacheResult).toBe(first.cacheResult)
+    const scrolled = poll({ pouName: 'Main', lines: [[3, 4]] }, first.cacheResult as never)
+    expect(scrolled.cacheResult).not.toBe(first.cacheResult)
+    expect(scrolled.activeIndexes).toEqual([3, 10, 11])
   })
 })

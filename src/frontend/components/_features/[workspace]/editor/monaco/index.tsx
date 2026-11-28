@@ -16,6 +16,7 @@ import { pouUri, splitExpression } from '../../../../../services/st-lsp'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import { applyAcceptedHunks, computeHunks } from '../../../../../utils/ai-diff-review'
 import { memberChainBefore } from '../../../../../utils/cpp/member-chain'
+import { findDebugInlinePositions } from '../../../../../utils/debug-inline-positions'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
@@ -59,49 +60,6 @@ type monacoEditorOptionsType = monaco.editor.IStandaloneEditorConstructionOption
 
 type SnippetController = {
   insert: (snippet: string, options?: unknown) => void
-}
-
-type BlockCommentState = false | 'paren' | 'slash'
-
-function stripLineComments(line: string, state: BlockCommentState): { stripped: string; state: BlockCommentState } {
-  const chars = [...line]
-  let i = 0
-  let s = state
-
-  while (i < chars.length) {
-    if (s) {
-      const endMarker = s === 'paren' ? ')' : '/'
-      if (chars[i] === '*' && chars[i + 1] === endMarker) {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = false
-      } else {
-        chars[i] = ' '
-        i++
-      }
-    } else {
-      if (chars[i] === '/' && chars[i + 1] === '/') {
-        for (let j = i; j < chars.length; j++) chars[j] = ' '
-        break
-      }
-      if (chars[i] === '(' && chars[i + 1] === '*') {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = 'paren'
-      } else if (chars[i] === '/' && chars[i + 1] === '*') {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = 'slash'
-      } else {
-        i++
-      }
-    }
-  }
-
-  return { stripped: chars.join(''), state: s }
 }
 
 let didApplyInitialTheme = false
@@ -149,6 +107,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     libraries: sliceLibraries,
     projectActions: { updatePou, createVariable },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
+    workspaceActions: { setDebugEditorViewport },
     snapshotActions: { pushToHistory },
     ai: { pendingDiffs },
     aiActions: { updatePendingDiff, updatePendingDiffAcceptedHunks, clearPendingDiff },
@@ -436,12 +395,37 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return instances.find((inst) => inst.key === selectedKey) || null
   }, [pou, fbSelectedInstance, fbDebugInstances])
 
-  const debugVarKeySet = useMemo(() => {
-    const keys: string[] = []
-    for (const key of debugBoolValues.keys()) keys.push(key)
-    for (const key of debugNonBoolValues.keys()) keys.push(key)
-    return keys.sort().join('\0')
-  }, [debugBoolValues, debugNonBoolValues])
+  const [visibleLines, setVisibleLines] = useState<Array<[number, number]>>([])
+
+  useEffect(() => {
+    const ed = editorRef.current
+    if (!ed || !isActive || !isDebuggerVisible || (language !== 'st' && language !== 'il')) return
+    const report = () => {
+      const lineCount = ed.getModel()?.getLineCount() ?? 0
+      const lines = ed
+        .getVisibleRanges()
+        .map((range): [number, number] => [
+          Math.max(1, range.startLineNumber - 1),
+          Math.min(lineCount, range.endLineNumber + 1),
+        ])
+      setVisibleLines((current) =>
+        current.length === lines.length && current.every(([from, to], i) => from === lines[i][0] && to === lines[i][1])
+          ? current
+          : lines,
+      )
+      setDebugEditorViewport({ pouName: name, lines })
+    }
+    report()
+    const subscriptions = [
+      ed.onDidScrollChange(report),
+      ed.onDidLayoutChange(report),
+      ed.onDidChangeHiddenAreas(report),
+      ed.onDidChangeModel(report),
+    ]
+    return () => subscriptions.forEach((subscription) => subscription.dispose())
+  }, [editorMounted, editorInstanceId, isActive, isDebuggerVisible, language, name, setDebugEditorViewport])
+
+  const debugValueCount = debugBoolValues.size + debugNonBoolValues.size
 
   const debugVarPositions = useMemo(() => {
     // Active-tab-only: avoids every hidden multi-mounted editor re-scanning and decorating on each poll.
@@ -460,46 +444,33 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
       : `${name}:`
 
-    const varNames: string[] = []
+    const exprs: string[] = []
     for (const key of debugBoolValues.keys()) {
-      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
+      if (key.startsWith(prefix)) exprs.push(key.slice(prefix.length))
     }
     for (const key of debugNonBoolValues.keys()) {
-      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
+      if (key.startsWith(prefix)) exprs.push(key.slice(prefix.length))
     }
-    if (varNames.length === 0) return null
+    if (exprs.length === 0) return null
 
-    varNames.sort((a, b) => b.length - a.length)
-
-    const exprPatterns = varNames.map((expr) => {
-      const escaped = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      return { expr, pattern: new RegExp(`\\b${escaped}(?![\\w.\\[])`, 'gi') }
-    })
-
-    const positions: Array<{ expr: string; line: number; startCol: number; endCol: number }> = []
-    let blockCommentState: BlockCommentState = false
-
-    for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
-      const result = stripLineComments(model.getLineContent(lineNumber), blockCommentState)
-      blockCommentState = result.state
-      const claimed: Array<[number, number]> = []
-
-      for (const { expr, pattern } of exprPatterns) {
-        pattern.lastIndex = 0
-        let match: RegExpExecArray | null
-        while ((match = pattern.exec(result.stripped)) !== null) {
-          const startCol = match.index + 1
-          const endCol = startCol + match[0].length
-          if (claimed.some(([s, e]) => startCol < e && endCol > s)) continue
-          claimed.push([startCol, endCol])
-          positions.push({ expr, line: lineNumber, startCol, endCol })
-          break
-        }
-      }
-    }
-
+    const positions = findDebugInlinePositions(
+      (lineNumber) => model.getLineContent(lineNumber),
+      model.getLineCount(),
+      visibleLines,
+      exprs,
+    )
     return { prefix, positions }
-  }, [isActive, isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
+  }, [
+    isActive,
+    isDebuggerVisible,
+    debugValueCount,
+    language,
+    name,
+    fbInstanceContext,
+    editorMounted,
+    modelVersion,
+    visibleLines,
+  ])
 
   useEffect(() => {
     if (!debugVarPositions || !editorRef.current) return

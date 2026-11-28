@@ -8,6 +8,9 @@ import type {
   PLCPou,
 } from '../../../../middleware/shared/ports/types'
 
+/** Visible 1-based inclusive line ranges of a textual POU editor. */
+export type DebugEditorViewport = { pouName: string; lines: Array<[number, number]> }
+
 // ---------------------------------------------------------------------------
 // PLC Log Filters
 // ---------------------------------------------------------------------------
@@ -99,6 +102,8 @@ export type WorkspaceState = {
     debugExpandedNodes: Map<string, boolean>
     /** Composite keys of the debugger panel rows currently on screen; empty while the panel is hidden. */
     debugPanelVisibleKeys: string[]
+    /** Part of the active POU editor on screen during debug; null until an editor reports it. */
+    debugEditorViewport: DebugEditorViewport | null
     fbDebugInstances: Map<string, FbInstanceInfo[]>
     fbSelectedInstance: Map<string, string>
     /**
@@ -220,6 +225,7 @@ export type WorkspaceActions = {
   setDebugExpandedNodes: (expandedNodes: Map<string, boolean>) => void
   toggleDebugExpandedNode: (compositeKey: string) => void
   setDebugPanelVisibleKeys: (keys: string[]) => void
+  setDebugEditorViewport: (viewport: DebugEditorViewport | null) => void
   setFbDebugInstances: (instances: Map<string, FbInstanceInfo[]>) => void
   /** Install (or clear, with `null`) the session's harness overlay. */
   setDebugHarness: (harness: { programPou: PLCPou; instances: PLCInstance[] } | null) => void

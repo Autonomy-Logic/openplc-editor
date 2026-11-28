@@ -93,6 +93,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const editorName = useOpenPLCStore(useCallback((s) => s.editor.meta.name, []))
   const debugForcedVariables = useOpenPLCStore(useCallback((s) => s.workspace.debugForcedVariables, []))
   const debugPanelVisibleKeys = useOpenPLCStore(useCallback((s) => s.workspace.debugPanelVisibleKeys, []))
+  const debugEditorViewport = useOpenPLCStore(useCallback((s) => s.workspace.debugEditorViewport, []))
   const debugGraphList = useOpenPLCStore(useCallback((s) => s.workspace.debugGraphList, []))
   const fbSelectedInstance = useOpenPLCStore(useCallback((s) => s.workspace.fbSelectedInstance, []))
 
@@ -114,11 +115,12 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const activeIndexesRef = useRef<number[] | null>(null)
 
   // Cache for diagram/source-visible variable scan results.
-  // Keyed by {pouName, language, fbContextKey}. Invalidated on POU/FB switch.
+  // Keyed by {pouName, language, fbContextKey, viewKey}. Invalidated on POU/FB switch.
   const visibleVarsCacheRef = useRef<{
     pouName: string
     language: string
     fbContextKey: string
+    viewKey: string
     keys: Set<string>
   } | null>(null)
 
@@ -130,7 +132,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
   useEffect(() => {
     activeIndexesRef.current = null
-  }, [debugPanelVisibleKeys])
+  }, [debugPanelVisibleKeys, debugEditorViewport])
 
   /** Build the full leaf metadata map from all debug trees (once per session). */
   const getAllLeaves = useCallback(() => {

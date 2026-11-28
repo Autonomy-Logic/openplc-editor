@@ -3,7 +3,7 @@ import { StateCreator } from 'zustand'
 
 import type { DebugTreeNode, FbInstanceInfo, PlcLogs } from '../../../../middleware/shared/ports/types'
 import { isV4Logs, LOG_BUFFER_CAP } from '../../../../middleware/shared/ports/types'
-import type { WorkspaceSlice } from './types'
+import type { DebugEditorViewport, WorkspaceSlice } from './types'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
@@ -47,6 +47,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugVariableTree: new Map(),
     debugExpandedNodes: new Map(),
     debugPanelVisibleKeys: [],
+    debugEditorViewport: null,
     fbDebugInstances: new Map(),
     fbSelectedInstance: new Map(),
     debugHarness: null,
@@ -169,6 +170,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugVariableTree = new Map()
           workspace.debugExpandedNodes = new Map()
           workspace.debugPanelVisibleKeys = []
+          workspace.debugEditorViewport = null
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
           workspace.debugHarness = null
@@ -343,6 +345,23 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setDebugEditorViewport: (viewport: DebugEditorViewport | null) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const current = workspace.debugEditorViewport
+          if (current === viewport) return
+          if (
+            current &&
+            viewport &&
+            current.pouName === viewport.pouName &&
+            current.lines.length === viewport.lines.length &&
+            current.lines.every(([from, to], i) => from === viewport.lines[i][0] && to === viewport.lines[i][1])
+          )
+            return
+          workspace.debugEditorViewport = viewport
+        }),
+      )
+    },
     setFbDebugInstances: (instances: Map<string, FbInstanceInfo[]>) => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -413,6 +432,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugVariableTree = new Map()
           workspace.debugExpandedNodes = new Map()
           workspace.debugPanelVisibleKeys = []
+          workspace.debugEditorViewport = null
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
           workspace.debugHarness = null
