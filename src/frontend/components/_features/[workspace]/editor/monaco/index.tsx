@@ -17,6 +17,7 @@ import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import { applyAcceptedHunks, computeHunks } from '../../../../../utils/ai-diff-review'
 import { memberChainBefore } from '../../../../../utils/cpp/member-chain'
 import { findDebugInlinePositions } from '../../../../../utils/debug-inline-positions'
+import { pouDebugExpressions, pouExternalNames } from '../../../../../utils/debug-pou-key'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
@@ -444,22 +445,20 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
       : `${name}:`
 
-    const exprs: string[] = []
-    for (const key of debugBoolValues.keys()) {
-      if (key.startsWith(prefix)) exprs.push(key.slice(prefix.length))
-    }
-    for (const key of debugNonBoolValues.keys()) {
-      if (key.startsWith(prefix)) exprs.push(key.slice(prefix.length))
-    }
-    if (exprs.length === 0) return null
+    const keyOf = pouDebugExpressions(
+      [...debugBoolValues.keys(), ...debugNonBoolValues.keys()],
+      prefix,
+      pouExternalNames(pouVariables),
+    )
+    if (keyOf.size === 0) return null
 
     const positions = findDebugInlinePositions(
       (lineNumber) => model.getLineContent(lineNumber),
       model.getLineCount(),
       visibleLines,
-      exprs,
+      [...keyOf.keys()],
     )
-    return { prefix, positions }
+    return { keyOf, positions }
   }, [
     isActive,
     isDebuggerVisible,
@@ -467,6 +466,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     language,
     name,
     fbInstanceContext,
+    pouVariables,
     editorMounted,
     modelVersion,
     visibleLines,
@@ -475,12 +475,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   useEffect(() => {
     if (!debugVarPositions || !editorRef.current) return
 
-    const { prefix, positions } = debugVarPositions
+    const { keyOf, positions } = debugVarPositions
     const decorations: monaco.editor.IModelDeltaDecoration[] = positions.map(({ expr, line, startCol, endCol }) => ({
       range: new monaco.Range(line, startCol, line, endCol),
       options: {
         after: {
-          content: ` = ${debugBoolValues.get(prefix + expr) ?? debugNonBoolValues.get(prefix + expr) ?? '?'} `,
+          content: ` = ${debugBoolValues.get(keyOf.get(expr) ?? '') ?? debugNonBoolValues.get(keyOf.get(expr) ?? '') ?? '?'} `,
           inlineClassName: 'debug-inline-value',
         },
       },

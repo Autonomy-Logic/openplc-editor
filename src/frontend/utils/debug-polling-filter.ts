@@ -17,6 +17,7 @@
  */
 
 import type { FbInstanceInfo, PLCPou } from '../../middleware/shared/ports/types'
+import { pouDebugKey, pouExternalNames } from './debug-pou-key'
 import { edgeTriggerInstanceName, edgeTriggerTypeForVariant } from './PLC/edge-trigger-instance'
 
 /**
@@ -231,13 +232,14 @@ function computeVisibleVariableKeys(
   } = state
 
   // Helper to make composite key respecting FB instance context
+  const externals = pouExternalNames(currentPou.interface?.variables ?? [])
   const makeKey = (variableName: string): string | null => {
     if (currentPou.pouType === 'function-block') {
       const resolved = resolveFbInstance(currentPou.name, fbSelectedInstance, fbDebugInstances)
       if (!resolved) return null
-      return `${resolved.programName}:${resolved.fbVariableName}.${variableName}`
+      return pouDebugKey(variableName, `${resolved.programName}:${resolved.fbVariableName}.`, externals)
     }
-    return `${currentPou.name}:${variableName}`
+    return pouDebugKey(variableName, `${currentPou.name}:`, externals)
   }
 
   // Helper to find all leaf keys matching a prefix in the debug tree

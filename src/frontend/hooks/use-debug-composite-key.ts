@@ -1,11 +1,13 @@
 import { useCallback, useMemo } from 'react'
 
 import { useOpenPLCStore } from '../store'
+import { pouDebugKey, pouExternalNames } from '../utils/debug-pou-key'
 
 /**
  * Hook that returns a memoized function to build composite keys for debug variable lookups.
  * Handles both program POUs (simple `pouName:variableName` format) and function block POUs
  * (resolved to `programName:fbVariableName.variableName` using the selected FB instance context).
+ * A name on one of the POU's VAR_EXTERNAL globals resolves to the canonical global key.
  *
  * Uses targeted Zustand selectors so it only re-renders when the active editor,
  * the current POU's type, or the selected FB instance changes — not on every
@@ -16,6 +18,10 @@ export const useDebugCompositeKey = () => {
   const pouType = useOpenPLCStore(
     useCallback((s) => s.project.data.pous.find((p) => p.name === s.editor.meta.name)?.pouType, []),
   )
+  const pouVariables = useOpenPLCStore(
+    useCallback((s) => s.project.data.pous.find((p) => p.name === s.editor.meta.name)?.interface?.variables, []),
+  )
+  const externals = useMemo(() => pouExternalNames(pouVariables ?? []), [pouVariables])
   const fbSelectedInstance = useOpenPLCStore(useCallback((s) => s.workspace.fbSelectedInstance, []))
   const fbDebugInstances = useOpenPLCStore(useCallback((s) => s.workspace.fbDebugInstances, []))
 
@@ -30,12 +36,12 @@ export const useDebugCompositeKey = () => {
 
   const getCompositeKey = useCallback(
     (variableName: string): string => {
-      if (fbInstanceContext) {
-        return `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.${variableName}`
-      }
-      return `${editorName}:${variableName}`
+      const scope = fbInstanceContext
+        ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
+        : `${editorName}:`
+      return pouDebugKey(variableName, scope, externals)
     },
-    [fbInstanceContext, editorName],
+    [fbInstanceContext, editorName, externals],
   )
 
   return getCompositeKey

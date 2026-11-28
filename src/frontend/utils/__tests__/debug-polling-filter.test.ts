@@ -192,6 +192,26 @@ describe('buildActiveIndexSet', () => {
     })
   })
 
+  describe('ST/IL source-visible VAR_EXTERNAL globals', () => {
+    it('polls a global the source references through VAR_EXTERNAL by its canonical key', () => {
+      const pou = makePou('Main', 'program', [makeVariable('g_count', 'external'), makeVariable('x')], 'st')
+      pou.body = { language: 'st', value: 'x := g_count + 1;' }
+      const state = makeState({
+        pous: [pou],
+        editorName: 'Main',
+        editorLanguage: 'st',
+        debugVariableIndexes: new Map([
+          ['Config0:g_count', 5],
+          ['Main:x', 6],
+          ['Main:g_count', 7],
+        ]),
+      })
+
+      const { activeIndexes } = buildActiveIndexSet(state, new Map(), null)
+      expect(activeIndexes).toEqual([5, 6])
+    })
+  })
+
   describe('diagram-visible / source-visible caching', () => {
     it('uses cached result when pouName, language, and fbContextKey match', () => {
       const pou = makePou('Main', 'program', [], 'st')
@@ -461,6 +481,36 @@ describe('buildActiveIndexSet', () => {
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toContain(1)
       expect(activeIndexes).toContain(2)
+    })
+
+    it('polls a contact and a coil on a VAR_EXTERNAL global through its canonical key, member path included', () => {
+      const pou = makePou('Main', 'program', [makeVariable('g_plant', 'external'), makeVariable('lp')], 'ld')
+      const indexMap = new Map([
+        ['Config0:g_plant.LINES[2].RUNNING', 1],
+        ['Main:lp.LINES[2].RUNNING', 2],
+        ['Main:g_plant.LINES[2].RUNNING', 3],
+      ])
+      const ldFlow = {
+        name: 'Main',
+        rungs: [
+          {
+            nodes: [
+              { type: 'contact', data: { variable: { name: 'g_plant.LINES[2].RUNNING' } } },
+              { type: 'coil', data: { variable: { name: 'lp.LINES[2].RUNNING' } } },
+            ],
+          },
+        ],
+      }
+      const state = makeState({
+        pous: [pou],
+        editorName: 'Main',
+        editorLanguage: 'ld',
+        debugVariableIndexes: indexMap,
+        ladderFlows: [ldFlow],
+      })
+
+      const { activeIndexes } = buildActiveIndexSet(state, new Map(), null)
+      expect(activeIndexes).toEqual([1, 2])
     })
 
     it('polls the edge trigger output of rising and falling contacts, not only their variable', () => {
