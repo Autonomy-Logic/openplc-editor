@@ -537,6 +537,69 @@ describe('traverseVariable', () => {
       expect(result.children![0].children![0].name).toBe('Q')
     })
 
+    it('nests one array level per dimension of a 2-D base-type array', () => {
+      const variable: PLCVariable = {
+        name: 'grid',
+        class: 'local',
+        type: {
+          definition: 'array',
+          value: 'ARRAY [1..2, 0..2] OF INT',
+          data: {
+            baseType: { definition: 'base-type', value: 'INT' },
+            dimensions: [{ dimension: '1..2' }, { dimension: '0..2' }],
+          },
+        },
+        location: '',
+        documentation: '',
+      }
+      const debugVars = [makeDebugVar('INSTANCE0.GRID[2][1]', 'INT', 41)]
+      const ctx = makeContext({ debugVariables: debugVars })
+
+      const result = traverseVariable(variable, ctx, simpleVisitor)
+
+      expect(result.kind).toBe('array')
+      expect(result.arrayIndices).toEqual([1, 2])
+      expect(result.children!.map((c) => c.name)).toEqual(['[1]', '[2]'])
+      const row = result.children![1]
+      expect(row.kind).toBe('array')
+      expect(row.arrayIndices).toEqual([0, 2])
+      expect(row.fullPath).toBe('INSTANCE0.GRID[2]')
+      expect(row.children!.map((c) => c.name)).toEqual(['[0]', '[1]', '[2]'])
+      expect(row.children![1]).toMatchObject({
+        kind: 'leaf',
+        fullPath: 'INSTANCE0.GRID[2][1]',
+        compositeKey: 'Main:grid[2][1]',
+        typeName: 'INT',
+        debugIndex: 41,
+      })
+    })
+
+    it('resolves the fields of a 2-D function block array element', () => {
+      const customFb = makePou('InnerFB', 'function-block', [makeBaseVariable('Q', 'BOOL', 'output')])
+      const variable: PLCVariable = {
+        name: 'fbGrid',
+        class: 'local',
+        type: {
+          definition: 'array',
+          value: 'ARRAY [1..2, 1..2] OF InnerFB',
+          data: {
+            baseType: { definition: 'user-data-type', value: 'InnerFB' },
+            dimensions: [{ dimension: '1..2' }, { dimension: '1..2' }],
+          },
+        },
+        location: '',
+        documentation: '',
+      }
+      const debugVars = [makeDebugVar('INSTANCE0.FBGRID[2][1].Q', 'BOOL', 77)]
+      const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
+
+      const result = traverseVariable(variable, ctx, simpleVisitor)
+
+      const element = result.children![1].children![0]
+      expect(element).toMatchObject({ kind: 'complex', name: '[1]', fullPath: 'INSTANCE0.FBGRID[2][1]' })
+      expect(element.children![0]).toMatchObject({ name: 'Q', debugIndex: 77 })
+    })
+
     it('returns leaf for array with invalid dimension format', () => {
       const variable: PLCVariable = {
         name: 'badArr',

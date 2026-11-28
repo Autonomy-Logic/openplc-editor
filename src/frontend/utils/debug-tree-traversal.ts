@@ -336,7 +336,8 @@ function traverseNestedNode<T>(
     return visitor.visitComplex(name, fullPath, compositeKey, typeName, children)
   } else if (typeDefinition === 'array' && arrayData) {
     // Array type — STruC++ emits array elements as `PARENT[iec_idx]` using
-    // IEC-based indexing (the start of the declared range, not 0).
+    // IEC-based indexing (the start of the declared range, not 0), one
+    // bracket per dimension (`PARENT[i][j]`), so each dimension is a level.
     const dimensions = arrayData.dimensions
     if (dimensions.length === 0) {
       return visitor.visitLeaf(name, fullPath, compositeKey, 'ARRAY', undefined)
@@ -351,6 +352,7 @@ function traverseNestedNode<T>(
     const arraySize = endIndex - startIndex + 1
     const baseType = arrayData.baseType
     const elementTypeName = baseType.definition === 'base-type' ? baseType.value.toUpperCase() : baseType.value
+    const innerDimensions = dimensions.slice(1)
 
     const children: T[] = []
 
@@ -359,7 +361,23 @@ function traverseNestedNode<T>(
       const elementFullPath = `${fullPath}[${elementIndex}]`
       const elementCompositeKey = `${compositeKey}[${elementIndex}]`
 
-      if (baseType.definition === 'base-type') {
+      if (innerDimensions.length > 0) {
+        children.push(
+          traverseNestedNode(
+            `[${elementIndex}]`,
+            elementFullPath,
+            elementCompositeKey,
+            'ARRAY',
+            'array',
+            context,
+            visitor,
+            {
+              baseType,
+              dimensions: innerDimensions,
+            },
+          ),
+        )
+      } else if (baseType.definition === 'base-type') {
         const debugVar = findDebugVariable(debugVariables, elementFullPath)
         children.push(
           visitor.visitLeaf(
