@@ -3,6 +3,7 @@ import { StateCreator } from 'zustand'
 
 import type { DebugTreeNode, FbInstanceInfo, PlcLogs } from '../../../../middleware/shared/ports/types'
 import { isV4Logs, LOG_BUFFER_CAP } from '../../../../middleware/shared/ports/types'
+import { debugViewportKey } from '../../../utils/debug-polling-filter'
 import type { DebugEditorViewport, WorkspaceSlice } from './types'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
@@ -350,14 +351,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         produce(({ workspace }: WorkspaceSlice) => {
           const current = workspace.debugEditorViewport
           if (current === viewport) return
-          if (
-            current &&
-            viewport &&
-            current.pouName === viewport.pouName &&
-            current.lines.length === viewport.lines.length &&
-            current.lines.every(([from, to], i) => from === viewport.lines[i][0] && to === viewport.lines[i][1])
-          )
-            return
+          if (current && viewport && debugViewportKey(current) === debugViewportKey(viewport)) return
           workspace.debugEditorViewport = viewport
         }),
       )

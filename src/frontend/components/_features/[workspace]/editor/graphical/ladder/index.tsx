@@ -37,6 +37,7 @@ import { RungLadderState } from '../../../../../../store/slices/ladder'
 import { graphicalElementModalFor } from '../../../../../../store/slices/modal'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
+import { idsInVerticalView } from '../../../../../../utils/debug-diagram-viewport'
 import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
 import { BlockNode, BlockNodeData } from '../../../../../_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '../../../../../_atoms/graphical-editor/ladder/coil'
@@ -49,7 +50,7 @@ import {
   useLadderPouCanvasValue,
 } from '../../../../../_molecules/graphical-editor/ladder/rung/pou-canvas'
 import { Rung } from '../../../../../_organisms/graphical-editor/ladder/rung'
-import { useBoundPou } from '../active-context'
+import { useBoundPou, useIsGraphicalEditorActive } from '../active-context'
 import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
@@ -105,6 +106,50 @@ function useVisibleWidth(ref: RefObject<HTMLElement | null>): number {
     return () => observer.disconnect()
   }, [ref])
   return width
+}
+
+/**
+ * Reports to debug polling the ids of the open rungs of `diagram` inside the scroll container `ref`, while `enabled`,
+ * following scrolls and resizes.
+ */
+function useDebugRungsOnScreen(
+  ref: RefObject<HTMLElement | null>,
+  diagram: RefObject<HTMLElement | null>,
+  pouName: string,
+  enabled: boolean,
+  rungs: unknown,
+): void {
+  const setDebugEditorViewport = useOpenPLCStore((state) => state.workspaceActions.setDebugEditorViewport)
+  useEffect(() => {
+    const container = ref.current
+    const content = diagram.current
+    if (!enabled || !container || !content) return
+    let frame = 0
+    const report = () => {
+      frame = 0
+      const top = container.getBoundingClientRect().top
+      const items = Array.from(content.querySelectorAll<HTMLElement>('[aria-label="Rung container"]'))
+        .filter((rung) => rung.querySelector('[aria-label="Collapsed rung"]') === null)
+        .map((rung) => {
+          const rect = rung.getBoundingClientRect()
+          return { id: rung.id, top: rect.top, bottom: rect.bottom }
+        })
+      setDebugEditorViewport({ pouName, elementIds: idsInVerticalView(items, top, top + container.clientHeight) })
+    }
+    const schedule = () => {
+      if (frame === 0) frame = requestAnimationFrame(report)
+    }
+    report()
+    container.addEventListener('scroll', schedule, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+    observer?.observe(container)
+    observer?.observe(content)
+    return () => {
+      container.removeEventListener('scroll', schedule)
+      observer?.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [ref, diagram, pouName, enabled, rungs, setDebugEditorViewport])
 }
 
 export default function LadderEditor() {
@@ -229,6 +274,8 @@ export default function LadderEditor() {
   const viewportWidth = useVisibleWidth(scrollableRef)
   const diagramRef = useRef<HTMLDivElement>(null)
   const scrollPastEnd = useScrollPastEnd(scrollableRef, diagramRef)
+  const isEditorActive = useIsGraphicalEditorActive()
+  useDebugRungsOnScreen(scrollableRef, diagramRef, pouName, isEditorActive && isDebuggerVisible, rungs)
   const pouCanvas = useLadderPouCanvasValue(pouName, rungs, viewportWidth)
   // A rung drag starts after 4 px, so a click on the gutter still selects the rung.
   const rungDragSensors = useSensors(

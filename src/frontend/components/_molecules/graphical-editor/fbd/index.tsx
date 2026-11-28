@@ -39,6 +39,7 @@ import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { type GraphicalElementModalData, graphicalElementModalFor } from '../../../../store/slices/modal'
 import { cn } from '../../../../utils/cn'
+import { fbdNodesInView, flowViewRect } from '../../../../utils/debug-diagram-viewport'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { findOccupiedInOutPin } from '../../../../utils/graphical/in-out-pin-rules'
@@ -49,7 +50,11 @@ import { BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
 import { getVariableRestrictionType } from '../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../_atoms/react-flow'
 import { toast } from '../../../_features/[app]/toast/use-toast'
-import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
+import {
+  useBoundEditorModel,
+  useBoundPou,
+  useIsGraphicalEditorActive,
+} from '../../../_features/[workspace]/editor/graphical/active-context'
 import BlockElement from '../../../_features/[workspace]/editor/graphical/elements/fbd/block'
 import { useGraphicalPlacement } from '../../../_features/[workspace]/editor/graphical/placement/placement-context'
 import { buildGenericNode } from './fbd-utils/nodes'
@@ -241,6 +246,38 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
+  const isEditorActive = useIsGraphicalEditorActive()
+  const setDebugEditorViewport = useOpenPLCStore((state) => state.workspaceActions.setDebugEditorViewport)
+  const tracksDebugView = isDebuggerActive && isEditorActive && reactFlowInstance !== null
+  const debugViewFrameRef = useRef(0)
+
+  /** Reports the nodes whose values the pane shows, so debug polling reads only those. */
+  const reportDebugView = useStableCallback(() => {
+    debugViewFrameRef.current = 0
+    const pane = reactFlowViewportRef.current?.querySelector<HTMLElement>('.react-flow')
+    if (!reactFlowInstance || !pane) return
+    const { clientWidth: width, clientHeight: height } = pane
+    const view = flowViewRect(reactFlowInstance.getViewport(), width, height)
+    const elementIds =
+      width > 0 && height > 0 ? fbdNodesInView(reactFlowInstance.getNodes(), reactFlowInstance.getEdges(), view) : []
+    setDebugEditorViewport({ pouName, elementIds })
+  })
+  const scheduleDebugView = useStableCallback(() => {
+    if (debugViewFrameRef.current === 0) debugViewFrameRef.current = requestAnimationFrame(reportDebugView)
+  })
+
+  useEffect(() => {
+    const pane = reactFlowViewportRef.current
+    if (!tracksDebugView || !pane) return
+    reportDebugView()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleDebugView)
+    observer?.observe(pane)
+    return () => {
+      observer?.disconnect()
+      cancelAnimationFrame(debugViewFrameRef.current)
+      debugViewFrameRef.current = 0
+    }
+  }, [tracksDebugView, rungLocal.nodes, rungLocal.edges, reportDebugView, scheduleDebugView])
 
   const placement = useGraphicalPlacement()
   const armedElement = placement?.language === 'fbd' && !isDebuggerActive ? placement.armed : null
@@ -792,6 +829,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
           onNodesChange: onNodesChange,
           onEdgesChange: onEdgesChange,
+          onMove: tracksDebugView ? scheduleDebugView : undefined,
           selectionMode: SelectionMode.Partial,
 
           onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,

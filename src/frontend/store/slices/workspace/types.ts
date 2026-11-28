@@ -8,8 +8,8 @@ import type {
   PLCPou,
 } from '../../../../middleware/shared/ports/types'
 
-/** Visible 1-based inclusive line ranges of a textual POU editor. */
-export type DebugEditorViewport = { pouName: string; lines: Array<[number, number]> }
+/** Part of the active POU editor on screen: 1-based inclusive line ranges (ST/IL) or element ids (LD rungs, FBD nodes). */
+export type DebugEditorViewport = { pouName: string; lines?: Array<[number, number]>; elementIds?: string[] }
 
 // ---------------------------------------------------------------------------
 // PLC Log Filters

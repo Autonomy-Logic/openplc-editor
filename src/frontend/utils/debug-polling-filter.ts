@@ -7,7 +7,8 @@
  * 1. Debugger panel rows on screen (watched and forced roots, expanded children)
  * 2. Forced variables (currently forced, must stay polled)
  * 3. Graph-listed variables (being plotted in real-time charts)
- * 4. Diagram-visible variables (LD/FBD contacts, coils, variable nodes, block outputs)
+ * 4. Diagram-visible variables (contacts, coils, variables and block outputs of the LD rungs
+ *    or FBD nodes on screen)
  * 5. Source-visible variables (ST/IL — regex-matched against the lines on screen)
  *
  * Diagram/source scan results are cached per {pouName, language, fbContext, viewKey}
@@ -28,7 +29,7 @@ export interface DebugPollingState {
     debugVariableIndexes: Map<string, number>
     debugForcedVariables: Map<string, unknown>
     debugPanelVisibleKeys: string[]
-    debugEditorViewport: { pouName: string; lines: Array<[number, number]> } | null
+    debugEditorViewport: DebugViewport | null
     debugGraphList: string[]
     fbSelectedInstance: Map<string, string>
     fbDebugInstances: Map<string, FbInstanceInfo[]>
@@ -39,17 +40,20 @@ export interface DebugPollingState {
   editor: { meta: { name: string; [key: string]: unknown } }
   ladderFlows: Array<{
     name: string
-    rungs: Array<{ nodes: Array<{ type?: string; data: unknown }> }>
+    rungs: Array<{ id: string; nodes: Array<{ type?: string; data: unknown }> }>
   }>
   fbdFlows: Array<{
     name: string
-    rung: { nodes: Array<{ type?: string; data: unknown }> }
+    rung: { nodes: Array<{ id: string; type?: string; data: unknown }> }
   }>
 }
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/** Part of the active POU editor on screen: line ranges (ST/IL) or element ids (LD rungs, FBD nodes). */
+export type DebugViewport = { pouName: string; lines?: Array<[number, number]>; elementIds?: string[] }
 
 export type VisibleVarsCache = {
   pouName: string
@@ -117,8 +121,8 @@ export function buildActiveIndexSet(
     const fbCtxKey =
       currentPou.pouType === 'function-block' ? (fbSelectedInstance.get(currentPou.name.toUpperCase()) ?? '') : ''
 
-    const visibleLines = sourceVisibleLines(state, currentPou)
-    const viewKey = visibleLines ? visibleLines.map(([from, to]) => `${from}-${to}`).join(',') : ''
+    const viewport = viewportFor(state, currentPou)
+    const viewKey = viewport ? debugViewportKey(viewport) : ''
 
     // Check if cache is still valid
     if (
@@ -130,7 +134,7 @@ export function buildActiveIndexSet(
     ) {
       for (const k of cachedResult.keys) activeKeys.add(k)
     } else {
-      const visibleKeys = computeVisibleVariableKeys(state, currentPou, allLeaves, visibleLines)
+      const visibleKeys = computeVisibleVariableKeys(state, currentPou, allLeaves, viewport)
       cachedResult = {
         pouName: editorName,
         language: editorLanguage,
@@ -176,12 +180,20 @@ function resolveFbInstance(
   return instances.find((inst) => inst.key === selectedKey) ?? null
 }
 
-/** Line ranges the active ST/IL editor reports on screen for this POU; null scans the whole body. */
-function sourceVisibleLines(state: DebugPollingState, currentPou: PLCPou): Array<[number, number]> | null {
-  const language = currentPou.body.language
-  if (language !== 'st' && language !== 'il') return null
+/** Viewport the active editor reports for this POU in the form its language uses; null scans the whole POU. */
+function viewportFor(state: DebugPollingState, currentPou: PLCPou): DebugViewport | null {
   const viewport = state.workspace.debugEditorViewport
-  return viewport && viewport.pouName === currentPou.name ? viewport.lines : null
+  if (!viewport || viewport.pouName !== currentPou.name) return null
+  const language = currentPou.body.language
+  if (language === 'st' || language === 'il') return viewport.lines ? viewport : null
+  if (language === 'ld' || language === 'fbd') return viewport.elementIds ? viewport : null
+  return null
+}
+
+/** Identity of a viewport's content; equal keys poll the same variables. */
+export function debugViewportKey(viewport: DebugViewport): string {
+  const lines = viewport.lines?.map(([from, to]) => `${from}-${to}`).join(',') ?? ''
+  return `${viewport.pouName}|${lines}|${viewport.elementIds?.join(',') ?? ''}`
 }
 
 /** Composite key → debug indexes of the leaves carrying it, built once per leaf map. */
@@ -210,7 +222,7 @@ function computeVisibleVariableKeys(
   state: DebugPollingState,
   currentPou: PLCPou,
   allLeaves: Map<number, { compositeKey: string; type: string }[]>,
-  visibleLines: Array<[number, number]> | null,
+  viewport: DebugViewport | null,
 ): Set<string> {
   const keys = new Set<string>()
   const language = currentPou.body.language
@@ -239,22 +251,25 @@ function computeVisibleVariableKeys(
     }
   }
 
+  const elementIds = viewport?.elementIds ? new Set(viewport.elementIds) : null
   if (language === 'ld') {
-    collectLdVisibleKeys(state, makeKey, addLeavesWithPrefix, keys)
+    collectLdVisibleKeys(state, elementIds, makeKey, addLeavesWithPrefix, keys)
   } else if (language === 'fbd') {
-    collectFbdVisibleKeys(state, makeKey, addLeavesWithPrefix, keys)
+    collectFbdVisibleKeys(state, elementIds, makeKey, addLeavesWithPrefix, keys)
   } else if (language === 'st' || language === 'il') {
-    collectStIlVisibleKeys(currentPou, visibleLines, makeKey, addLeavesWithPrefix, keys)
+    collectStIlVisibleKeys(currentPou, viewport?.lines ?? null, makeKey, addLeavesWithPrefix, keys)
   }
 
   return keys
 }
 
 /**
- * Collect composite keys for variables visible on a Ladder Diagram.
+ * Collect composite keys for variables on the rungs on screen of a Ladder Diagram,
+ * or on every rung when `rungIds` is null.
  */
 function collectLdVisibleKeys(
   state: DebugPollingState,
+  rungIds: Set<string> | null,
   makeKey: (name: string) => string | null,
   addLeavesWithPrefix: (prefix: string) => void,
   keys: Set<string>,
@@ -264,6 +279,7 @@ function collectLdVisibleKeys(
   if (!currentFlow) return
 
   for (const rung of currentFlow.rungs) {
+    if (rungIds && !rungIds.has(rung.id)) continue
     for (const node of rung.nodes) {
       if (node.type === 'contact' || node.type === 'coil') {
         const nodeData = node.data as { variable?: { name?: string }; variant?: string; numericId?: string }
@@ -293,10 +309,12 @@ function collectLdVisibleKeys(
 }
 
 /**
- * Collect composite keys for variables visible on a Function Block Diagram.
+ * Collect composite keys for variables of the given nodes of a Function Block Diagram,
+ * or of every node when `nodeIds` is null.
  */
 function collectFbdVisibleKeys(
   state: DebugPollingState,
+  nodeIds: Set<string> | null,
   makeKey: (name: string) => string | null,
   addLeavesWithPrefix: (prefix: string) => void,
   keys: Set<string>,
@@ -306,6 +324,7 @@ function collectFbdVisibleKeys(
   if (!currentFlow) return
 
   for (const node of currentFlow.rung.nodes) {
+    if (nodeIds && !nodeIds.has(node.id)) continue
     if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
       const nodeData = node.data as { variable?: { name?: string } }
       const varName = nodeData.variable?.name

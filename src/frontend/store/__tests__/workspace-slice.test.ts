@@ -397,6 +397,15 @@ describe('createWorkspaceSlice', () => {
     expect(store.getState().workspace.debugEditorViewport).toEqual({ pouName: 'Main', lines: [[11, 40]] })
   })
 
+  it('setDebugEditorViewport keeps the same object while the diagram elements on screen do not change', () => {
+    store.getState().workspaceActions.setDebugEditorViewport({ pouName: 'Main', elementIds: ['r1', 'r2'] })
+    const first = store.getState().workspace.debugEditorViewport
+    store.getState().workspaceActions.setDebugEditorViewport({ pouName: 'Main', elementIds: ['r1', 'r2'] })
+    expect(store.getState().workspace.debugEditorViewport).toBe(first)
+    store.getState().workspaceActions.setDebugEditorViewport({ pouName: 'Main', elementIds: ['r2'] })
+    expect(store.getState().workspace.debugEditorViewport).toEqual({ pouName: 'Main', elementIds: ['r2'] })
+  })
+
   it('clearDebugState forgets the editor viewport', () => {
     store.getState().workspaceActions.setDebugEditorViewport({ pouName: 'Main', lines: [[1, 30]] })
     store.getState().workspaceActions.clearDebugState()

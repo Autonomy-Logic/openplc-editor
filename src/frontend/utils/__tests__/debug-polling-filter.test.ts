@@ -1,5 +1,5 @@
 import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
-import { buildActiveIndexSet, type VisibleVarsCache } from '../debug-polling-filter'
+import { buildActiveIndexSet, type DebugViewport, type VisibleVarsCache } from '../debug-polling-filter'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,7 +60,7 @@ function makeState(overrides: {
   debugVariableIndexes?: Map<string, number>
   debugForcedVariables?: Map<string, unknown>
   debugPanelVisibleKeys?: string[]
-  debugEditorViewport?: { pouName: string; lines: Array<[number, number]> } | null
+  debugEditorViewport?: DebugViewport | null
   debugGraphList?: string[]
   fbSelectedInstance?: Map<string, string>
   fbDebugInstances?: Map<
@@ -1323,7 +1323,7 @@ describe('ST/IL lines on screen', () => {
     [10, [{ compositeKey: 'Main:TMR.Q', type: 'BOOL' }]],
     [11, [{ compositeKey: 'Main:TMR.ET', type: 'TIME' }]],
   ])
-  const poll = (debugEditorViewport: { pouName: string; lines: Array<[number, number]> } | null, cache = null) =>
+  const poll = (debugEditorViewport: DebugViewport | null, cache = null) =>
     buildActiveIndexSet(
       makeState({
         pous: [pou],
@@ -1368,5 +1368,105 @@ describe('ST/IL lines on screen', () => {
     const scrolled = poll({ pouName: 'Main', lines: [[3, 4]] }, first.cacheResult as never)
     expect(scrolled.cacheResult).not.toBe(first.cacheResult)
     expect(scrolled.activeIndexes).toEqual([3, 10, 11])
+  })
+})
+
+describe('LD rungs and FBD nodes on screen', () => {
+  const ldPou = makePou('Ladder', 'program', [], 'ld')
+  const fbdPou = makePou('Diagram', 'program', [], 'fbd')
+  const indexes = new Map([
+    ['Ladder:X1', 1],
+    ['Ladder:Y1', 2],
+    ['Ladder:X2', 3],
+    ['Ladder:Y2', 4],
+    ['Diagram:IN1', 5],
+    ['Diagram:OUT1', 6],
+    ['Diagram:IN2', 7],
+  ])
+  const leaves = new Map([
+    [10, [{ compositeKey: 'Ladder:TMR.Q', type: 'BOOL' }]],
+    [11, [{ compositeKey: 'Diagram:CNT.CV', type: 'INT' }]],
+  ])
+  const ladderFlows = [
+    {
+      name: 'Ladder',
+      rungs: [
+        {
+          id: 'r1',
+          nodes: [
+            { id: 'c1', type: 'contact', data: { variable: { name: 'X1' } } },
+            { id: 'o1', type: 'coil', data: { variable: { name: 'Y1' } } },
+          ],
+        },
+        {
+          id: 'r2',
+          nodes: [
+            { id: 'c1', type: 'contact', data: { variable: { name: 'X2' } } },
+            {
+              id: 'b1',
+              type: 'block',
+              data: { variant: { name: 'TON', type: 'function-block' }, variable: { name: 'TMR' } },
+            },
+            { id: 'o1', type: 'coil', data: { variable: { name: 'Y2' } } },
+          ],
+        },
+      ],
+    },
+  ]
+  const fbdFlows = [
+    {
+      name: 'Diagram',
+      rung: {
+        nodes: [
+          { id: 'n1', type: 'input-variable', data: { variable: { name: 'IN1' } } },
+          { id: 'n2', type: 'output-variable', data: { variable: { name: 'OUT1' } } },
+          { id: 'n3', type: 'input-variable', data: { variable: { name: 'IN2' } } },
+          {
+            id: 'n4',
+            type: 'block',
+            data: { variant: { name: 'CTU', type: 'function-block' }, variable: { name: 'CNT' } },
+          },
+        ],
+      },
+    },
+  ]
+  const poll = (pou: PLCPou, debugEditorViewport: DebugViewport | null, cache: VisibleVarsCache = null) =>
+    buildActiveIndexSet(
+      makeState({
+        pous: [ldPou, fbdPou],
+        editorName: pou.name,
+        editorLanguage: pou.body.language,
+        debugVariableIndexes: indexes,
+        debugEditorViewport,
+        ladderFlows,
+        fbdFlows,
+      }),
+      leaves,
+      cache,
+    )
+
+  it('polls only the variables of the LD rungs on screen', () => {
+    expect(poll(ldPou, { pouName: 'Ladder', elementIds: ['r1'] }).activeIndexes).toEqual([1, 2])
+    expect(poll(ldPou, { pouName: 'Ladder', elementIds: ['r2'] }).activeIndexes).toEqual([3, 4, 10])
+  })
+
+  it('polls only the variables of the FBD nodes on screen', () => {
+    expect(poll(fbdPou, { pouName: 'Diagram', elementIds: ['n2', 'n4'] }).activeIndexes).toEqual([6, 11])
+  })
+
+  it('polls every rung or node while the editor has not reported this POU, and none when nothing is on screen', () => {
+    expect(poll(ldPou, null).activeIndexes).toEqual([1, 2, 3, 4, 10])
+    expect(poll(ldPou, { pouName: 'Other', elementIds: [] }).activeIndexes).toEqual([1, 2, 3, 4, 10])
+    expect(poll(fbdPou, { pouName: 'Diagram', lines: [[1, 3]] }).activeIndexes).toEqual([5, 6, 7, 11])
+    expect(poll(ldPou, { pouName: 'Ladder', elementIds: [] }).activeIndexes).toEqual([])
+  })
+
+  it('rescans when the elements on screen change and reuses the scan while they do not', () => {
+    const first = poll(fbdPou, { pouName: 'Diagram', elementIds: ['n1'] })
+    const same = poll(fbdPou, { pouName: 'Diagram', elementIds: ['n1'] }, first.cacheResult)
+    expect(same.cacheResult).toBe(first.cacheResult)
+    const panned = poll(fbdPou, { pouName: 'Diagram', elementIds: ['n3'] }, first.cacheResult)
+    expect(panned.cacheResult).not.toBe(first.cacheResult)
+    expect(panned.activeIndexes).toEqual([7])
   })
 })
